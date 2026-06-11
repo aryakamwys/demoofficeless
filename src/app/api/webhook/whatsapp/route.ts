@@ -19,13 +19,17 @@ export async function POST(request: NextRequest) {
     const supabase = createServiceClient();
 
     // LOG RAW PAYLOAD FOR DEBUGGING
-    await supabase.from("whatsapp_logs").insert({
-      claim_id: "1aedea14-57ef-4929-8d27-f6b8b513cbe0", // Valid ID
-      phone_number: "SYSTEM",
-      message_type: "RAW_WEBHOOK",
-      status: "RECEIVED",
-      response: JSON.stringify(body),
-    }).catch(e => console.error("Log error", e));
+    try {
+      await supabase.from("whatsapp_logs").insert({
+        claim_id: "1aedea14-57ef-4929-8d27-f6b8b513cbe0", // Valid ID
+        phone_number: "SYSTEM",
+        message_type: "RAW_WEBHOOK",
+        status: "RECEIVED",
+        response: JSON.stringify(body),
+      });
+    } catch (e) {
+      console.error("Log error", e);
+    }
 
     // Extract message data from Kirimi webhook payload
     // Kirimi typically sends: sender, message, device_id, etc.
