@@ -80,6 +80,12 @@ export async function POST(request: NextRequest) {
     }
 
     const reply = messageText.trim();
+    
+    // SELALU gunakan nomor asli dari database untuk membalas, 
+    // karena phoneNumber dari webhook mungkin berupa @lid yang tidak bisa dikirimi pesan.
+    const targetPhone = claim.employee?.phone_number 
+      ? claim.employee.phone_number.replace(/^\+/, "").replace(/^0/, "62")
+      : phoneNumber;
 
     if (reply === "1") {
       // Approved
@@ -93,12 +99,12 @@ export async function POST(request: NextRequest) {
 
       // Send confirmation
       const confirmMsg = buildConfirmationMessage();
-      await sendTextMessage(phoneNumber, confirmMsg);
+      await sendTextMessage(targetPhone, confirmMsg);
 
       // Log
       await supabase.from("whatsapp_logs").insert({
         claim_id: claim.id,
-        phone_number: phoneNumber,
+        phone_number: targetPhone,
         message_type: "APPROVAL",
         status: "RECEIVED",
         response: reply,
@@ -112,12 +118,12 @@ export async function POST(request: NextRequest) {
 
       // Send correction prompt
       const correctionMsg = buildCorrectionPrompt();
-      await sendTextMessage(phoneNumber, correctionMsg);
+      await sendTextMessage(targetPhone, correctionMsg);
 
       // Log
       await supabase.from("whatsapp_logs").insert({
         claim_id: claim.id,
-        phone_number: phoneNumber,
+        phone_number: targetPhone,
         message_type: "CORRECTION_REQUEST",
         status: "RECEIVED",
         response: reply,
@@ -132,13 +138,13 @@ export async function POST(request: NextRequest) {
 
       if (trips && trips.length > 0) {
         const detailMsg = buildDetailMessage(trips, claim.total_amount);
-        await sendTextMessage(phoneNumber, detailMsg);
+        await sendTextMessage(targetPhone, detailMsg);
       }
 
       // Log
       await supabase.from("whatsapp_logs").insert({
         claim_id: claim.id,
-        phone_number: phoneNumber,
+        phone_number: targetPhone,
         message_type: "DETAIL_REQUEST",
         status: "RECEIVED",
         response: reply,
@@ -163,7 +169,7 @@ export async function POST(request: NextRequest) {
         // Log
         await supabase.from("whatsapp_logs").insert({
           claim_id: claim.id,
-          phone_number: phoneNumber,
+          phone_number: targetPhone,
           message_type: "COMMENT",
           status: "RECEIVED",
           response: reply,
