@@ -32,12 +32,11 @@ export function ClaimDetailView({ claim }: ClaimDetailViewProps) {
       body: JSON.stringify({ claim_id: claim.id }),
     });
     const result = await res.json();
-    if (result.success && result.wa_url) {
-      toast.success("Membuka WhatsApp...");
-      window.open(result.wa_url, "_blank");
+    if (result.success) {
+      toast.success("WhatsApp berhasil dikirim");
       router.refresh();
     } else {
-      toast.error(result.error || "Gagal membuat tautan WhatsApp");
+      toast.error(result.error || "Gagal mengirim WhatsApp");
     }
   };
 

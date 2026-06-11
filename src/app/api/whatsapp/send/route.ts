@@ -47,17 +47,24 @@ export async function POST(request: NextRequest) {
     total_amount: claim.total_amount,
   });
 
-  // Generate wa.me URL
-  const wa_url = `https://wa.me/${normalizedPhone}?text=${encodeURIComponent(message)}`;
+  // Send via Kirimi API directly
+  const result = await sendTextMessage(normalizedPhone, message);
 
-  // Log the attempt (as manual click)
+  // Log the attempt
   await supabase.from("whatsapp_logs").insert({
     claim_id,
     phone_number: phoneNumber,
     message_type: "CLAIM_NOTIFICATION",
-    status: "MANUAL_CLICK",
-    response: "Opened wa.me link",
+    status: result.success ? "SENT" : "FAILED",
+    response: JSON.stringify(result),
   });
+
+  if (!result.success) {
+    return NextResponse.json(
+      { success: false, error: result.error || "Gagal mengirim WhatsApp" },
+      { status: 500 }
+    );
+  }
 
   // Update claim status
   await supabase
@@ -69,5 +76,5 @@ export async function POST(request: NextRequest) {
     })
     .eq("id", claim_id);
 
-  return NextResponse.json({ success: true, wa_url });
+  return NextResponse.json({ success: true });
 }
