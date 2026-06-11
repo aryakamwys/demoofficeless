@@ -51,9 +51,6 @@ export async function sendTextMessage(
         device_id: config.device_id,
         phone: receiver,
         message,
-        // Beberapa WA API unofficial mendukung typing_time / delay
-        typing_time: Math.floor(delayMs / 1000),
-        delay: Math.floor(delayMs / 1000),
       }),
     });
 
