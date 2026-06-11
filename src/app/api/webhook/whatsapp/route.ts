@@ -60,13 +60,19 @@ export async function POST(request: NextRequest) {
       .order("wa_sent_at", { ascending: false });
 
     // Match by phone number (normalize employee's phone to match webhook's phone format)
-    const claim = claims?.find(
+    let claim = claims?.find(
       (c) => {
         if (!c.employee?.phone_number) return false;
         const dbPhone = c.employee.phone_number.replace(/^\+/, "").replace(/^0/, "62");
-        return dbPhone === phoneNumber;
+        return dbPhone === phoneNumber || dbPhone === phoneNumber.replace("@lid", "");
       }
     );
+
+    // FALLBACK: Jika Kirimi merespons dengan ID @lid (Linked Device / nomor disembunyikan),
+    // kita tidak punya nomor aslinya. Untuk demo ini, kita ambil claim berstatus SENT yang terakhir.
+    if (!claim && phoneNumber.includes("@lid") && claims && claims.length > 0) {
+      claim = claims[0];
+    }
 
     if (!claim) {
       // No active claim found for this number
