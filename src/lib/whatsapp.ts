@@ -30,9 +30,16 @@ interface SendTextResponse {
  */
 export async function sendTextMessage(
   receiver: string,
-  message: string
+  message: string,
+  options?: { delayMs?: number }
 ): Promise<SendTextResponse> {
   const config = getConfig();
+
+  // Simulasi jeda / "typing" sebelum pesan dikirim (default 2 detik)
+  const delayMs = options?.delayMs ?? 2000;
+  if (delayMs > 0) {
+    await new Promise((resolve) => setTimeout(resolve, delayMs));
+  }
 
   try {
     const res = await fetch(`${KIRIMI_BASE_URL}/v1/send-message`, {
@@ -44,6 +51,9 @@ export async function sendTextMessage(
         device_id: config.device_id,
         phone: receiver,
         message,
+        // Beberapa WA API unofficial mendukung typing_time / delay
+        typing_time: Math.floor(delayMs / 1000),
+        delay: Math.floor(delayMs / 1000),
       }),
     });
 
