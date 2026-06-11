@@ -16,10 +16,26 @@ export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
 
+    const supabase = createServiceClient();
+
+    // LOG RAW PAYLOAD FOR DEBUGGING
+    await supabase.from("whatsapp_logs").insert({
+      claim_id: "1aedea14-57ef-4929-8d27-f6b8b513cbe0", // Valid ID
+      phone_number: "SYSTEM",
+      message_type: "RAW_WEBHOOK",
+      status: "RECEIVED",
+      response: JSON.stringify(body),
+    }).catch(e => console.error("Log error", e));
+
     // Extract message data from Kirimi webhook payload
     // Kirimi typically sends: sender, message, device_id, etc.
-    const sender = body.sender || body.from || "";
-    const messageText = (body.message || body.text || "").trim();
+    const sender = body.sender || body.from || body.phone || "";
+    let messageText = (body.message || body.text || "").trim();
+
+    // Sometimes Kirimi wraps message in an object if it's text
+    if (typeof body.message === "object" && body.message.text) {
+      messageText = body.message.text.trim();
+    }
 
     if (!sender || !messageText) {
       return NextResponse.json({ success: true }); // Acknowledge but ignore
@@ -38,14 +54,18 @@ export async function POST(request: NextRequest) {
       .eq("status", "SENT")
       .order("wa_sent_at", { ascending: false });
 
-    // Match by phone number
+    // Match by phone number (normalize employee's phone to match webhook's phone format)
     const claim = claims?.find(
-      (c) => c.employee?.phone_number === phoneNumber
+      (c) => {
+        if (!c.employee?.phone_number) return false;
+        const dbPhone = c.employee.phone_number.replace(/^\+/, "").replace(/^0/, "62");
+        return dbPhone === phoneNumber;
+      }
     );
 
     if (!claim) {
       // No active claim found for this number
-      return NextResponse.json({ success: true });
+      return NextResponse.json({ success: true, reason: "No matching claim found" });
     }
 
     const reply = messageText.trim();
