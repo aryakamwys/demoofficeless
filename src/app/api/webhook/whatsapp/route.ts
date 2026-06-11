@@ -30,11 +30,15 @@ export async function POST(request: NextRequest) {
     // Extract message data from Kirimi webhook payload
     // Kirimi typically sends: sender, message, device_id, etc.
     const sender = body.sender || body.from || body.phone || "";
-    let messageText = (body.message || body.text || "").trim();
+    let messageText = "";
 
-    // Sometimes Kirimi wraps message in an object if it's text
-    if (typeof body.message === "object" && body.message.text) {
+    // Kadang Kirimi mengirim message berbentuk object (misal untuk button/interactive)
+    if (body.message && typeof body.message === "object" && body.message.text) {
       messageText = body.message.text.trim();
+    } else if (typeof body.message === "string") {
+      messageText = body.message.trim();
+    } else if (typeof body.text === "string") {
+      messageText = body.text.trim();
     }
 
     if (!sender || !messageText) {
@@ -43,9 +47,6 @@ export async function POST(request: NextRequest) {
 
     // Normalize phone number (remove + or leading 0)
     const phoneNumber = sender.replace(/^\+/, "").replace(/^0/, "62");
-
-    // Use service role client (webhook is unauthenticated)
-    const supabase = createServiceClient();
 
     // Find the most recent SENT claim for this phone number
     const { data: claims } = await supabase
