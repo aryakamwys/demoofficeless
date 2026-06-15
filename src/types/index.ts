@@ -58,6 +58,10 @@ export interface Trip {
   claim_id: string;
   trip_date: string;
   booking_id: string;
+  service_type: string;
+  payment_method: string;
+  employee_group: string;
+  cost_code: string;
   pickup: string;
   dropoff: string;
   fare: number;
@@ -112,6 +116,10 @@ export interface ParsedTrip {
   employee_name: string;
   booking_id: string;
   trip_date: string;
+  service_type: string;
+  payment_method: string;
+  employee_group: string;
+  cost_code: string;
   pickup: string;
   dropoff: string;
   fare: number;

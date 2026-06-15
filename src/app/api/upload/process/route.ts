@@ -108,6 +108,10 @@ export async function POST(request: NextRequest) {
           ? new Date(t.trip_date).toISOString()
           : new Date().toISOString(),
         booking_id: t.booking_id,
+        service_type: t.service_type,
+        payment_method: t.payment_method,
+        employee_group: t.employee_group,
+        cost_code: t.cost_code,
         pickup: t.pickup,
         dropoff: t.dropoff,
         fare: t.fare,

@@ -37,7 +37,6 @@ export function RecentClaimsTable({ claims }: RecentClaimsTableProps) {
             <TableHeader>
               <TableRow>
                 <TableHead>Employee</TableHead>
-                <TableHead>Employee No.</TableHead>
                 <TableHead className="text-right">Total Amount</TableHead>
                 <TableHead>Status</TableHead>
                 <TableHead>Last Update</TableHead>
@@ -53,9 +52,6 @@ export function RecentClaimsTable({ claims }: RecentClaimsTableProps) {
                     >
                       {claim.employee?.employee_name || "—"}
                     </Link>
-                  </TableCell>
-                  <TableCell className="text-muted-foreground">
-                    {claim.employee?.employee_number || "—"}
                   </TableCell>
                   <TableCell className="text-right font-medium">
                     Rp{claim.total_amount.toLocaleString("id-ID")}

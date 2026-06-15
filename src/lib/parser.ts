@@ -38,6 +38,10 @@ export function parseGrabCSV(csvText: string): ParsedTrip[] {
   const pickupCol = findCol(["pickup", "origin", "dari"]);
   const dropoffCol = findCol(["dropoff", "destination", "drop", "tujuan"]);
   const fareCol = findCol(["fare", "amount", "total", "biaya", "cost"]);
+  const serviceCol = findCol(["service", "layanan", "type"]);
+  const paymentCol = findCol(["payment", "pembayaran", "method"]);
+  const groupCol = findCol(["group", "grup"]);
+  const costCodeCol = findCol(["cost code", "description", "keterangan", "trip code"]);
 
   if (!nameCol || !fareCol) {
     throw new Error(
@@ -51,6 +55,10 @@ export function parseGrabCSV(csvText: string): ParsedTrip[] {
       employee_name: row[nameCol!].trim(),
       booking_id: bookingCol ? row[bookingCol].trim() : "",
       trip_date: dateCol ? row[dateCol].trim() : "",
+      service_type: serviceCol ? row[serviceCol].trim() : "Car Standard",
+      payment_method: paymentCol ? row[paymentCol].trim() : "Corporate Billing",
+      employee_group: groupCol ? row[groupCol].trim() : "General",
+      cost_code: costCodeCol ? row[costCodeCol].trim() : "",
       pickup: pickupCol ? row[pickupCol].trim() : "",
       dropoff: dropoffCol ? row[dropoffCol].trim() : "",
       fare: parseFare(row[fareCol!]),
@@ -137,15 +145,45 @@ export async function parseGrabPDF(buffer: Buffer, employees: any[] = []): Promi
       if (val > fare) fare = val;
     }
 
-    // Extract route (text between "Billing" and the fare/time)
+    // Find service type
+    const serviceTypeMatch = textForFare.match(/(Car Standard|Bike Standard|Car Premium|Bike Hemat|GrabCar\.|GrabBike|GrabCar|Bike)/i);
+    const service_type = serviceTypeMatch ? serviceTypeMatch[0] : "Car Standard";
+
+    // Find payment method
+    const paymentMethodMatch = textForFare.match(/(Corporate Billing)/i);
+    const payment_method = paymentMethodMatch ? paymentMethodMatch[0] : "Corporate Billing";
+
+    const employee_group = "General";
+
+    // Extract cost_code, pickup, dropoff (text between "Billing" and the fare/time)
+    let cost_code = "";
     let pickup = "Rute Perjalanan Grab";
+    let dropoff = "";
+
     const billMatch = textForFare.match(/Billing/i);
     if (billMatch) {
       const start = billMatch.index + billMatch[0].length;
       let cleanedAfter = textForFare.substring(start).trim();
       // remove trailing numbers and times
       cleanedAfter = cleanedAfter.replace(/[\d\.\sA-Z:]+$/, "");
-      pickup = cleanedAfter.trim() || pickup;
+      
+      const pickupStartMatch = cleanedAfter.match(/(Jl\.|Jalan|Cluster|Gedung|Kawasan|Ruko|Mid Plaza|Jatiluhur|CBD|Perumahan|Podomoro|Stasiun|Soekarno-Hatta|Terminal|Alfamidi|South Quarter|De Lovina|Jasmine Garden)/i);
+      
+      if (pickupStartMatch) {
+         cost_code = cleanedAfter.substring(0, pickupStartMatch.index).trim();
+         let addresses = cleanedAfter.substring(pickupStartMatch.index).trim();
+         
+         const secondJl = addresses.substring(10).match(/(Jl\.|Jalan|Cluster|Kawasan|Ruko|Perumahan|Mid Plaza|Jatiluhur|CBD|Podomoro|Stasiun|Soekarno-Hatta|Terminal|Alfamidi|South Quarter|De Lovina|Jasmine Garden)/i);
+         if (secondJl) {
+            const splitIndex = 10 + secondJl.index;
+            pickup = addresses.substring(0, splitIndex).trim();
+            dropoff = addresses.substring(splitIndex).trim();
+         } else {
+            pickup = addresses;
+         }
+      } else {
+         cost_code = cleanedAfter.trim();
+      }
     }
 
     // Find the employee for THIS specific trip
@@ -167,8 +205,12 @@ export async function parseGrabPDF(buffer: Buffer, employees: any[] = []): Promi
         employee_name: tripEmployee,
         booking_id: bookingId,
         trip_date: isoDate,
+        service_type,
+        payment_method,
+        employee_group,
+        cost_code,
         pickup,
-        dropoff: "",
+        dropoff,
         fare,
       });
     }
