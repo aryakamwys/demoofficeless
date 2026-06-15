@@ -1,19 +1,21 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Loader2, Search, RefreshCw, Server } from "lucide-react";
+import { Loader2, Search, RefreshCw, Server, PieChart } from "lucide-react";
 import { toast } from "sonner";
 
 export default function ServicesPage() {
   const [data, setData] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
   const [search, setSearch] = useState("");
+  const [hasFetched, setHasFetched] = useState(false);
 
   const fetchServiceData = async () => {
     setLoading(true);
+    setHasFetched(false);
     try {
       // Hit internal API Route to securely fetch from Service Desk with Basic Auth
       const response = await fetch("/api/services");
@@ -29,6 +31,7 @@ export default function ServicesPage() {
       }
 
       setData(Array.isArray(result.data) ? result.data : [result.data]);
+      setHasFetched(true);
       toast.success("Berhasil mengambil data service desk");
     } catch (error: any) {
       console.error("Fetch error:", error);
@@ -37,6 +40,36 @@ export default function ServicesPage() {
       setLoading(false);
     }
   };
+
+  const mapping = useMemo(() => {
+    if (!data || data.length === 0) return null;
+
+    const grouped: Record<string, Record<string, number>> = {};
+    
+    data.forEach(item => {
+      let month = "Unknown Date";
+      if (item.created_at) {
+        let dateVal = item.created_at;
+        if (/^\d+$/.test(dateVal)) {
+          const num = parseInt(dateVal);
+          dateVal = num > 9999999999 ? num : num * 1000;
+        }
+        
+        const d = new Date(dateVal);
+        if (!isNaN(d.getTime())) {
+          month = d.toLocaleString('id-ID', { month: 'long', year: 'numeric' });
+        }
+      }
+      
+      const cat = item.category_id ? `Category ID: ${item.category_id}` : "Uncategorized";
+      
+      if (!grouped[month]) grouped[month] = {};
+      if (!grouped[month][cat]) grouped[month][cat] = 0;
+      grouped[month][cat]++;
+    });
+
+    return grouped;
+  }, [data]);
 
   return (
     <div className="space-y-4">
@@ -62,6 +95,36 @@ export default function ServicesPage() {
           </Button>
         </div>
       </div>
+
+      {mapping && Object.keys(mapping).length > 0 && (
+        <Card className="border-slate-200 shadow-sm">
+          <CardHeader className="border-b bg-slate-50/50 pb-4 py-4">
+            <div className="flex items-center gap-2">
+              <PieChart className="h-5 w-5 text-blue-600" />
+              <CardTitle className="text-base font-semibold text-slate-800">Mapping Kategori per Bulan</CardTitle>
+            </div>
+          </CardHeader>
+          <CardContent className="p-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {Object.entries(mapping).map(([month, categories]) => (
+                <div key={month} className="border border-slate-200 rounded-lg p-4 bg-white shadow-sm">
+                  <h3 className="font-semibold text-slate-800 mb-3 border-b border-slate-100 pb-2">{month}</h3>
+                  <div className="space-y-2">
+                    {Object.entries(categories).map(([cat, count]) => (
+                      <div key={cat} className="flex justify-between items-center text-sm">
+                        <span className="text-slate-600">{cat}</span>
+                        <span className="bg-blue-50 text-blue-700 font-medium px-2 py-0.5 rounded-full text-xs">
+                          {count} tiket
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Main Content Area */}
       <Card className="min-h-[400px]">

@@ -14,9 +14,10 @@ export async function GET() {
 
     const authHeader = `Basic ${Buffer.from(`${username}:${password}`).toString("base64")}`;
 
-    // Step 1: Hit incidents.by.status to get just the 1 latest open request ID to keep it lightweight
-    // Added status_id=1 because the API requires either status_id or status_ids
-    const statusResponse = await fetch("https://servicedesk.perkom.co.id/api/v1/incidents.by.status?status_id=1&limit=1", {
+    // Step 1: Hit incidents.by.status with multiple status IDs to get history (including closed)
+    // InvGate statuses usually 1: Open, 2: In Progress, 3: Waiting, 4: Resolved, 5: Closed
+    const statusQuery = [1, 2, 3, 4, 5, 6].map(id => `status_ids[]=${id}`).join("&");
+    const statusResponse = await fetch(`https://servicedesk.perkom.co.id/api/v1/incidents.by.status?${statusQuery}&limit=20`, {
       method: "GET",
       headers: {
         "Authorization": authHeader,
