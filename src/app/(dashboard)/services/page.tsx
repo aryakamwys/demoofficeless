@@ -3,8 +3,8 @@
 import { useState, useMemo } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Loader2, Search, RefreshCw, Server, Download, Calendar as CalendarIcon } from "lucide-react";
+import { Card, CardContent } from "@/components/ui/card";
+import { Loader2, RefreshCw, Download, Calendar as CalendarIcon, ChevronsUpDown } from "lucide-react";
 import { toast } from "sonner";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
@@ -14,6 +14,8 @@ export default function ServicesPage() {
   const [search, setSearch] = useState("");
   const [hasFetched, setHasFetched] = useState(false);
   const [dateFilter, setDateFilter] = useState("all");
+  const [pageSize, setPageSize] = useState(10);
+  const [currentPage, setCurrentPage] = useState(1);
 
   const fetchServiceData = async () => {
     setLoading(true);
@@ -33,6 +35,7 @@ export default function ServicesPage() {
 
       setData(Array.isArray(result.data) ? result.data : [result.data]);
       setHasFetched(true);
+      setCurrentPage(1);
       toast.success("Berhasil mengambil data service desk");
     } catch (error: any) {
       console.error("Fetch error:", error);
@@ -56,7 +59,6 @@ export default function ServicesPage() {
   const filteredData = useMemo(() => {
     let filtered = data;
 
-    // Filter by Date
     if (dateFilter !== "all") {
       const now = new Date();
       filtered = filtered.filter(item => {
@@ -78,7 +80,6 @@ export default function ServicesPage() {
       });
     }
 
-    // Filter by Search
     if (search) {
       const lowerSearch = search.toLowerCase();
       filtered = filtered.filter(item => 
@@ -90,13 +91,21 @@ export default function ServicesPage() {
     return filtered;
   }, [data, search, dateFilter]);
 
+  // Pagination Logic
+  const totalEntries = filteredData.length;
+  const totalPages = Math.ceil(totalEntries / pageSize) || 1;
+  const paginatedData = useMemo(() => {
+    const start = (currentPage - 1) * pageSize;
+    return filteredData.slice(start, start + pageSize);
+  }, [filteredData, currentPage, pageSize]);
+
   const downloadCSV = () => {
     if (filteredData.length === 0) {
       toast.error("Tidak ada data untuk di-download");
       return;
     }
 
-    const headers = ["ID", "Subject", "Category ID", "Assigned Help desk ID", "Agent ID", "Creation date"];
+    const headers = ["ID", "Subject", "Category ID", "Assigned Help desk ID", "Agent First Name", "Agent Last Name", "Creation date"];
     const rows = filteredData.map(item => {
       const d = parseDate(item.created_at);
       const dateStr = d ? d.toLocaleString('en-US', { month: '2-digit', day: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: true }) : "";
@@ -107,6 +116,7 @@ export default function ServicesPage() {
         item.category_id || "",
         item.assigned_group_id || "",
         item.assigned_id || "",
+        "", // Last name (We only have Agent ID for now)
         `"${dateStr}"`
       ];
     });
@@ -122,126 +132,196 @@ export default function ServicesPage() {
     document.body.removeChild(link);
   };
 
+  const TableHeader = ({ title }: { title: string }) => (
+    <th className="px-3 py-3 text-left font-semibold text-slate-700 whitespace-nowrap border border-slate-300 bg-slate-100">
+      <div className="flex items-center justify-between gap-2">
+        <span>{title}</span>
+        <ChevronsUpDown className="h-3 w-3 text-slate-400" />
+      </div>
+    </th>
+  );
+
   return (
-    <div className="space-y-4">
-      {/* Header & Actions */}
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <div className="relative flex-1 max-w-sm">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-          <Input
-            placeholder="Search for requests..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="pl-9"
-          />
-        </div>
+    <div className="space-y-6">
+      {/* Top Filter Bar - Matches screenshot top area */}
+      <div className="flex flex-wrap items-center justify-between gap-4 bg-white p-3 rounded-md border border-slate-200 shadow-sm">
         <div className="flex gap-2">
           <Select value={dateFilter} onValueChange={setDateFilter}>
-            <SelectTrigger className="w-[180px]">
-              <CalendarIcon className="mr-2 h-4 w-4 text-muted-foreground" />
+            <SelectTrigger className="w-[140px] h-9 bg-slate-50 border-slate-300">
               <SelectValue placeholder="Date filter" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="all">Date: All Time</SelectItem>
+              <SelectItem value="all">Date: All</SelectItem>
               <SelectItem value="today">Date: Today</SelectItem>
               <SelectItem value="week">Date: This week</SelectItem>
               <SelectItem value="month">Date: This month</SelectItem>
             </SelectContent>
           </Select>
 
-          <Button variant="outline" onClick={downloadCSV}>
-            <Download className="mr-2 h-4 w-4" />
+          <Button variant="outline" size="sm" onClick={downloadCSV} className="h-9 border-slate-300 bg-slate-50">
             Export
           </Button>
+        </div>
 
-          <Button onClick={fetchServiceData} disabled={loading} className="bg-blue-600 hover:bg-blue-700 text-white">
-            {loading ? (
-              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-            ) : (
-              <RefreshCw className="mr-2 h-4 w-4" />
-            )}
-            {loading ? "Fetching..." : "Get Data API"}
+        <div className="flex items-center gap-4">
+          <div className="text-sm text-slate-600 flex items-center gap-2">
+            From <div className="border border-slate-300 bg-slate-50 rounded px-2 py-1 h-9 flex items-center min-w-[120px] text-muted-foreground"><CalendarIcon className="mr-2 h-4 w-4" /> 2026-06-14</div>
+            To <div className="border border-slate-300 bg-slate-50 rounded px-2 py-1 h-9 flex items-center min-w-[120px] text-muted-foreground"><CalendarIcon className="mr-2 h-4 w-4" /> 2026-06-20</div>
+          </div>
+          <Button onClick={fetchServiceData} disabled={loading} variant="outline" size="sm" className="h-9 border-slate-300">
+            <RefreshCw className={`mr-2 h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
+            Refresh
           </Button>
         </div>
       </div>
 
       {/* Main Content Area */}
-      <Card className="min-h-[400px]">
-        <CardHeader className="border-b bg-slate-50/50 flex flex-row items-center justify-between py-3">
-          <CardTitle className="text-base font-medium flex items-center gap-2">
-            <Server className="h-4 w-4 text-blue-600" />
-            Requests
-          </CardTitle>
-          <div className="text-sm text-muted-foreground">
-            Show {filteredData.length} entries
+      <Card className="min-h-[500px] border-slate-300 rounded-sm overflow-hidden rounded-md">
+        <CardContent className="p-4 flex flex-col h-full">
+          {/* Table Controls */}
+          <div className="flex justify-between items-center mb-4">
+            <div className="flex items-center text-sm text-slate-700">
+              <span>Show</span>
+              <select 
+                className="mx-2 border border-slate-300 rounded p-1"
+                value={pageSize}
+                onChange={(e) => { setPageSize(Number(e.target.value)); setCurrentPage(1); }}
+              >
+                <option value={10}>10</option>
+                <option value={20}>20</option>
+                <option value={50}>50</option>
+              </select>
+              <span>entries</span>
+            </div>
+            <div className="flex items-center text-sm text-slate-700">
+              <span className="mr-2">Search:</span>
+              <Input
+                className="w-48 h-8 rounded-sm border-slate-300 focus-visible:ring-0 focus-visible:border-blue-500"
+                value={search}
+                onChange={(e) => { setSearch(e.target.value); setCurrentPage(1); }}
+              />
+            </div>
           </div>
-        </CardHeader>
-        <CardContent className="p-0">
-          {loading ? (
-            <div className="flex flex-col items-center justify-center h-[300px] text-muted-foreground">
-              <Loader2 className="h-8 w-8 animate-spin mb-4 text-blue-600" />
-              <p>Menghubungi server Service Desk...</p>
-            </div>
-          ) : data.length === 0 ? (
-            <div className="flex flex-col items-center justify-center h-[300px] text-muted-foreground">
-              <Server className="h-12 w-12 text-slate-200 mb-4" />
-              <p>{hasFetched ? "Tidak ada tiket request saat ini." : "Belum ada data."}</p>
-              <p className="text-sm">
-                {hasFetched 
-                  ? "API berhasil dipanggil, namun response list kosong." 
-                  : "Klik \"Get Data API\" untuk mengambil data dari Service Desk Perkom."}
-              </p>
-            </div>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm min-w-[1000px] border-collapse">
-                <thead>
-                  <tr className="bg-white border-b-2 border-slate-200">
-                    <th className="px-4 py-4 text-left font-semibold text-slate-600 whitespace-nowrap w-[80px]">ID</th>
-                    <th className="px-4 py-4 text-left font-semibold text-slate-600 whitespace-nowrap min-w-[200px]">Subject</th>
-                    <th className="px-4 py-4 text-left font-semibold text-slate-600 whitespace-nowrap">Category</th>
-                    <th className="px-4 py-4 text-left font-semibold text-slate-600 whitespace-nowrap">Assigned Help desk</th>
-                    <th className="px-4 py-4 text-left font-semibold text-slate-600 whitespace-nowrap">Agent</th>
-                    <th className="px-4 py-4 text-left font-semibold text-slate-600 whitespace-nowrap">Creation date</th>
+
+          {/* Table */}
+          <div className="overflow-x-auto flex-1 border border-slate-300">
+            <table className="w-full text-xs min-w-[1200px] border-collapse bg-white">
+              <thead>
+                <tr>
+                  <TableHeader title="ID" />
+                  <TableHeader title="Subject" />
+                  <TableHeader title="Category" />
+                  <TableHeader title="Assigned Help desk" />
+                  <TableHeader title="Agent First Name" />
+                  <TableHeader title="Agent Last Name" />
+                  <TableHeader title="Creation date" />
+                </tr>
+              </thead>
+              <tbody>
+                {loading ? (
+                  <tr>
+                    <td colSpan={7} className="text-center py-12 text-slate-500 border border-slate-200">
+                      <Loader2 className="h-8 w-8 animate-spin mx-auto mb-2 text-blue-500" />
+                      Loading...
+                    </td>
                   </tr>
-                </thead>
-                <tbody>
-                  {filteredData.map((item: any, index: number) => {
+                ) : paginatedData.length === 0 ? (
+                  <tr>
+                    <td colSpan={7} className="text-center py-8 text-slate-500 border border-slate-200">
+                      No data available in table
+                    </td>
+                  </tr>
+                ) : (
+                  paginatedData.map((item: any, index: number) => {
                     const d = parseDate(item.created_at);
                     const dateStr = d ? d.toLocaleString('en-US', { month: '2-digit', day: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: true }) : "—";
                     
                     return (
-                      <tr key={item.id || index} className="hover:bg-slate-50/50 transition-colors border-b border-slate-100">
-                        <td className="px-4 py-4 align-middle text-blue-600 font-medium cursor-pointer hover:underline">
+                      <tr key={item.id || index} className="hover:bg-blue-50/30 transition-colors">
+                        <td className="px-3 py-2 align-middle text-blue-600 font-medium bg-blue-100/50 border border-slate-200 w-[80px]">
                           {item.id || "—"}
                         </td>
-                        <td className="px-4 py-4 align-middle text-slate-800">
+                        <td className="px-3 py-2 align-middle text-blue-500 font-medium cursor-pointer border border-slate-200">
                           {item.title || "—"}
                         </td>
-                        <td className="px-4 py-4 align-middle text-slate-600">
-                          {item.category_id ? `Category ID: ${item.category_id}` : "—"}
+                        <td className="px-3 py-2 align-middle text-slate-700 border border-slate-200">
+                          {item.category_id ? `Category > ${item.category_id}` : "—"}
                         </td>
-                        <td className="px-4 py-4 align-middle text-slate-600">
-                          {item.assigned_group_id ? `Helpdesk ID: ${item.assigned_group_id}` : "—"}
+                        <td className="px-3 py-2 align-middle text-slate-700 border border-slate-200">
+                          {item.assigned_group_id ? `Helpdesk Level ${item.assigned_group_id}` : "—"}
                         </td>
-                        <td className="px-4 py-4 align-middle text-slate-600">
-                          {item.assigned_id ? `Agent ID: ${item.assigned_id}` : "—"}
+                        <td className="px-3 py-2 align-middle text-slate-700 border border-slate-200">
+                          {item.assigned_id || "—"}
                         </td>
-                        <td className="px-4 py-4 align-middle text-slate-500 text-xs">
+                        <td className="px-3 py-2 align-middle text-slate-700 border border-slate-200">
+                          {/* Blank for now until we map proper last names */}
+                        </td>
+                        <td className="px-3 py-2 align-middle text-slate-700 border border-slate-200 w-[160px]">
                           {dateStr}
                         </td>
                       </tr>
                     );
-                  })}
-                  {filteredData.length === 0 && (
-                    <tr>
-                      <td colSpan={6} className="text-center py-8 text-slate-500">
-                        Tidak ada data yang sesuai dengan filter.
-                      </td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
+                  })
+                )}
+              </tbody>
+            </table>
+          </div>
+
+          {/* Pagination Controls */}
+          {!loading && (
+            <div className="flex justify-between items-center mt-4 text-xs text-slate-600">
+              <div>
+                Showing {totalEntries === 0 ? 0 : ((currentPage - 1) * pageSize) + 1} to {Math.min(currentPage * pageSize, totalEntries)} of {totalEntries} entries
+              </div>
+              <div className="flex items-center gap-1">
+                <button 
+                  onClick={() => setCurrentPage(1)} 
+                  disabled={currentPage === 1}
+                  className="px-2 py-1 hover:text-slate-900 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  First
+                </button>
+                <button 
+                  onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))} 
+                  disabled={currentPage === 1}
+                  className="px-2 py-1 hover:text-slate-900 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  Previous
+                </button>
+                
+                {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+                  let pageNum = currentPage;
+                  if (totalPages <= 5) pageNum = i + 1;
+                  else if (currentPage <= 3) pageNum = i + 1;
+                  else if (currentPage >= totalPages - 2) pageNum = totalPages - 4 + i;
+                  else pageNum = currentPage - 2 + i;
+
+                  return (
+                    <button
+                      key={pageNum}
+                      onClick={() => setCurrentPage(pageNum)}
+                      className={`px-3 py-1 border border-slate-200 ${currentPage === pageNum ? 'bg-blue-600 text-white border-blue-600' : 'bg-slate-50 hover:bg-slate-100'}`}
+                    >
+                      {pageNum}
+                    </button>
+                  );
+                })}
+
+                <button 
+                  onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))} 
+                  disabled={currentPage === totalPages}
+                  className="px-2 py-1 hover:text-slate-900 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  Next
+                </button>
+                <button 
+                  onClick={() => setCurrentPage(totalPages)} 
+                  disabled={currentPage === totalPages}
+                  className="px-2 py-1 hover:text-slate-900 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  Last
+                </button>
+              </div>
             </div>
           )}
         </CardContent>
