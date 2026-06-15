@@ -176,14 +176,14 @@ export default function ServicesPage() {
       </div>
 
       {/* Main Content Area */}
-      <Card className="min-h-[500px] border-slate-300 rounded-sm overflow-hidden rounded-md">
-        <CardContent className="p-4 flex flex-col h-full">
+      <div className="bg-white border-slate-200 border rounded-sm">
+        <div className="p-4 flex flex-col">
           {/* Table Controls */}
-          <div className="flex justify-between items-center mb-4">
-            <div className="flex items-center text-sm text-slate-700">
+          <div className="flex justify-between items-center mb-3">
+            <div className="flex items-center text-xs text-slate-700">
               <span>Show</span>
               <select 
-                className="mx-2 border border-slate-300 rounded p-1"
+                className="mx-2 border border-slate-300 rounded-sm p-1 text-xs"
                 value={pageSize}
                 onChange={(e) => { setPageSize(Number(e.target.value)); setCurrentPage(1); }}
               >
@@ -193,10 +193,10 @@ export default function ServicesPage() {
               </select>
               <span>entries</span>
             </div>
-            <div className="flex items-center text-sm text-slate-700">
+            <div className="flex items-center text-xs text-slate-700">
               <span className="mr-2">Search:</span>
               <Input
-                className="w-48 h-8 rounded-sm border-slate-300 focus-visible:ring-0 focus-visible:border-blue-500"
+                className="w-[180px] h-7 rounded-sm border-slate-300 focus-visible:ring-0 text-xs"
                 value={search}
                 onChange={(e) => { setSearch(e.target.value); setCurrentPage(1); }}
               />
@@ -204,8 +204,8 @@ export default function ServicesPage() {
           </div>
 
           {/* Table */}
-          <div className="overflow-x-auto flex-1 border border-slate-300">
-            <table className="w-full text-xs min-w-[1200px] border-collapse bg-white">
+          <div className="overflow-x-auto w-full border border-slate-300">
+            <table className="w-full text-[11px] min-w-[1200px] border-collapse bg-white">
               <thead>
                 <tr>
                   <TableHeader title="ID" />
@@ -234,29 +234,29 @@ export default function ServicesPage() {
                 ) : (
                   paginatedData.map((item: any, index: number) => {
                     const d = parseDate(item.created_at);
-                    const dateStr = d ? d.toLocaleString('en-US', { month: '2-digit', day: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: true }) : "—";
+                    const dateStr = d ? d.toLocaleString('en-US', { month: '2-digit', day: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: true }).replace(',', '') : "—";
                     
                     return (
                       <tr key={item.id || index} className="hover:bg-blue-50/30 transition-colors">
-                        <td className="px-3 py-2 align-middle text-blue-600 font-medium bg-blue-100/50 border border-slate-200 w-[80px]">
+                        <td className="px-2 py-2 align-middle text-blue-600 font-medium bg-blue-100/50 border border-slate-200 w-[60px]">
                           {item.id || "—"}
                         </td>
-                        <td className="px-3 py-2 align-middle text-blue-500 font-medium cursor-pointer border border-slate-200">
+                        <td className="px-2 py-2 align-middle text-blue-500 font-medium cursor-pointer border border-slate-200">
                           {item.title || "—"}
                         </td>
-                        <td className="px-3 py-2 align-middle text-slate-700 border border-slate-200">
+                        <td className="px-2 py-2 align-middle text-slate-700 border border-slate-200">
                           {item.category_id ? `Category > ${item.category_id}` : "—"}
                         </td>
-                        <td className="px-3 py-2 align-middle text-slate-700 border border-slate-200">
+                        <td className="px-2 py-2 align-middle text-slate-700 border border-slate-200">
                           {item.assigned_group_id ? `Helpdesk Level ${item.assigned_group_id}` : "—"}
                         </td>
-                        <td className="px-3 py-2 align-middle text-slate-700 border border-slate-200">
+                        <td className="px-2 py-2 align-middle text-slate-700 border border-slate-200">
                           {item.assigned_id || "—"}
                         </td>
-                        <td className="px-3 py-2 align-middle text-slate-700 border border-slate-200">
+                        <td className="px-2 py-2 align-middle text-slate-700 border border-slate-200">
                           {/* Blank for now until we map proper last names */}
                         </td>
-                        <td className="px-3 py-2 align-middle text-slate-700 border border-slate-200 w-[160px]">
+                        <td className="px-2 py-2 align-middle text-slate-700 border border-slate-200 w-[140px]">
                           {dateStr}
                         </td>
                       </tr>
@@ -269,22 +269,22 @@ export default function ServicesPage() {
 
           {/* Pagination Controls */}
           {!loading && (
-            <div className="flex justify-between items-center mt-4 text-xs text-slate-600">
+            <div className="flex justify-between items-center mt-3 text-[11px] text-slate-600">
               <div>
                 Showing {totalEntries === 0 ? 0 : ((currentPage - 1) * pageSize) + 1} to {Math.min(currentPage * pageSize, totalEntries)} of {totalEntries} entries
               </div>
-              <div className="flex items-center gap-1">
+              <div className="flex items-center gap-0">
                 <button 
                   onClick={() => setCurrentPage(1)} 
                   disabled={currentPage === 1}
-                  className="px-2 py-1 hover:text-slate-900 disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="px-2 hover:text-slate-900 disabled:opacity-50 disabled:cursor-not-allowed font-medium text-slate-500"
                 >
                   First
                 </button>
                 <button 
                   onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))} 
                   disabled={currentPage === 1}
-                  className="px-2 py-1 hover:text-slate-900 disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="px-2 hover:text-slate-900 disabled:opacity-50 disabled:cursor-not-allowed font-medium text-slate-500"
                 >
                   Previous
                 </button>
@@ -300,7 +300,7 @@ export default function ServicesPage() {
                     <button
                       key={pageNum}
                       onClick={() => setCurrentPage(pageNum)}
-                      className={`px-3 py-1 border border-slate-200 ${currentPage === pageNum ? 'bg-blue-600 text-white border-blue-600' : 'bg-slate-50 hover:bg-slate-100'}`}
+                      className={`px-3 py-1 font-medium ${currentPage === pageNum ? 'bg-blue-600 text-white' : 'text-slate-500 hover:bg-slate-100'}`}
                     >
                       {pageNum}
                     </button>
@@ -310,22 +310,22 @@ export default function ServicesPage() {
                 <button 
                   onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))} 
                   disabled={currentPage === totalPages}
-                  className="px-2 py-1 hover:text-slate-900 disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="px-2 hover:text-slate-900 disabled:opacity-50 disabled:cursor-not-allowed font-medium text-slate-500"
                 >
                   Next
                 </button>
                 <button 
                   onClick={() => setCurrentPage(totalPages)} 
                   disabled={currentPage === totalPages}
-                  className="px-2 py-1 hover:text-slate-900 disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="px-2 hover:text-slate-900 disabled:opacity-50 disabled:cursor-not-allowed font-medium text-slate-500"
                 >
                   Last
                 </button>
               </div>
             </div>
           )}
-        </CardContent>
-      </Card>
+        </div>
+      </div>
     </div>
   );
 }
