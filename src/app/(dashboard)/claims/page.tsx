@@ -183,60 +183,65 @@ export default function ClaimsPage() {
             <div className="overflow-x-auto">
               <table className="w-full text-sm min-w-[1000px] border-collapse">
                 <thead>
-                  <tr className="bg-slate-50">
-                    <th className="border border-slate-200 px-3 py-3 text-left font-semibold text-slate-600 whitespace-nowrap">Nama</th>
-                    <th className="border border-slate-200 px-3 py-3 text-left font-semibold text-slate-600 whitespace-nowrap">Phone</th>
-                    <th className="border border-slate-200 px-3 py-3 text-center font-semibold text-slate-600 whitespace-nowrap">Trips</th>
-                    <th className="border border-slate-200 px-3 py-3 text-right font-semibold text-slate-600 whitespace-nowrap">Total</th>
-                    <th className="border border-slate-200 px-3 py-3 text-left font-semibold text-slate-600 whitespace-nowrap">Status</th>
-                    <th className="border border-slate-200 px-3 py-3 text-left font-semibold text-slate-600 whitespace-nowrap w-24">Action</th>
+                  <tr className="bg-white border-b-2 border-slate-200">
+                    <th className="px-4 py-4 text-left font-semibold text-slate-600 whitespace-nowrap">Date & Time (GMT+7)</th>
+                    <th className="px-4 py-4 text-left font-semibold text-slate-600 whitespace-nowrap">Employee Name</th>
+                    <th className="px-4 py-4 text-left font-semibold text-slate-600 whitespace-nowrap">Phone</th>
+                    <th className="px-4 py-4 text-center font-semibold text-slate-600 whitespace-nowrap">Trips</th>
+                    <th className="px-4 py-4 text-right font-semibold text-slate-600 whitespace-nowrap">Total Fare</th>
+                    <th className="px-4 py-4 text-left font-semibold text-slate-600 whitespace-nowrap">Status</th>
+                    <th className="px-4 py-4 text-left font-semibold text-slate-600 whitespace-nowrap w-24">Action</th>
                   </tr>
                 </thead>
                 <tbody>
                   {claims.map((claim) => (
-                    <tr key={claim.id} className="hover:bg-slate-50/80 transition-colors">
-                      <td className="border border-slate-200 px-3 py-3 font-medium align-middle">
+                    <tr key={claim.id} className="hover:bg-slate-50/50 transition-colors border-b border-slate-100">
+                      <td className="px-4 py-4 align-middle text-slate-500 text-xs">
+                        11 Jun 2026,<br/>12:00:00 PM
+                      </td>
+                      <td className="px-4 py-4 font-medium align-middle text-slate-800">
                         {claim.employee?.employee_name || "—"}
                       </td>
-                      <td className="border border-slate-200 px-3 py-3 text-slate-600 align-middle">
+                      <td className="px-4 py-4 text-slate-500 align-middle">
                         {claim.employee?.phone_number || "—"}
                       </td>
-                      <td className="border border-slate-200 px-3 py-3 text-center align-middle">
+                      <td className="px-4 py-4 text-center align-middle text-slate-600">
                         {claim.trip_count}
                       </td>
-                      <td className="border border-slate-200 px-3 py-3 text-right font-medium text-slate-800 align-middle">
-                        Rp{claim.total_amount.toLocaleString("id-ID")}
+                      <td className="px-4 py-4 text-right font-medium text-slate-800 align-middle">
+                        IDR {claim.total_amount.toLocaleString("id-ID")}
                       </td>
-                      <td className="border border-slate-200 px-3 py-3 align-middle">
+                      <td className="px-4 py-4 align-middle">
                         <StatusBadge status={claim.status} />
                       </td>
-                      <td className="border border-slate-200 px-3 py-3 align-middle">
-                        <div className="flex gap-1">
+                      <td className="px-4 py-4 align-middle">
+                        <div className="flex gap-2">
                           <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-8 w-8"
+                            variant="outline"
+                            size="sm"
+                            className="h-8 px-2 text-xs"
                             asChild
                           >
                             <Link href={`/claims/${claim.id}`}>
-                              <Eye className="h-4 w-4" />
+                              Detail
                             </Link>
                           </Button>
                           {claim.employee &&
                             (claim.status === "PENDING" ||
                               claim.status === "SENT") && (
                               <Button
-                                variant="ghost"
-                                size="icon"
-                                className="h-8 w-8"
+                                variant="outline"
+                                size="sm"
+                                className="h-8 px-2 text-xs"
                                 disabled={sendingId === claim.id}
                                 onClick={() => handleSendWA(claim.id)}
                               >
                                 {sendingId === claim.id ? (
-                                  <Loader2 className="h-4 w-4 animate-spin" />
+                                  <Loader2 className="h-3 w-3 animate-spin mr-1" />
                                 ) : (
-                                  <Send className="h-4 w-4" />
+                                  <Send className="h-3 w-3 mr-1" />
                                 )}
+                                Send
                               </Button>
                             )}
                         </div>
