@@ -24,7 +24,6 @@ import { useState } from "react";
 
 const tripsSubItems = [
   { name: "Employees", href: "/employees", icon: Users },
-  { name: "Manage Service", href: "/services", icon: Settings },
   { name: "Upload", href: "/upload", icon: Upload },
   { name: "Claims", href: "/claims", icon: FileText },
 ];
@@ -186,6 +185,17 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
                 </div>
               </div>
             )}
+
+            {/* Manage Service Module */}
+            <div className="pt-2 mt-2 border-t border-slate-100">
+              <SidebarLink
+                href="/services"
+                icon={Settings}
+                label="Manage Service"
+                isActive={pathname.startsWith("/services")}
+                collapsed={collapsed}
+              />
+            </div>
           </nav>
         </ScrollArea>
 

@@ -27,7 +27,6 @@ import { useState } from "react";
 
 const tripsSubItems = [
   { name: "Employees", href: "/employees", icon: Users },
-  { name: "Manage Service", href: "/services", icon: Settings },
   { name: "Upload", href: "/upload", icon: Upload },
   { name: "Claims", href: "/claims", icon: FileText },
 ];
@@ -147,6 +146,22 @@ export function Header({ collapsed, onToggle }: HeaderProps) {
                   );
                 })}
               </div>
+            </div>
+
+            {/* Manage Service */}
+            <div className="pt-2 mt-2 border-t border-slate-100">
+              <Link
+                href="/services"
+                className={cn(
+                  "flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors",
+                  pathname.startsWith("/services")
+                    ? "bg-accent text-primary"
+                    : "text-muted-foreground hover:bg-accent hover:text-foreground"
+                )}
+              >
+                <Settings className="h-4 w-4 shrink-0" />
+                Manage Service
+              </Link>
             </div>
           </nav>
           <div className="absolute bottom-0 left-0 right-0 p-3 border-t">
