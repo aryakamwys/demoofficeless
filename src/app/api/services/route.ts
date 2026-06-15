@@ -14,8 +14,8 @@ export async function GET() {
 
     const authHeader = `Basic ${Buffer.from(`${username}:${password}`).toString("base64")}`;
 
-    // Step 1: Hit incidents.by.status to get open request IDs
-    const statusResponse = await fetch("https://servicedesk.perkom.co.id/api/v1/incidents.by.status?limit=20", {
+    // Step 1: Hit incidents.by.status to get just the 1 latest open request ID to keep it lightweight
+    const statusResponse = await fetch("https://servicedesk.perkom.co.id/api/v1/incidents.by.status?limit=1", {
       method: "GET",
       headers: {
         "Authorization": authHeader,
@@ -43,8 +43,7 @@ export async function GET() {
       return NextResponse.json({ success: true, data: [] });
     }
 
-    // Step 2: Fetch details using /api/v1/incidents with the retrieved IDs
-    // InvGate expects ids as an array. We format it as ?ids[]=1&ids[]=2
+    // Step 2: Fetch details using /api/v1/incidents with the retrieved ID(s)
     const idsQuery = requestIds.map((id: number) => `ids[]=${id}`).join("&");
     
     const detailResponse = await fetch(`https://servicedesk.perkom.co.id/api/v1/incidents?${idsQuery}`, {
@@ -56,10 +55,8 @@ export async function GET() {
     });
 
     if (!detailResponse.ok) {
-      // If ids[]= doesn't work, maybe it expects a JSON string or comma-separated list
-      // Let's try to just return the IDs so the UI doesn't completely break, but log the error
       console.error(`Step 2 Failed: ${detailResponse.status}`);
-      // Fallback: return dummy objects with just the ID
+      // Fallback: return dummy objects with just the ID if detail fetching fails
       const fallbackData = requestIds.map((id: number) => ({ id, title: "Failed to load details" }));
       return NextResponse.json({ success: true, data: fallbackData, note: "Fallback data due to details fetch error" });
     }
