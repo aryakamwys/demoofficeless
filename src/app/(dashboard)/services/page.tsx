@@ -80,8 +80,12 @@ export default function ServicesPage() {
           ) : data.length === 0 ? (
             <div className="flex flex-col items-center justify-center h-[300px] text-muted-foreground">
               <Server className="h-12 w-12 text-slate-200 mb-4" />
-              <p>Belum ada data.</p>
-              <p className="text-sm">Klik "Get Data API" untuk mengambil data dari Service Desk Perkom.</p>
+              <p>{hasFetched ? "Tidak ada tiket (incident) yang Open saat ini." : "Belum ada data."}</p>
+              <p className="text-sm">
+                {hasFetched 
+                  ? "API berhasil dipanggil, namun response list kosong." 
+                  : "Klik \"Get Data API\" untuk mengambil data dari Service Desk Perkom."}
+              </p>
             </div>
           ) : (
             <div className="overflow-x-auto">

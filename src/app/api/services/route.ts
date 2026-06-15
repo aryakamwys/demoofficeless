@@ -40,16 +40,9 @@ export async function GET() {
     const statusResult = await statusResponse.json();
     const requestIds = statusResult.requestIds || (statusResult.response && statusResult.response.requestIds) || [];
 
+    // Jika requestIds kosong (artinya tidak ada tiket dengan status_id=1), kita kembalikan array kosong
     if (!Array.isArray(requestIds) || requestIds.length === 0) {
-      // Jika requestIds kosong, kita kembalikan raw data ke frontend agar bisa di-debug
-      return NextResponse.json({ 
-        success: true, 
-        data: [{ 
-          id: "DEBUG-EMPTY", 
-          title: `RAW Response: ${JSON.stringify(statusResult).substring(0, 200)}`,
-          status_id: "N/A"
-        }] 
-      });
+      return NextResponse.json({ success: true, data: [] });
     }
 
     // Step 2: Fetch details using /api/v1/incidents with the retrieved ID(s)
