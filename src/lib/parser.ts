@@ -79,25 +79,12 @@ export async function parseGrabPDF(buffer: Buffer, employees: any[] = []): Promi
 
   // Try to extract trip data from text
   // This is a best-effort parser — structure depends on Grab's PDF format
-  const lines = text.split("\n").map((l: string) => l.trim()).filter(Boolean);
   const trips: ParsedTrip[] = [];
 
   // Strip all whitespace and newlines to handle word-wrapping in narrow columns
   const normalizedText = text.replace(/\n/g, " ").replace(/\s+/g, " ");
 
-  // Find the most likely employee for this document
-  let docEmployee = "";
-  const cleanNormalized = normalizedText.toLowerCase().replace(/\s+/g, "");
-  
-  for (const emp of employees) {
-    const normalizedEmp = emp.employee_name.replace(/\s+/g, "").toLowerCase();
-    if (cleanNormalized.includes(normalizedEmp)) {
-      docEmployee = emp.employee_name;
-      break;
-    }
-  }
-
-  // Find all booking IDs (Grab format usually A-[A-Z0-9]{12,25}V)
+  // Find all booking IDs (Grab format usually A-[A-Z0-9\s]{12,25}V)
   const bookingRegex = /A-[A-Z0-9\s]{12,25}V/g;
   const matches = [...normalizedText.matchAll(bookingRegex)];
 
@@ -161,9 +148,23 @@ export async function parseGrabPDF(buffer: Buffer, employees: any[] = []): Promi
       pickup = cleanedAfter.trim() || pickup;
     }
 
+    // Find the employee for THIS specific trip
+    let tripEmployee = "Unknown Employee";
+    const cleanTextAfter = textAfter.toLowerCase().replace(/\s+/g, "");
+    
+    for (const emp of employees) {
+      if (!emp.employee_name) continue;
+      const normalizedEmp = emp.employee_name.replace(/\s+/g, "").toLowerCase();
+      // Check if textAfter starts with or contains the employee name close to the booking ID
+      if (cleanTextAfter.includes(normalizedEmp) && cleanTextAfter.indexOf(normalizedEmp) < 50) {
+        tripEmployee = emp.employee_name;
+        break;
+      }
+    }
+
     if (fare > 0) {
       trips.push({
-        employee_name: docEmployee,
+        employee_name: tripEmployee,
         booking_id: bookingId,
         trip_date: isoDate,
         pickup,
