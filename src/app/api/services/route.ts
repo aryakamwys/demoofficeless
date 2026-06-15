@@ -15,7 +15,8 @@ export async function GET() {
     const authHeader = `Basic ${Buffer.from(`${username}:${password}`).toString("base64")}`;
 
     // Step 1: Hit incidents.by.status to get just the 1 latest open request ID to keep it lightweight
-    const statusResponse = await fetch("https://servicedesk.perkom.co.id/api/v1/incidents.by.status?limit=1", {
+    // Added status_id=1 because the API requires either status_id or status_ids
+    const statusResponse = await fetch("https://servicedesk.perkom.co.id/api/v1/incidents.by.status?status_id=1&limit=1", {
       method: "GET",
       headers: {
         "Authorization": authHeader,
