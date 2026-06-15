@@ -19,10 +19,12 @@ import {
   FileText,
   LogOut,
   Menu,
+  Car,
+  ChevronDown,
 } from "lucide-react";
+import { useState } from "react";
 
-const navigation = [
-  { name: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
+const tripsSubItems = [
   { name: "Employees", href: "/employees", icon: Users },
   { name: "Upload", href: "/upload", icon: Upload },
   { name: "Claims", href: "/claims", icon: FileText },
@@ -40,15 +42,25 @@ function getPageTitle(pathname: string): string {
   return pageTitles[pathname] || "Perkom";
 }
 
-export function Header() {
+interface HeaderProps {
+  collapsed: boolean;
+  onToggle: () => void;
+}
+
+export function Header({ collapsed, onToggle }: HeaderProps) {
   const pathname = usePathname();
   const title = getPageTitle(pathname);
+  const [tripsOpen, setTripsOpen] = useState(true);
 
   const handleLogout = async () => {
     const supabase = createBrowserClient();
     await supabase.auth.signOut();
     window.location.href = "/login";
   };
+
+  const isTripsActive = tripsSubItems.some(
+    (item) => pathname === item.href || pathname.startsWith(item.href)
+  );
 
   return (
     <header className="sticky top-0 z-40 flex h-16 items-center gap-4 border-b bg-background px-4 lg:px-6">
@@ -73,27 +85,67 @@ export function Header() {
             />
           </div>
           <nav className="space-y-1 p-3">
-            {navigation.map((item) => {
-              const isActive =
-                pathname === item.href ||
-                (item.href !== "/dashboard" &&
-                  pathname.startsWith(item.href));
-              return (
-                <Link
-                  key={item.name}
-                  href={item.href}
-                  className={cn(
-                    "flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors",
-                    isActive
-                      ? "bg-accent text-primary"
-                      : "text-muted-foreground hover:bg-accent hover:text-foreground"
-                  )}
-                >
-                  <item.icon className="h-4 w-4 shrink-0" />
-                  {item.name}
-                </Link>
-              );
-            })}
+            {/* Dashboard */}
+            <Link
+              href="/dashboard"
+              className={cn(
+                "flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors",
+                pathname === "/dashboard"
+                  ? "bg-accent text-primary"
+                  : "text-muted-foreground hover:bg-accent hover:text-foreground"
+              )}
+            >
+              <LayoutDashboard className="h-4 w-4 shrink-0" />
+              Dashboard
+            </Link>
+
+            {/* Trips Module */}
+            <button
+              onClick={() => setTripsOpen(!tripsOpen)}
+              className={cn(
+                "flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors",
+                isTripsActive
+                  ? "text-primary"
+                  : "text-muted-foreground hover:bg-accent hover:text-foreground"
+              )}
+            >
+              <Car className="h-4 w-4 shrink-0" />
+              <span className="flex-1 text-left">Trips</span>
+              <ChevronDown
+                className={cn(
+                  "h-3.5 w-3.5 transition-transform duration-200",
+                  tripsOpen && "rotate-180"
+                )}
+              />
+            </button>
+            <div
+              className={cn(
+                "overflow-hidden transition-all duration-200 ease-in-out",
+                tripsOpen ? "max-h-48 opacity-100" : "max-h-0 opacity-0"
+              )}
+            >
+              <div className="ml-4 space-y-0.5 border-l border-slate-200 pl-2">
+                {tripsSubItems.map((item) => {
+                  const isActive =
+                    pathname === item.href || pathname.startsWith(item.href);
+                  return (
+                    <Link
+                      key={item.name}
+                      href={item.href}
+                      className={cn(
+                        "flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors",
+                        isActive
+                          ? "bg-accent text-primary"
+                          : "text-muted-foreground hover:bg-accent hover:text-foreground"
+                      )}
+                    >
+                      <item.icon className="h-4 w-4 shrink-0" />
+                      {item.name}
+                    </Link>
+                  );
+                })}
+              </div>
+            </div>
           </nav>
           <div className="absolute bottom-0 left-0 right-0 p-3 border-t">
             <Button
