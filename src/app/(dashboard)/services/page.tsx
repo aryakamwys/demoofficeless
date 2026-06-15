@@ -84,10 +84,44 @@ export default function ServicesPage() {
               <p className="text-sm">Klik "Get Data API" untuk mengambil data dari Service Desk Perkom.</p>
             </div>
           ) : (
-            <div className="overflow-x-auto p-4">
-              <pre className="text-sm bg-slate-50 p-4 rounded-lg border overflow-auto max-h-[500px]">
-                {JSON.stringify(data, null, 2)}
-              </pre>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm min-w-[800px] border-collapse">
+                <thead>
+                  <tr className="bg-white border-b-2 border-slate-200">
+                    <th className="px-4 py-4 text-left font-semibold text-slate-600 whitespace-nowrap">ID</th>
+                    <th className="px-4 py-4 text-left font-semibold text-slate-600 whitespace-nowrap">Title</th>
+                    <th className="px-4 py-4 text-left font-semibold text-slate-600 whitespace-nowrap">Priority</th>
+                    <th className="px-4 py-4 text-left font-semibold text-slate-600 whitespace-nowrap">Status</th>
+                    <th className="px-4 py-4 text-left font-semibold text-slate-600 whitespace-nowrap">Created At</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {data.map((item: any, index: number) => (
+                    <tr key={item.id || index} className="hover:bg-slate-50/50 transition-colors border-b border-slate-100">
+                      <td className="px-4 py-4 align-middle text-slate-800 font-medium">
+                        #{item.id || "—"}
+                      </td>
+                      <td className="px-4 py-4 align-middle text-slate-800 max-w-[300px] truncate">
+                        {item.title || "—"}
+                      </td>
+                      <td className="px-4 py-4 align-middle text-slate-600">
+                        {item.priority_id ? `Priority ${item.priority_id}` : "—"}
+                      </td>
+                      <td className="px-4 py-4 align-middle">
+                        <span className="inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold bg-slate-100 text-slate-800 border border-slate-200">
+                          Status {item.status_id || "Unknown"}
+                        </span>
+                      </td>
+                      <td className="px-4 py-4 align-middle text-slate-500 text-xs">
+                        {item.created_at ? new Date(item.created_at).toLocaleString('id-ID', {
+                          day: 'numeric', month: 'short', year: 'numeric',
+                          hour: '2-digit', minute: '2-digit'
+                        }) : "—"}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
           )}
         </CardContent>
