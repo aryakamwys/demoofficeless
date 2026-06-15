@@ -21,11 +21,13 @@ import {
   Menu,
   Car,
   ChevronDown,
+  Settings,
 } from "lucide-react";
 import { useState } from "react";
 
 const tripsSubItems = [
   { name: "Employees", href: "/employees", icon: Users },
+  { name: "Manage Service", href: "/services", icon: Settings },
   { name: "Upload", href: "/upload", icon: Upload },
   { name: "Claims", href: "/claims", icon: FileText },
 ];

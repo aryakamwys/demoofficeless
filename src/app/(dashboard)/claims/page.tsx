@@ -13,14 +13,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
+
 import { Skeleton } from "@/components/ui/skeleton";
 import { StatusBadge } from "@/components/claims/status-badge";
 import {
@@ -187,70 +180,72 @@ export default function ClaimsPage() {
               Belum ada data claims.
             </div>
           ) : (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Nama</TableHead>
-                  <TableHead>Phone</TableHead>
-                  <TableHead className="text-center">Trips</TableHead>
-                  <TableHead className="text-right">Total</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead className="w-24">Action</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {claims.map((claim) => (
-                  <TableRow key={claim.id}>
-                    <TableCell className="font-medium">
-                      {claim.employee?.employee_name || "—"}
-                    </TableCell>
-                    <TableCell className="text-muted-foreground">
-                      {claim.employee?.phone_number || "—"}
-                    </TableCell>
-                    <TableCell className="text-center">
-                      {claim.trip_count}
-                    </TableCell>
-                    <TableCell className="text-right font-medium">
-                      Rp{claim.total_amount.toLocaleString("id-ID")}
-                    </TableCell>
-                    <TableCell>
-                      <StatusBadge status={claim.status} />
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex gap-1">
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-8 w-8"
-                          asChild
-                        >
-                          <Link href={`/claims/${claim.id}`}>
-                            <Eye className="h-4 w-4" />
-                          </Link>
-                        </Button>
-                        {claim.employee &&
-                          (claim.status === "PENDING" ||
-                            claim.status === "SENT") && (
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              className="h-8 w-8"
-                              disabled={sendingId === claim.id}
-                              onClick={() => handleSendWA(claim.id)}
-                            >
-                              {sendingId === claim.id ? (
-                                <Loader2 className="h-4 w-4 animate-spin" />
-                              ) : (
-                                <Send className="h-4 w-4" />
-                              )}
-                            </Button>
-                          )}
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm min-w-[1000px] border-collapse">
+                <thead>
+                  <tr className="bg-slate-50">
+                    <th className="border border-slate-200 px-3 py-3 text-left font-semibold text-slate-600 whitespace-nowrap">Nama</th>
+                    <th className="border border-slate-200 px-3 py-3 text-left font-semibold text-slate-600 whitespace-nowrap">Phone</th>
+                    <th className="border border-slate-200 px-3 py-3 text-center font-semibold text-slate-600 whitespace-nowrap">Trips</th>
+                    <th className="border border-slate-200 px-3 py-3 text-right font-semibold text-slate-600 whitespace-nowrap">Total</th>
+                    <th className="border border-slate-200 px-3 py-3 text-left font-semibold text-slate-600 whitespace-nowrap">Status</th>
+                    <th className="border border-slate-200 px-3 py-3 text-left font-semibold text-slate-600 whitespace-nowrap w-24">Action</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {claims.map((claim) => (
+                    <tr key={claim.id} className="hover:bg-slate-50/80 transition-colors">
+                      <td className="border border-slate-200 px-3 py-3 font-medium align-middle">
+                        {claim.employee?.employee_name || "—"}
+                      </td>
+                      <td className="border border-slate-200 px-3 py-3 text-slate-600 align-middle">
+                        {claim.employee?.phone_number || "—"}
+                      </td>
+                      <td className="border border-slate-200 px-3 py-3 text-center align-middle">
+                        {claim.trip_count}
+                      </td>
+                      <td className="border border-slate-200 px-3 py-3 text-right font-medium text-slate-800 align-middle">
+                        Rp{claim.total_amount.toLocaleString("id-ID")}
+                      </td>
+                      <td className="border border-slate-200 px-3 py-3 align-middle">
+                        <StatusBadge status={claim.status} />
+                      </td>
+                      <td className="border border-slate-200 px-3 py-3 align-middle">
+                        <div className="flex gap-1">
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8"
+                            asChild
+                          >
+                            <Link href={`/claims/${claim.id}`}>
+                              <Eye className="h-4 w-4" />
+                            </Link>
+                          </Button>
+                          {claim.employee &&
+                            (claim.status === "PENDING" ||
+                              claim.status === "SENT") && (
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-8 w-8"
+                                disabled={sendingId === claim.id}
+                                onClick={() => handleSendWA(claim.id)}
+                              >
+                                {sendingId === claim.id ? (
+                                  <Loader2 className="h-4 w-4 animate-spin" />
+                                ) : (
+                                  <Send className="h-4 w-4" />
+                                )}
+                              </Button>
+                            )}
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           )}
         </CardContent>
       </Card>
