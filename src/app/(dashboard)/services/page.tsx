@@ -15,27 +15,24 @@ export default function ServicesPage() {
   const fetchServiceData = async () => {
     setLoading(true);
     try {
-      // Endpoint dari referensi user: https://servicedesk.perkom.co.id/api/v1/
-      // Jika terjadi CORS, disarankan memanggilnya melalui Next.js API Route
-      const response = await fetch("https://servicedesk.perkom.co.id/api/v1/", {
-        method: "GET",
-        headers: {
-          "Accept": "application/json",
-          // "Authorization": "Bearer YOUR_TOKEN" // Tambahkan jika butuh auth
-        }
-      });
+      // Hit internal API Route to securely fetch from Service Desk with Basic Auth
+      const response = await fetch("/api/services");
       
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`);
       }
       
       const result = await response.json();
-      // Asumsi API mengembalikan array di result.data atau result langsung
-      setData(Array.isArray(result) ? result : result.data || []);
+      
+      if (!result.success) {
+        throw new Error(result.error || "Gagal mengambil data");
+      }
+
+      setData(Array.isArray(result.data) ? result.data : [result.data]);
       toast.success("Berhasil mengambil data service desk");
-    } catch (error) {
+    } catch (error: any) {
       console.error("Fetch error:", error);
-      toast.error("Gagal mengambil data. Pastikan jaringan terhubung ke VPN Perkom jika ini API internal.");
+      toast.error(error.message || "Gagal mengambil data.");
     } finally {
       setLoading(false);
     }
