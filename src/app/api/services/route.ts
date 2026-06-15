@@ -17,7 +17,9 @@ export async function GET() {
     // Step 1: Hit incidents.by.status with multiple status IDs to get history (including closed)
     // InvGate statuses usually 1: Open, 2: In Progress, 3: Waiting, 4: Resolved, 5: Closed
     const statusQuery = [1, 2, 3, 4, 5, 6].map(id => `status_ids[]=${id}`).join("&");
-    const statusResponse = await fetch(`https://servicedesk.perkom.co.id/api/v1/incidents.by.status?${statusQuery}&limit=20`, {
+    
+    // Hit first to get total
+    let statusResponse = await fetch(`https://servicedesk.perkom.co.id/api/v1/incidents.by.status?${statusQuery}&limit=1`, {
       method: "GET",
       headers: {
         "Authorization": authHeader,
@@ -26,22 +28,35 @@ export async function GET() {
     });
 
     if (!statusResponse.ok) {
-      let errorDetail = "";
-      try {
-        const errJson = await statusResponse.json();
-        errorDetail = JSON.stringify(errJson);
-      } catch (e) {}
-
       return NextResponse.json(
-        { success: false, error: `Step 1 API error: ${statusResponse.status} ${statusResponse.statusText} ${errorDetail}` },
+        { success: false, error: `Step 1 API error: ${statusResponse.status} ${statusResponse.statusText}` },
         { status: statusResponse.status }
       );
     }
 
-    const statusResult = await statusResponse.json();
-    const requestIds = statusResult.requestIds || (statusResult.response && statusResult.response.requestIds) || [];
+    const initialStatusResult = await statusResponse.json();
+    const total = initialStatusResult.total || 0;
+    
+    // We want the newest items. If there's no descending sort, we skip to the end of the list.
+    const fetchLimit = 50; // Get latest 50 items to show a good 1-year mapping
+    let offset = 0;
+    if (total > fetchLimit) {
+      offset = total - fetchLimit;
+    }
 
-    // Jika requestIds kosong (artinya tidak ada tiket dengan status_id=1), kita kembalikan array kosong
+    // Now fetch the actual last items
+    statusResponse = await fetch(`https://servicedesk.perkom.co.id/api/v1/incidents.by.status?${statusQuery}&limit=${fetchLimit}&offset=${offset}`, {
+      method: "GET",
+      headers: {
+        "Authorization": authHeader,
+        "Accept": "application/json",
+      },
+    });
+
+    const statusResult = await statusResponse.json();
+    let requestIds = statusResult.requestIds || (statusResult.response && statusResult.response.requestIds) || [];
+
+    // Jika requestIds kosong, kembalikan array kosong
     if (!Array.isArray(requestIds) || requestIds.length === 0) {
       return NextResponse.json({ success: true, data: [] });
     }
@@ -74,6 +89,11 @@ export async function GET() {
       data = rawData;
     } else if (typeof rawData === 'object' && rawData !== null) {
       data = Object.values(rawData);
+    }
+
+    // Sort descending so the newest tickets are on top
+    if (data.length > 0) {
+      data.sort((a, b) => b.id - a.id);
     }
 
     // Clean up debug details if it's still somehow empty
