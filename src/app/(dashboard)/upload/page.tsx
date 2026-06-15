@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Skeleton } from "@/components/ui/skeleton";
 import {
   Select,
   SelectContent,
@@ -26,15 +27,21 @@ export default function UploadPage() {
   const [file, setFile] = useState<File | null>(null);
   const [loading, setLoading] = useState(false);
   const [uploads, setUploads] = useState<Upload[]>([]);
+  const [historyLoading, setHistoryLoading] = useState(true);
 
   const currentYear = dayjs().year();
   const years = [currentYear - 1, currentYear, currentYear + 1];
 
   const fetchUploads = useCallback(async () => {
-    const res = await fetch("/api/upload");
-    const result = await res.json();
-    if (result.success) {
-      setUploads(result.data);
+    setHistoryLoading(true);
+    try {
+      const res = await fetch("/api/upload");
+      const result = await res.json();
+      if (result.success) {
+        setUploads(result.data);
+      }
+    } finally {
+      setHistoryLoading(false);
     }
   }, []);
 
@@ -148,7 +155,7 @@ export default function UploadPage() {
             ) : (
               <UploadIcon className="mr-2 h-4 w-4" />
             )}
-            Upload & Process
+            {loading ? "Uploading & Processing..." : "Upload & Process"}
           </Button>
         </CardContent>
       </Card>
@@ -159,7 +166,22 @@ export default function UploadPage() {
           <CardTitle className="text-base">Upload History</CardTitle>
         </CardHeader>
         <CardContent>
-          {uploads.length === 0 ? (
+          {historyLoading ? (
+            <div className="space-y-2">
+              {[1, 2, 3, 4].map((row) => (
+                <div key={row} className="flex items-center justify-between rounded-lg border p-3">
+                  <div className="flex items-center gap-3">
+                    <Skeleton className="h-4 w-4 rounded" />
+                    <div className="space-y-1.5">
+                      <Skeleton className="h-4 w-48" />
+                      <Skeleton className="h-3 w-36" />
+                    </div>
+                  </div>
+                  <Skeleton className="h-3 w-10" />
+                </div>
+              ))}
+            </div>
+          ) : uploads.length === 0 ? (
             <p className="text-sm text-muted-foreground text-center py-8">
               Belum ada riwayat upload.
             </p>

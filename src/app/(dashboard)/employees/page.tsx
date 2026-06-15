@@ -5,6 +5,7 @@ import { Employee } from "@/types";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
+import { Skeleton } from "@/components/ui/skeleton";
 import { EmployeeTable } from "@/components/employees/employee-table";
 import { EmployeeFormDialog } from "@/components/employees/employee-form-dialog";
 import { ImportDialog } from "@/components/employees/import-dialog";
@@ -16,15 +17,21 @@ export default function EmployeesPage() {
   const [formOpen, setFormOpen] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
   const [editEmployee, setEditEmployee] = useState<Employee | null>(null);
+  const [loading, setLoading] = useState(true);
 
   const fetchEmployees = useCallback(async () => {
-    const params = new URLSearchParams();
-    if (search) params.set("search", search);
+    setLoading(true);
+    try {
+      const params = new URLSearchParams();
+      if (search) params.set("search", search);
 
-    const res = await fetch(`/api/employees?${params}`);
-    const result = await res.json();
-    if (result.success) {
-      setEmployees(result.data);
+      const res = await fetch(`/api/employees?${params}`);
+      const result = await res.json();
+      if (result.success) {
+        setEmployees(result.data);
+      }
+    } finally {
+      setLoading(false);
     }
   }, [search]);
 
@@ -73,11 +80,28 @@ export default function EmployeesPage() {
       {/* Table */}
       <Card>
         <CardContent className="p-0">
-          <EmployeeTable
-            employees={employees}
-            onEdit={handleEdit}
-            onRefresh={fetchEmployees}
-          />
+          {loading ? (
+            <div className="p-0">
+              <div className="border-b px-4 py-3 flex gap-6">
+                {[60, 140, 100, 120, 80, 60].map((w, i) => (
+                  <Skeleton key={i} className="h-4" style={{ width: w }} />
+                ))}
+              </div>
+              {[1, 2, 3, 4, 5, 6].map((row) => (
+                <div key={row} className="border-b px-4 py-4 flex gap-6 items-center">
+                  {[60, 140, 100, 120, 80, 60].map((w, i) => (
+                    <Skeleton key={i} className="h-4" style={{ width: w }} />
+                  ))}
+                </div>
+              ))}
+            </div>
+          ) : (
+            <EmployeeTable
+              employees={employees}
+              onEdit={handleEdit}
+              onRefresh={fetchEmployees}
+            />
+          )}
         </CardContent>
       </Card>
 

@@ -64,9 +64,7 @@ export function SummaryCards({ summary }: SummaryCardsProps) {
             <CardTitle className="text-sm font-medium text-muted-foreground">
               {card.title}
             </CardTitle>
-            <div className={`rounded-lg p-2 ${card.bg}`}>
-              <card.icon className={`h-4 w-4 ${card.color}`} />
-            </div>
+            <card.icon className={`h-4 w-4 ${card.color}`} />
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">{summary[card.key]}</div>
