@@ -65,8 +65,18 @@ export async function GET() {
     }
 
     const detailResult = await detailResponse.json();
-    let data = Array.isArray(detailResult) ? detailResult : (detailResult.response || detailResult.data || []);
+    
+    let rawData = detailResult.response || detailResult.data || detailResult;
+    let data: any[] = [];
+    
+    // InvGate often returns a dictionary of objects with the request ID as the key, like {"1": { id: 1, ... }}
+    if (Array.isArray(rawData)) {
+      data = rawData;
+    } else if (typeof rawData === 'object' && rawData !== null) {
+      data = Object.values(rawData);
+    }
 
+    // Clean up debug details if it's still somehow empty
     if (!Array.isArray(data) || data.length === 0) {
       data = [{
         id: "DEBUG-DETAIL",
