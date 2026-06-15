@@ -21,15 +21,16 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { Skeleton } from "@/components/ui/skeleton";
 import { StatusBadge } from "@/components/claims/status-badge";
 import {
   Search,
   Eye,
   Send,
   Download,
+  Loader2,
 } from "lucide-react";
 import { toast } from "sonner";
-import dayjs from "dayjs";
 
 export default function ClaimsPage() {
   const [claims, setClaims] = useState<ClaimWithEmployee[]>([]);
@@ -37,17 +38,25 @@ export default function ClaimsPage() {
   const [statusFilter, setStatusFilter] = useState("ALL");
   const [periodFilter, setPeriodFilter] = useState("ALL");
   const [periods, setPeriods] = useState<string[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [sendingId, setSendingId] = useState<string | null>(null);
+  const [exporting, setExporting] = useState(false);
 
   const fetchClaims = useCallback(async () => {
-    const params = new URLSearchParams();
-    if (search) params.set("search", search);
-    if (statusFilter !== "ALL") params.set("status", statusFilter);
-    if (periodFilter !== "ALL") params.set("period", periodFilter);
+    setLoading(true);
+    try {
+      const params = new URLSearchParams();
+      if (search) params.set("search", search);
+      if (statusFilter !== "ALL") params.set("status", statusFilter);
+      if (periodFilter !== "ALL") params.set("period", periodFilter);
 
-    const res = await fetch(`/api/claims?${params}`);
-    const result = await res.json();
-    if (result.success) {
-      setClaims(result.data);
+      const res = await fetch(`/api/claims?${params}`);
+      const result = await res.json();
+      if (result.success) {
+        setClaims(result.data);
+      }
+    } finally {
+      setLoading(false);
     }
   }, [search, statusFilter, periodFilter]);
 
@@ -68,26 +77,35 @@ export default function ClaimsPage() {
   }, [fetchPeriods]);
 
   const handleSendWA = async (claimId: string) => {
-    const res = await fetch("/api/whatsapp/send", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ claim_id: claimId }),
-    });
-    const result = await res.json();
-    if (result.success) {
-      toast.success("WhatsApp berhasil dikirim");
-      fetchClaims();
-    } else {
-      toast.error(result.error || "Gagal mengirim WhatsApp");
+    setSendingId(claimId);
+    try {
+      const res = await fetch("/api/whatsapp/send", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ claim_id: claimId }),
+      });
+      const result = await res.json();
+      if (result.success) {
+        toast.success("WhatsApp berhasil dikirim");
+        fetchClaims();
+      } else {
+        toast.error(result.error || "Gagal mengirim WhatsApp");
+      }
+    } finally {
+      setSendingId(null);
     }
   };
 
   const handleExport = async () => {
-    const params = new URLSearchParams();
-    if (statusFilter !== "ALL") params.set("status", statusFilter);
-    if (periodFilter !== "ALL") params.set("period", periodFilter);
-
-    window.open(`/api/claims/export?${params}`, "_blank");
+    setExporting(true);
+    try {
+      const params = new URLSearchParams();
+      if (statusFilter !== "ALL") params.set("status", statusFilter);
+      if (periodFilter !== "ALL") params.set("period", periodFilter);
+      window.open(`/api/claims/export?${params}`, "_blank");
+    } finally {
+      setTimeout(() => setExporting(false), 1500);
+    }
   };
 
   return (
@@ -134,16 +152,37 @@ export default function ClaimsPage() {
           </Select>
         </div>
 
-        <Button variant="outline" onClick={handleExport}>
-          <Download className="mr-2 h-4 w-4" />
-          Export CSV
+        <Button variant="outline" onClick={handleExport} disabled={exporting}>
+          {exporting ? (
+            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+          ) : (
+            <Download className="mr-2 h-4 w-4" />
+          )}
+          {exporting ? "Exporting..." : "Export CSV"}
         </Button>
       </div>
 
       {/* Table */}
       <Card>
         <CardContent className="p-0">
-          {claims.length === 0 ? (
+          {loading ? (
+            <div className="p-0">
+              {/* Skeleton table header */}
+              <div className="border-b px-4 py-3 flex gap-6">
+                {[100, 140, 100, 60, 80, 80, 60].map((w, i) => (
+                  <Skeleton key={i} className="h-4" style={{ width: w }} />
+                ))}
+              </div>
+              {/* Skeleton table rows */}
+              {[1, 2, 3, 4, 5, 6].map((row) => (
+                <div key={row} className="border-b px-4 py-4 flex gap-6 items-center">
+                  {[100, 140, 100, 60, 80, 80, 60].map((w, i) => (
+                    <Skeleton key={i} className="h-4" style={{ width: w }} />
+                  ))}
+                </div>
+              ))}
+            </div>
+          ) : claims.length === 0 ? (
             <div className="text-center py-12 text-muted-foreground">
               Belum ada data claims.
             </div>
@@ -151,7 +190,6 @@ export default function ClaimsPage() {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Employee No.</TableHead>
                   <TableHead>Nama</TableHead>
                   <TableHead>Phone</TableHead>
                   <TableHead className="text-center">Trips</TableHead>
@@ -164,9 +202,6 @@ export default function ClaimsPage() {
                 {claims.map((claim) => (
                   <TableRow key={claim.id}>
                     <TableCell className="font-medium">
-                      {claim.employee?.employee_number || "—"}
-                    </TableCell>
-                    <TableCell>
                       {claim.employee?.employee_name || "—"}
                     </TableCell>
                     <TableCell className="text-muted-foreground">
@@ -200,9 +235,14 @@ export default function ClaimsPage() {
                               variant="ghost"
                               size="icon"
                               className="h-8 w-8"
+                              disabled={sendingId === claim.id}
                               onClick={() => handleSendWA(claim.id)}
                             >
-                              <Send className="h-4 w-4" />
+                              {sendingId === claim.id ? (
+                                <Loader2 className="h-4 w-4 animate-spin" />
+                              ) : (
+                                <Send className="h-4 w-4" />
+                              )}
                             </Button>
                           )}
                       </div>

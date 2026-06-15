@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import { ClaimDetail } from "@/types";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -12,7 +13,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { StatusBadge } from "@/components/claims/status-badge";
-import { Send, Info, UserCheck, ChevronRight } from "lucide-react";
+import { Send, Info, UserCheck, ChevronRight, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import dayjs from "dayjs";
 import { useRouter } from "next/navigation";
@@ -23,33 +24,45 @@ interface ClaimDetailViewProps {
 
 export function ClaimDetailView({ claim }: ClaimDetailViewProps) {
   const router = useRouter();
+  const [sendingWA, setSendingWA] = useState(false);
+  const [approving, setApproving] = useState(false);
 
   const handleSendWA = async () => {
-    const res = await fetch("/api/whatsapp/send", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ claim_id: claim.id }),
-    });
-    const result = await res.json();
-    if (result.success) {
-      toast.success("WhatsApp berhasil dikirim");
-      router.refresh();
-    } else {
-      toast.error(result.error || "Gagal mengirim WhatsApp");
+    setSendingWA(true);
+    try {
+      const res = await fetch("/api/whatsapp/send", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ claim_id: claim.id }),
+      });
+      const result = await res.json();
+      if (result.success) {
+        toast.success("WhatsApp berhasil dikirim");
+        router.refresh();
+      } else {
+        toast.error(result.error || "Gagal mengirim WhatsApp");
+      }
+    } finally {
+      setSendingWA(false);
     }
   };
 
   const handleApprove = async () => {
-    const res = await fetch(`/api/claims/${claim.id}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ status: "APPROVED", approved_at: new Date().toISOString() }),
-    });
-    if (res.ok) {
-      toast.success("Claim berhasil di-approve");
-      router.refresh();
-    } else {
-      toast.error("Gagal meng-approve claim");
+    setApproving(true);
+    try {
+      const res = await fetch(`/api/claims/${claim.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status: "APPROVED", approved_at: new Date().toISOString() }),
+      });
+      if (res.ok) {
+        toast.success("Claim berhasil di-approve");
+        router.refresh();
+      } else {
+        toast.error("Gagal meng-approve claim");
+      }
+    } finally {
+      setApproving(false);
     }
   };
 
@@ -74,13 +87,34 @@ export function ClaimDetailView({ claim }: ClaimDetailViewProps) {
           {claim.employee &&
             (claim.status === "PENDING" || claim.status === "SENT") && (
               <>
-                <Button variant="outline" onClick={handleApprove} className="border-[#00B14F] text-[#00B14F] hover:bg-[#00B14F]/10">
-                  <UserCheck className="mr-2 h-4 w-4" />
-                  Approve Manual
+                <Button
+                  variant="outline"
+                  onClick={handleApprove}
+                  disabled={approving}
+                  className="border-[#00B14F] text-[#00B14F] hover:bg-[#00B14F]/10 disabled:opacity-60"
+                >
+                  {approving ? (
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  ) : (
+                    <UserCheck className="mr-2 h-4 w-4" />
+                  )}
+                  {approving ? "Processing..." : "Approve Manual"}
                 </Button>
-                <Button onClick={handleSendWA} className="bg-[#00B14F] hover:bg-[#009040] text-white">
-                  <Send className="mr-2 h-4 w-4" />
-                  {claim.wa_sent ? "Resend WhatsApp" : "Send WhatsApp"}
+                <Button
+                  onClick={handleSendWA}
+                  disabled={sendingWA}
+                  className="bg-[#00B14F] hover:bg-[#009040] text-white disabled:opacity-60"
+                >
+                  {sendingWA ? (
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  ) : (
+                    <Send className="mr-2 h-4 w-4" />
+                  )}
+                  {sendingWA
+                    ? "Sending..."
+                    : claim.wa_sent
+                      ? "Resend WhatsApp"
+                      : "Send WhatsApp"}
                 </Button>
               </>
             )}
@@ -93,7 +127,7 @@ export function ClaimDetailView({ claim }: ClaimDetailViewProps) {
         <div className="text-sm text-blue-900">
           <p className="font-semibold mb-1">Panduan HR: Sistem Mapping Perjalanan</p>
           <p>
-            Halaman ini menampilkan data perjalanan Grab Business yang telah <span className="font-semibold">diekstrak otomatis dan dicocokkan (mapped)</span> dengan nama karyawan yang ada di database kita. 
+            Halaman ini menampilkan data perjalanan Grab Business yang telah <span className="font-semibold">diekstrak otomatis dan dicocokkan (mapped)</span> dengan nama karyawan yang ada di database kita.
             Anda dapat meninjau rincian perjalanan di bawah, lalu klik tombol <b>Send WhatsApp</b> di pojok kanan atas untuk mengirim pesan konfirmasi penagihan kepada karyawan yang bersangkutan secara otomatis.
           </p>
         </div>
@@ -135,62 +169,64 @@ export function ClaimDetailView({ claim }: ClaimDetailViewProps) {
         </Card>
       </div>
 
-      {/* Trip Details - Grab Style Table */}
+      {/* Trip Details - Grab Style Table with borders */}
       <Card className="shadow-sm border-slate-200 overflow-hidden">
         <CardHeader className="bg-white border-b pb-4">
           <CardTitle className="text-base font-semibold text-slate-800">Bookings</CardTitle>
         </CardHeader>
         <CardContent className="p-0">
           <div className="overflow-x-auto">
-            <Table className="min-w-[1200px]">
-              <TableHeader className="bg-slate-50">
-                <TableRow>
-                  <TableHead className="whitespace-nowrap font-semibold text-slate-600 h-14">Date & Time<br/><span className="font-normal text-xs text-slate-400">(GMT+7)</span></TableHead>
-                  <TableHead className="whitespace-nowrap font-semibold text-slate-600">Employee Name</TableHead>
-                  <TableHead className="whitespace-nowrap font-semibold text-slate-600">Service Type</TableHead>
-                  <TableHead className="whitespace-nowrap font-semibold text-slate-600 text-right">Total Fare</TableHead>
-                  <TableHead className="whitespace-nowrap font-semibold text-slate-600">Payment Method</TableHead>
-                  <TableHead className="whitespace-nowrap font-semibold text-slate-600">Employee Group</TableHead>
-                  <TableHead className="whitespace-nowrap font-semibold text-slate-600">Trip / Cost Code Description</TableHead>
-                  <TableHead className="whitespace-nowrap font-semibold text-slate-600">Pick-Up Address</TableHead>
-                  <TableHead className="whitespace-nowrap font-semibold text-slate-600">Drop-Off Address</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
+            <table className="w-full text-sm min-w-[1200px] border-collapse">
+              <thead>
+                <tr className="bg-slate-50">
+                  <th className="border border-slate-200 px-3 py-3 text-left font-semibold text-slate-600 whitespace-nowrap">
+                    Date & Time<br/><span className="font-normal text-xs text-slate-400">(GMT+7)</span>
+                  </th>
+                  <th className="border border-slate-200 px-3 py-3 text-left font-semibold text-slate-600 whitespace-nowrap">Employee Name</th>
+                  <th className="border border-slate-200 px-3 py-3 text-left font-semibold text-slate-600 whitespace-nowrap">Service Type</th>
+                  <th className="border border-slate-200 px-3 py-3 text-right font-semibold text-slate-600 whitespace-nowrap">Total Fare</th>
+                  <th className="border border-slate-200 px-3 py-3 text-left font-semibold text-slate-600 whitespace-nowrap">Payment Method</th>
+                  <th className="border border-slate-200 px-3 py-3 text-left font-semibold text-slate-600 whitespace-nowrap">Employee Group</th>
+                  <th className="border border-slate-200 px-3 py-3 text-left font-semibold text-slate-600 whitespace-nowrap">Trip / Cost Code Description</th>
+                  <th className="border border-slate-200 px-3 py-3 text-left font-semibold text-slate-600 whitespace-nowrap">Pick-Up Address</th>
+                  <th className="border border-slate-200 px-3 py-3 text-left font-semibold text-slate-600 whitespace-nowrap">Drop-Off Address</th>
+                </tr>
+              </thead>
+              <tbody>
                 {claim.trips.map((trip) => (
-                  <TableRow key={trip.id} className="hover:bg-slate-50/80 transition-colors">
-                    <TableCell className="whitespace-nowrap align-top py-4">
+                  <tr key={trip.id} className="hover:bg-slate-50/80 transition-colors">
+                    <td className="border border-slate-200 px-3 py-3 whitespace-nowrap align-top">
                       {dayjs(trip.trip_date).format("DD MMM YYYY,")}<br/>
-                      {dayjs(trip.trip_date).format("hh:mm:ss A")}
-                    </TableCell>
-                    <TableCell className="align-top py-4 text-sm font-medium">
+                      <span className="text-slate-500">{dayjs(trip.trip_date).format("hh:mm:ss A")}</span>
+                    </td>
+                    <td className="border border-slate-200 px-3 py-3 align-top font-medium">
                       {claim.employee?.employee_name || "—"}
-                    </TableCell>
-                    <TableCell className="align-top py-4 text-sm text-slate-600">
+                    </td>
+                    <td className="border border-slate-200 px-3 py-3 align-top text-slate-600">
                       {trip.service_type || "Car Standard"}
-                    </TableCell>
-                    <TableCell className="text-right align-top py-4 font-medium text-slate-800 whitespace-nowrap">
+                    </td>
+                    <td className="border border-slate-200 px-3 py-3 text-right align-top font-medium text-slate-800 whitespace-nowrap">
                       IDR {trip.fare.toLocaleString("id-ID")}
-                    </TableCell>
-                    <TableCell className="align-top py-4 text-sm text-slate-600">
+                    </td>
+                    <td className="border border-slate-200 px-3 py-3 align-top text-slate-600">
                       {trip.payment_method || "Corporate Billing"}
-                    </TableCell>
-                    <TableCell className="align-top py-4 text-sm text-slate-600">
+                    </td>
+                    <td className="border border-slate-200 px-3 py-3 align-top text-slate-600">
                       {trip.employee_group || "General"}
-                    </TableCell>
-                    <TableCell className="align-top py-4 text-sm text-slate-600 max-w-[200px]">
+                    </td>
+                    <td className="border border-slate-200 px-3 py-3 align-top text-slate-600 max-w-[200px]">
                       {trip.cost_code || "—"}
-                    </TableCell>
-                    <TableCell className="align-top py-4 text-sm text-slate-600 max-w-[250px] leading-relaxed">
+                    </td>
+                    <td className="border border-slate-200 px-3 py-3 align-top text-slate-600 max-w-[250px] leading-relaxed">
                       {trip.pickup || "—"}
-                    </TableCell>
-                    <TableCell className="align-top py-4 text-sm text-slate-600 max-w-[250px] leading-relaxed">
+                    </td>
+                    <td className="border border-slate-200 px-3 py-3 align-top text-slate-600 max-w-[250px] leading-relaxed">
                       {trip.dropoff || "—"}
-                    </TableCell>
-                  </TableRow>
+                    </td>
+                  </tr>
                 ))}
-              </TableBody>
-            </Table>
+              </tbody>
+            </table>
           </div>
         </CardContent>
       </Card>
@@ -202,7 +238,7 @@ export function ClaimDetailView({ claim }: ClaimDetailViewProps) {
             <CardTitle className="text-base font-semibold text-slate-800">Comments / Koreksi</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4 pt-4">
-            {claim.comments.map((comment, i) => (
+            {claim.comments.map((comment) => (
               <div key={comment.id} className="bg-slate-50 p-3 rounded-md border border-slate-100">
                 <p className="text-sm text-slate-800">{comment.message}</p>
                 <p className="text-xs text-muted-foreground mt-2 font-medium">
