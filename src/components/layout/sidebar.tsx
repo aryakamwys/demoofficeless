@@ -60,26 +60,26 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
         )}
       >
         {/* Logo */}
-        <div className="flex h-20 items-center border-b border-slate-100 overflow-hidden">
+        <div className="flex h-24 items-center border-b border-slate-100 overflow-hidden justify-center px-4">
           {collapsed ? (
-            <div className="flex w-full items-center justify-center px-2">
+            <div className="flex w-full items-center justify-center">
               <Image
                 src="/ogoperkom.png"
                 alt="Perkom"
-                width={40}
-                height={40}
-                className="h-10 w-10 object-contain"
+                width={48}
+                height={48}
+                className="h-12 w-12 object-contain"
                 priority
               />
             </div>
           ) : (
-            <div className="flex items-center gap-2 px-6">
+            <div className="flex items-center justify-center w-full">
               <Image
                 src="/ogoperkom.png"
                 alt="Perkom Logo"
-                width={200}
-                height={64}
-                className="h-16 w-auto object-contain"
+                width={240}
+                height={80}
+                className="h-20 w-auto object-contain scale-110 origin-center"
                 priority
               />
             </div>

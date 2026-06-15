@@ -79,9 +79,9 @@ export function Header({ collapsed, onToggle }: HeaderProps) {
             <Image
               src="/ogoperkom.png"
               alt="Perkom Logo"
-              width={180}
-              height={48}
-              className="h-12 w-auto object-contain"
+              width={200}
+              height={60}
+              className="h-14 w-auto object-contain"
               priority
             />
           </div>
