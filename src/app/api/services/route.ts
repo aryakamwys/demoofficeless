@@ -37,10 +37,18 @@ export async function GET() {
     }
 
     const statusResult = await statusResponse.json();
-    const requestIds = statusResult.requestIds || [];
+    const requestIds = statusResult.requestIds || (statusResult.response && statusResult.response.requestIds) || [];
 
     if (!Array.isArray(requestIds) || requestIds.length === 0) {
-      return NextResponse.json({ success: true, data: [] });
+      // Jika requestIds kosong, kita kembalikan raw data ke frontend agar bisa di-debug
+      return NextResponse.json({ 
+        success: true, 
+        data: [{ 
+          id: "DEBUG-EMPTY", 
+          title: `RAW Response: ${JSON.stringify(statusResult).substring(0, 200)}`,
+          status_id: "N/A"
+        }] 
+      });
     }
 
     // Step 2: Fetch details using /api/v1/incidents with the retrieved ID(s)
@@ -62,7 +70,15 @@ export async function GET() {
     }
 
     const detailResult = await detailResponse.json();
-    const data = Array.isArray(detailResult) ? detailResult : (detailResult.response || detailResult.data || []);
+    let data = Array.isArray(detailResult) ? detailResult : (detailResult.response || detailResult.data || []);
+
+    if (!Array.isArray(data) || data.length === 0) {
+      data = [{
+        id: "DEBUG-DETAIL",
+        title: `RAW Detail: ${JSON.stringify(detailResult).substring(0, 200)}`,
+        status_id: "N/A"
+      }];
+    }
 
     return NextResponse.json({ success: true, data });
   } catch (error: any) {
