@@ -95,6 +95,8 @@ export function buildClaimMessage(params: {
     `1 - Setuju`,
     `2 - Koreksi`,
     `3 - Detail`,
+    ``,
+    `Ref: ${new Date().getTime().toString().slice(-6)}`
   ].join("\n");
 }
 
