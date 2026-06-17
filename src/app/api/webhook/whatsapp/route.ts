@@ -187,14 +187,14 @@ export async function POST(request: NextRequest) {
         // Approve
         await supabase.from("claims").update({ manager_status: "APPROVED" }).eq("id", claim.id);
         await sendTextMessage(phoneNumber, "Terima kasih, klaim telah Anda setujui.");
-        await sendTextMessage(targetPhone, buildEmployeeStatusUpdateMessage("APPROVED", claim.employee.manager.employee_name, "MANAGER"));
+        await sendTextMessage(targetPhone, buildEmployeeStatusUpdateMessage("APPROVED", claim.manager?.employee_name || "Manager", "MANAGER"));
         
         await proceedToHrOrFinalize(claim);
       } else if (reply === "2") {
         // Reject
         await supabase.from("claims").update({ manager_status: "REJECTED", status: "NEED_REVIEW" }).eq("id", claim.id);
         await sendTextMessage(phoneNumber, "Klaim telah ditolak.");
-        await sendTextMessage(targetPhone, buildEmployeeStatusUpdateMessage("REJECTED", claim.employee.manager.employee_name, "MANAGER"));
+        await sendTextMessage(targetPhone, buildEmployeeStatusUpdateMessage("REJECTED", claim.manager?.employee_name || "Manager", "MANAGER"));
       } else {
         await sendTextMessage(phoneNumber, "Balasan tidak valid. Silakan balas 1 untuk Approve atau 2 untuk Reject.");
       }
@@ -208,12 +208,12 @@ export async function POST(request: NextRequest) {
         // Approve
         await supabase.from("claims").update({ hr_status: "APPROVED", status: "APPROVED" }).eq("id", claim.id);
         await sendTextMessage(phoneNumber, "Terima kasih, klaim telah selesai Anda setujui.");
-        await sendTextMessage(targetPhone, buildEmployeeStatusUpdateMessage("FINALIZED", claim.employee.hr.employee_name, "HR"));
+        await sendTextMessage(targetPhone, buildEmployeeStatusUpdateMessage("FINALIZED", claim.hr?.employee_name || "HR", "HR"));
       } else if (reply === "2") {
         // Reject
         await supabase.from("claims").update({ hr_status: "REJECTED", status: "NEED_REVIEW" }).eq("id", claim.id);
         await sendTextMessage(phoneNumber, "Klaim telah ditolak.");
-        await sendTextMessage(targetPhone, buildEmployeeStatusUpdateMessage("REJECTED", claim.employee.hr.employee_name, "HR"));
+        await sendTextMessage(targetPhone, buildEmployeeStatusUpdateMessage("REJECTED", claim.hr?.employee_name || "HR", "HR"));
       } else {
         await sendTextMessage(phoneNumber, "Balasan tidak valid. Silakan balas 1 untuk Approve atau 2 untuk Reject.");
       }
