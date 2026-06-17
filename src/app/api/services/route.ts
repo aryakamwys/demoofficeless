@@ -94,6 +94,9 @@ export async function GET() {
     // Sort descending so the newest tickets are on top
     if (data.length > 0) {
       data.sort((a, b) => b.id - a.id);
+      try {
+        require("fs").writeFileSync("test_incident.json", JSON.stringify(data[0], null, 2));
+      } catch(e){}
     }
 
     // Clean up debug details if it's still somehow empty
@@ -103,6 +106,45 @@ export async function GET() {
         title: `RAW Detail: ${JSON.stringify(detailResult).substring(0, 200)}`,
         status_id: "N/A"
       }];
+    }
+
+    // Step 3: Fetch User Details for Assigned Agents
+    const assignedIds = [...new Set(data.map(d => d.assigned_id).filter(id => id != null))];
+    if (assignedIds.length > 0) {
+      try {
+        const usersQuery = assignedIds.map(id => `ids[]=${id}`).join("&");
+        const usersResponse = await fetch(`https://servicedesk.perkom.co.id/api/v1/users?${usersQuery}`, {
+          method: "GET",
+          headers: {
+            "Authorization": authHeader,
+            "Accept": "application/json",
+          },
+        });
+        
+        if (usersResponse.ok) {
+          const usersResult = await usersResponse.json();
+          const usersData = usersResult.response || usersResult.data || usersResult;
+          
+          let usersMap: Record<string, any> = {};
+          if (Array.isArray(usersData)) {
+            usersData.forEach(u => { if (u && u.id) usersMap[u.id] = u; });
+          } else if (typeof usersData === 'object' && usersData !== null) {
+            usersMap = usersData;
+          }
+          
+          // Map back to data
+          data = data.map(item => {
+            if (item.assigned_id && usersMap[item.assigned_id]) {
+              item.assigned_user = usersMap[item.assigned_id];
+            }
+            return item;
+          });
+        } else {
+          console.error("Failed to fetch users:", usersResponse.status);
+        }
+      } catch (e) {
+        console.error("Error fetching users:", e);
+      }
     }
 
     return NextResponse.json({ success: true, data });
