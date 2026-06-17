@@ -16,7 +16,7 @@ export async function POST(request: NextRequest) {
   // Get claim with employee
   const { data: claim, error: claimError } = await supabase
     .from("claims")
-    .select("*, employee:employees(*)")
+    .select("*, employee:employees!claims_employee_id_fkey(*)")
     .eq("id", claim_id)
     .single();
 

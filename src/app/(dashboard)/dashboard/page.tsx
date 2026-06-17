@@ -39,7 +39,7 @@ async function getDashboardData() {
   // Fetch recent claims with employee info
   const { data: recentClaims } = await supabase
     .from("claims")
-    .select("*, employee:employees(*)")
+    .select("*, employee:employees!claims_employee_id_fkey(*)")
     .order("updated_at", { ascending: false })
     .limit(10);
 

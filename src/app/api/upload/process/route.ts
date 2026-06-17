@@ -95,11 +95,16 @@ export async function POST(request: NextRequest) {
           trip_count: group.trip_count,
           total_amount: group.total_amount,
           status: matchedEmployee ? "PENDING" : "UNMATCHED",
+          manager_id: matchedEmployee?.manager_id || null,
+          hr_id: matchedEmployee?.hr_id || null,
         })
         .select()
         .single();
 
-      if (claimError || !claim) continue;
+      if (claimError || !claim) {
+        console.error("Failed to insert claim:", claimError);
+        continue;
+      }
 
       // Create trips
       const tripRecords = group.trips.map((t) => ({
@@ -117,7 +122,11 @@ export async function POST(request: NextRequest) {
         fare: t.fare,
       }));
 
-      await supabase.from("trips").insert(tripRecords);
+      const { error: tripsError } = await supabase.from("trips").insert(tripRecords);
+      if (tripsError) {
+        console.error("Failed to insert trips:", tripsError);
+      }
+      
       claimsCreated++;
     }
 

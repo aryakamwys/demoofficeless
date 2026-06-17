@@ -14,7 +14,7 @@ export default async function ClaimDetailPage({ params }: ClaimDetailPageProps) 
   // Fetch claim with employee
   const { data: claim, error } = await supabase
     .from("claims")
-    .select("*, employee:employees(*)")
+    .select("*, employee:employees!claims_employee_id_fkey(*)")
     .eq("id", id)
     .single();
 

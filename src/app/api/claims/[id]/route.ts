@@ -10,7 +10,7 @@ export async function GET(
 
   const { data: claim, error } = await supabase
     .from("claims")
-    .select("*, employee:employees(*)")
+    .select("*, employee:employees!claims_employee_id_fkey(*)")
     .eq("id", id)
     .single();
 

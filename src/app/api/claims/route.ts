@@ -22,7 +22,7 @@ export async function GET(request: NextRequest) {
 
   let query = supabase
     .from("claims")
-    .select("*, employee:employees(*)")
+    .select("*, employee:employees!claims_employee_id_fkey(*)")
     .order("updated_at", { ascending: false });
 
   if (status) {
