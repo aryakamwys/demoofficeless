@@ -102,7 +102,7 @@ export function buildClaimMessage(params: {
  * Build the trip detail message.
  */
 export function buildDetailMessage(
-  trips: Array<{ trip_date: string; fare: number }>,
+  trips: Array<{ trip_date: string; pickup: string; dropoff: string; fare: number }>,
   total_amount: number
 ): string {
   const lines = trips.map((t) => {
@@ -114,7 +114,7 @@ export function buildDetailMessage(
     ];
     const month = monthNames[date.getMonth()];
     const fare = `Rp${t.fare.toLocaleString("id-ID")}`;
-    return `${day} ${month} - ${fare}`;
+    return `- ${day} ${month}: ${t.pickup} -> ${t.dropoff} (${fare})`;
   });
 
   lines.push("");
