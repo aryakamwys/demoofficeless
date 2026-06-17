@@ -177,7 +177,7 @@ export function ClaimDetailView({ claim }: ClaimDetailViewProps) {
       </div>
 
       {/* Trip Details - Grab Style Table with borders */}
-      <Card className="shadow-sm border-slate-200 overflow-hidden print:shadow-none print:border-none">
+      <Card className="shadow-sm border-slate-200 overflow-hidden print:shadow-none print:border-none print:overflow-visible">
         <CardHeader className="bg-white border-b pb-4 print:hidden">
           <CardTitle className="text-base font-semibold text-slate-800">Bookings</CardTitle>
         </CardHeader>
@@ -235,7 +235,7 @@ export function ClaimDetailView({ claim }: ClaimDetailViewProps) {
       </Card>
       
       {/* Signature Section for Print */}
-      <div className="hidden print:block mt-12 pt-8">
+      <div className="hidden print:block mt-12 pt-8 print:break-inside-avoid">
         <div className="grid grid-cols-3 gap-8 text-center">
           <div className="space-y-16">
             <p className="font-semibold text-sm">Disetujui Oleh (Karyawan),</p>
