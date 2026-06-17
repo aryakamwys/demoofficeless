@@ -5,23 +5,25 @@ import {
   buildDetailMessage,
   buildConfirmationMessage,
   buildCorrectionPrompt,
+  buildManagerApprovalMessage,
+  buildHrApprovalMessage,
+  buildEmployeeStatusUpdateMessage
 } from "@/lib/whatsapp";
 
-/**
- * Kirimi webhook endpoint.
- * Configure this URL in your Kirimi dashboard as the webhook URL.
- * Kirimi sends incoming messages to this endpoint.
- */
+function normalizePhone(phone: string | undefined | null) {
+  if (!phone) return null;
+  return phone.replace(/^\+/, "").replace(/^0/, "62").replace("@lid", "");
+}
+
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-
     const supabase = createServiceClient();
 
-    // LOG RAW PAYLOAD FOR DEBUGGING
+    // Log raw payload
     try {
       await supabase.from("whatsapp_logs").insert({
-        claim_id: "1aedea14-57ef-4929-8d27-f6b8b513cbe0", // Valid ID
+        claim_id: "1aedea14-57ef-4929-8d27-f6b8b513cbe0", // Dummy/System ID
         phone_number: "SYSTEM",
         message_type: "RAW_WEBHOOK",
         status: "RECEIVED",
@@ -31,12 +33,9 @@ export async function POST(request: NextRequest) {
       console.error("Log error", e);
     }
 
-    // Extract message data from Kirimi webhook payload
-    // Kirimi typically sends: sender, message, device_id, etc.
     const sender = body.sender || body.from || body.phone || "";
     let messageText = "";
 
-    // Kadang Kirimi mengirim message berbentuk object (misal untuk button/interactive)
     if (body.message && typeof body.message === "object" && body.message.text) {
       messageText = body.message.text.trim();
     } else if (typeof body.message === "string") {
@@ -46,147 +45,196 @@ export async function POST(request: NextRequest) {
     }
 
     if (!sender || !messageText) {
-      return NextResponse.json({ success: true }); // Acknowledge but ignore
+      return NextResponse.json({ success: true });
     }
 
-    // Normalize phone number (remove + or leading 0)
-    const phoneNumber = sender.replace(/^\+/, "").replace(/^0/, "62");
+    const phoneNumber = normalizePhone(sender);
+    if (!phoneNumber) return NextResponse.json({ success: true });
 
-    // Find the most recent SENT claim for this phone number
+    // Find active claims
+    // We fetch claims that are SENT or NEED_REVIEW
     const { data: claims } = await supabase
       .from("claims")
-      .select("*, employee:employees(*)")
-      .eq("status", "SENT")
+      .select(`
+        *,
+        employee:employees!claims_employee_id_fkey(*),
+        manager:employees!claims_manager_id_fkey(*),
+        hr:employees!claims_hr_id_fkey(*),
+        trips(*)
+      `)
+      .in("status", ["SENT", "NEED_REVIEW"])
       .order("wa_sent_at", { ascending: false });
 
-    // Match by phone number (normalize employee's phone to match webhook's phone format)
-    let claim = claims?.find(
-      (c) => {
-        if (!c.employee?.phone_number) return false;
-        const dbPhone = c.employee.phone_number.replace(/^\+/, "").replace(/^0/, "62");
-        return dbPhone === phoneNumber || dbPhone === phoneNumber.replace("@lid", "");
-      }
-    );
+    if (!claims || claims.length === 0) {
+      return NextResponse.json({ success: true, reason: "No active claims" });
+    }
 
-    // FALLBACK: Jika Kirimi merespons dengan ID @lid (Linked Device / nomor disembunyikan),
-    // kita tidak punya nomor aslinya. Untuk demo ini, kita ambil claim berstatus SENT yang terakhir.
-    if (!claim && phoneNumber.includes("@lid") && claims && claims.length > 0) {
-      claim = claims[0];
+    let claim = null;
+    let role = null;
+
+    // Match sender to claim and role
+    for (const c of claims) {
+      if (!c.employee) continue;
+      
+      const empPhone = normalizePhone(c.employee.phone_number);
+      const mgrPhone = normalizePhone(c.manager?.phone_number);
+      const hrPhone = normalizePhone(c.hr?.phone_number);
+
+      // Check HR (If Manager approved, but HR is pending)
+      if (hrPhone === phoneNumber && c.approved_at && c.manager_status !== 'PENDING' && c.hr_status === 'PENDING') {
+        claim = c;
+        role = 'HR';
+        break;
+      }
+      
+      // Check Manager (If Employee approved, but Manager is pending)
+      if (mgrPhone === phoneNumber && c.approved_at && c.manager_status === 'PENDING') {
+        claim = c;
+        role = 'MANAGER';
+        break;
+      }
+      
+      // Check Employee
+      if (empPhone === phoneNumber && !c.approved_at) {
+        claim = c;
+        role = 'EMPLOYEE';
+        break;
+      }
     }
 
     if (!claim) {
-      // No active claim found for this number
-      return NextResponse.json({ success: true, reason: "No matching claim found" });
+      return NextResponse.json({ success: true, reason: "No matching claim/role found for phone" });
     }
 
     const reply = messageText.trim();
-    
-    // SELALU gunakan nomor asli dari database untuk membalas, 
-    // karena phoneNumber dari webhook mungkin berupa @lid yang tidak bisa dikirimi pesan.
-    const targetPhone = claim.employee?.phone_number 
-      ? claim.employee.phone_number.replace(/^\+/, "").replace(/^0/, "62")
-      : phoneNumber;
+    const targetPhone = normalizePhone(claim.employee?.phone_number) || phoneNumber;
 
-    if (reply === "1") {
-      // Approved
-      await supabase
-        .from("claims")
-        .update({
-          status: "APPROVED",
-          approved_at: new Date().toISOString(),
-        })
-        .eq("id", claim.id);
-
-      // Send confirmation
-      const confirmMsg = buildConfirmationMessage();
-      await sendTextMessage(targetPhone, confirmMsg);
-
-      // Log
-      await supabase.from("whatsapp_logs").insert({
-        claim_id: claim.id,
-        phone_number: targetPhone,
-        message_type: "APPROVAL",
-        status: "RECEIVED",
-        response: reply,
-      });
-    } else if (reply === "2") {
-      // Need review
-      await supabase
-        .from("claims")
-        .update({ status: "NEED_REVIEW" })
-        .eq("id", claim.id);
-
-      // Send correction prompt
-      const correctionMsg = buildCorrectionPrompt();
-      await sendTextMessage(targetPhone, correctionMsg);
-
-      // Log
-      await supabase.from("whatsapp_logs").insert({
-        claim_id: claim.id,
-        phone_number: targetPhone,
-        message_type: "CORRECTION_REQUEST",
-        status: "RECEIVED",
-        response: reply,
-      });
-    } else if (reply === "3") {
-      // Send detail
-      const { data: trips } = await supabase
-        .from("trips")
-        .select("*")
-        .eq("claim_id", claim.id)
-        .order("trip_date", { ascending: true });
-
-      if (trips && trips.length > 0) {
-        const detailMsg = buildDetailMessage(trips, claim.total_amount);
-        await sendTextMessage(targetPhone, detailMsg);
+    // Helper to proceed to HR or Finalize
+    const proceedToHrOrFinalize = async (c: any) => {
+      if (c.hr) {
+        // Send to HR
+        await sendTextMessage(
+          normalizePhone(c.hr.phone_number)!,
+          buildHrApprovalMessage({
+            employee_name: c.employee.employee_name,
+            manager_name: c.manager ? c.manager.employee_name : "Sistem",
+            period: c.period,
+            total_amount: c.total_amount,
+            trips: c.trips || [],
+          })
+        );
+      } else {
+        // No HR, auto finalize
+        await supabase.from("claims").update({ status: "APPROVED", hr_status: "APPROVED" }).eq("id", c.id);
+        await sendTextMessage(
+          targetPhone,
+          buildEmployeeStatusUpdateMessage("FINALIZED", "Sistem", "HR")
+        );
       }
+    };
 
-      // Log
-      await supabase.from("whatsapp_logs").insert({
-        claim_id: claim.id,
-        phone_number: targetPhone,
-        message_type: "DETAIL_REQUEST",
-        status: "RECEIVED",
-        response: reply,
-      });
-    } else {
-      // Free-text reply — treat as a comment/correction
-      // Only store if claim status is NEED_REVIEW
-      if (claim.status === "NEED_REVIEW" || reply.length > 5) {
-        await supabase.from("comments").insert({
-          claim_id: claim.id,
-          message: reply,
-        });
+    // ==========================================
+    // ROLE: EMPLOYEE
+    // ==========================================
+    if (role === 'EMPLOYEE') {
+      if (reply === "1") {
+        await supabase.from("claims").update({ approved_at: new Date().toISOString() }).eq("id", claim.id);
+        
+        const hasManager = !!claim.manager;
+        const confirmMsg = buildConfirmationMessage(hasManager ? claim.manager.employee_name : undefined);
+        await sendTextMessage(targetPhone, confirmMsg);
 
-        // Update status to NEED_REVIEW if not already
-        if (claim.status !== "NEED_REVIEW") {
-          await supabase
-            .from("claims")
-            .update({ status: "NEED_REVIEW" })
-            .eq("id", claim.id);
+        if (hasManager) {
+          // Send to Manager
+          const mgrPhone = normalizePhone(claim.manager.phone_number);
+          if (mgrPhone) {
+            await sendTextMessage(mgrPhone, buildManagerApprovalMessage({
+              employee_name: claim.employee.employee_name,
+              period: claim.period,
+              total_amount: claim.total_amount,
+              trips: claim.trips || [],
+            }));
+          }
+        } else {
+          // No Manager, auto-approve manager step, proceed to HR
+          await supabase.from("claims").update({ manager_status: "APPROVED" }).eq("id", claim.id);
+          await proceedToHrOrFinalize(claim);
         }
 
-        // Log
-        await supabase.from("whatsapp_logs").insert({
-          claim_id: claim.id,
-          phone_number: targetPhone,
-          message_type: "COMMENT",
-          status: "RECEIVED",
-          response: reply,
-        });
+      } else if (reply === "2") {
+        await supabase.from("claims").update({ status: "NEED_REVIEW" }).eq("id", claim.id);
+        await sendTextMessage(targetPhone, buildCorrectionPrompt());
+      } else if (reply === "3") {
+        const { data: trips } = await supabase.from("trips").select("*").eq("claim_id", claim.id).order("trip_date", { ascending: true });
+        if (trips && trips.length > 0) {
+          await sendTextMessage(targetPhone, buildDetailMessage(trips, claim.total_amount));
+        }
+      } else {
+        if (claim.status === "NEED_REVIEW" || reply.length > 5) {
+          await supabase.from("comments").insert({ claim_id: claim.id, message: reply });
+          if (claim.status !== "NEED_REVIEW") {
+            await supabase.from("claims").update({ status: "NEED_REVIEW" }).eq("id", claim.id);
+          }
+        }
       }
     }
+
+    // ==========================================
+    // ROLE: MANAGER
+    // ==========================================
+    else if (role === 'MANAGER') {
+      if (reply === "1") {
+        // Approve
+        await supabase.from("claims").update({ manager_status: "APPROVED" }).eq("id", claim.id);
+        await sendTextMessage(phoneNumber, "Terima kasih, klaim telah Anda setujui.");
+        await sendTextMessage(targetPhone, buildEmployeeStatusUpdateMessage("APPROVED", claim.employee.manager.employee_name, "MANAGER"));
+        
+        await proceedToHrOrFinalize(claim);
+      } else if (reply === "2") {
+        // Reject
+        await supabase.from("claims").update({ manager_status: "REJECTED", status: "NEED_REVIEW" }).eq("id", claim.id);
+        await sendTextMessage(phoneNumber, "Klaim telah ditolak.");
+        await sendTextMessage(targetPhone, buildEmployeeStatusUpdateMessage("REJECTED", claim.employee.manager.employee_name, "MANAGER"));
+      } else {
+        await sendTextMessage(phoneNumber, "Balasan tidak valid. Silakan balas 1 untuk Approve atau 2 untuk Reject.");
+      }
+    }
+
+    // ==========================================
+    // ROLE: HR
+    // ==========================================
+    else if (role === 'HR') {
+      if (reply === "1") {
+        // Approve
+        await supabase.from("claims").update({ hr_status: "APPROVED", status: "APPROVED" }).eq("id", claim.id);
+        await sendTextMessage(phoneNumber, "Terima kasih, klaim telah selesai Anda setujui.");
+        await sendTextMessage(targetPhone, buildEmployeeStatusUpdateMessage("FINALIZED", claim.employee.hr.employee_name, "HR"));
+      } else if (reply === "2") {
+        // Reject
+        await supabase.from("claims").update({ hr_status: "REJECTED", status: "NEED_REVIEW" }).eq("id", claim.id);
+        await sendTextMessage(phoneNumber, "Klaim telah ditolak.");
+        await sendTextMessage(targetPhone, buildEmployeeStatusUpdateMessage("REJECTED", claim.employee.hr.employee_name, "HR"));
+      } else {
+        await sendTextMessage(phoneNumber, "Balasan tidak valid. Silakan balas 1 untuk Approve atau 2 untuk Reject.");
+      }
+    }
+
+    // Log the interaction
+    await supabase.from("whatsapp_logs").insert({
+      claim_id: claim.id,
+      phone_number: phoneNumber,
+      message_type: role,
+      status: "RECEIVED",
+      response: reply,
+    });
 
     return NextResponse.json({ success: true });
   } catch (error) {
     console.error("Webhook error:", error);
-    return NextResponse.json({ success: true }); // Always 200 for webhooks
+    return NextResponse.json({ success: true });
   }
 }
 
-/**
- * GET handler for webhook verification (if needed by Kirimi).
- */
 export async function GET() {
   return NextResponse.json({ status: "ok" });
 }

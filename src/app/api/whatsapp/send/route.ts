@@ -4,7 +4,7 @@ import { sendTextMessage, buildClaimMessage } from "@/lib/whatsapp";
 
 export async function POST(request: NextRequest) {
   const supabase = await createServerClient();
-  const { claim_id } = await request.json();
+  const { claim_id, manager_id, hr_id } = await request.json();
 
   if (!claim_id) {
     return NextResponse.json(
@@ -71,6 +71,8 @@ export async function POST(request: NextRequest) {
     .from("claims")
     .update({
       status: "SENT",
+      manager_id: manager_id !== undefined ? manager_id : claim.employee.manager_id,
+      hr_id: hr_id !== undefined ? hr_id : claim.employee.hr_id,
       wa_sent: true,
       wa_sent_at: new Date().toISOString(),
     })

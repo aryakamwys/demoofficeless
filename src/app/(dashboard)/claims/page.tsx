@@ -14,6 +14,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 
+import { SendWADialog } from "@/components/claims/send-wa-dialog";
 import { Skeleton } from "@/components/ui/skeleton";
 import { StatusBadge } from "@/components/claims/status-badge";
 import {
@@ -32,8 +33,10 @@ export default function ClaimsPage() {
   const [periodFilter, setPeriodFilter] = useState("ALL");
   const [periods, setPeriods] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
-  const [sendingId, setSendingId] = useState<string | null>(null);
   const [exporting, setExporting] = useState(false);
+  
+  const [sendWADialogOpen, setSendWADialogOpen] = useState(false);
+  const [selectedClaim, setSelectedClaim] = useState<ClaimWithEmployee | null>(null);
 
   const fetchClaims = useCallback(async () => {
     setLoading(true);
@@ -69,24 +72,9 @@ export default function ClaimsPage() {
     fetchPeriods();
   }, [fetchPeriods]);
 
-  const handleSendWA = async (claimId: string) => {
-    setSendingId(claimId);
-    try {
-      const res = await fetch("/api/whatsapp/send", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ claim_id: claimId }),
-      });
-      const result = await res.json();
-      if (result.success) {
-        toast.success("WhatsApp berhasil dikirim");
-        fetchClaims();
-      } else {
-        toast.error(result.error || "Gagal mengirim WhatsApp");
-      }
-    } finally {
-      setSendingId(null);
-    }
+  const handleSendWA = (claim: ClaimWithEmployee) => {
+    setSelectedClaim(claim);
+    setSendWADialogOpen(true);
   };
 
   const handleExport = async () => {
@@ -189,7 +177,9 @@ export default function ClaimsPage() {
                     <th className="px-4 py-4 text-left font-semibold text-slate-600 whitespace-nowrap">Phone</th>
                     <th className="px-4 py-4 text-center font-semibold text-slate-600 whitespace-nowrap">Trips</th>
                     <th className="px-4 py-4 text-right font-semibold text-slate-600 whitespace-nowrap">Total Fare</th>
-                    <th className="px-4 py-4 text-left font-semibold text-slate-600 whitespace-nowrap">Status</th>
+                    <th className="px-4 py-4 text-left font-semibold text-slate-600 whitespace-nowrap">Mgr Status</th>
+                    <th className="px-4 py-4 text-left font-semibold text-slate-600 whitespace-nowrap">HR Status</th>
+                    <th className="px-4 py-4 text-left font-semibold text-slate-600 whitespace-nowrap">System Status</th>
                     <th className="px-4 py-4 text-left font-semibold text-slate-600 whitespace-nowrap w-24">Action</th>
                   </tr>
                 </thead>
@@ -210,6 +200,12 @@ export default function ClaimsPage() {
                       </td>
                       <td className="px-4 py-4 text-right font-medium text-slate-800 align-middle">
                         IDR {claim.total_amount.toLocaleString("id-ID")}
+                      </td>
+                      <td className="px-4 py-4 align-middle">
+                        <StatusBadge status={claim.manager_status as any} />
+                      </td>
+                      <td className="px-4 py-4 align-middle">
+                        <StatusBadge status={claim.hr_status as any} />
                       </td>
                       <td className="px-4 py-4 align-middle">
                         <StatusBadge status={claim.status} />
@@ -233,14 +229,9 @@ export default function ClaimsPage() {
                                 variant="outline"
                                 size="sm"
                                 className="h-8 px-2 text-xs"
-                                disabled={sendingId === claim.id}
-                                onClick={() => handleSendWA(claim.id)}
+                                onClick={() => handleSendWA(claim)}
                               >
-                                {sendingId === claim.id ? (
-                                  <Loader2 className="h-3 w-3 animate-spin mr-1" />
-                                ) : (
-                                  <Send className="h-3 w-3 mr-1" />
-                                )}
+                                <Send className="h-3 w-3 mr-1" />
                                 Send
                               </Button>
                             )}
@@ -254,6 +245,13 @@ export default function ClaimsPage() {
           )}
         </CardContent>
       </Card>
+
+      <SendWADialog
+        open={sendWADialogOpen}
+        onOpenChange={setSendWADialogOpen}
+        claim={selectedClaim}
+        onSuccess={fetchClaims}
+      />
     </div>
   );
 }

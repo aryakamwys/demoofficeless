@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import {
@@ -19,6 +19,13 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Loader2 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -36,6 +43,8 @@ export function EmployeeFormDialog({
   onSuccess,
 }: EmployeeFormDialogProps) {
   const [loading, setLoading] = useState(false);
+  const [managers, setManagers] = useState<Employee[]>([]);
+  const [hrs, setHrs] = useState<Employee[]>([]);
   const isEdit = !!employee;
 
   const form = useForm<EmployeeSchemaType>({
@@ -45,8 +54,36 @@ export function EmployeeFormDialog({
       employee_name: employee?.employee_name || "",
       department: employee?.department || "",
       phone_number: employee?.phone_number || "",
+      role: employee?.role || "EMPLOYEE",
+      manager_id: employee?.manager_id || null,
+      hr_id: employee?.hr_id || null,
     },
   });
+
+  // Reset form when employee changes or dialog opens
+  useEffect(() => {
+    form.reset({
+      employee_number: employee?.employee_number || "",
+      employee_name: employee?.employee_name || "",
+      department: employee?.department || "",
+      phone_number: employee?.phone_number || "",
+      role: employee?.role || "EMPLOYEE",
+      manager_id: employee?.manager_id || null,
+      hr_id: employee?.hr_id || null,
+    });
+  }, [employee, form]);
+
+  useEffect(() => {
+    if (open) {
+      // Fetch managers and HRs
+      fetch("/api/employees?role=MANAGER")
+        .then(res => res.json())
+        .then(res => { if (res.success) setManagers(res.data); });
+      fetch("/api/employees?role=HR")
+        .then(res => res.json())
+        .then(res => { if (res.success) setHrs(res.data); });
+    }
+  }, [open]);
 
   const onSubmit = async (data: EmployeeSchemaType) => {
     setLoading(true);
@@ -69,7 +106,17 @@ export function EmployeeFormDialog({
         return;
       }
 
-      toast.success(isEdit ? "Data berhasil diubah" : "Employee berhasil ditambahkan");
+      toast.success(isEdit ? "Data Karyawan Berhasil Diubah!" : "Karyawan Baru Berhasil Ditambahkan!", {
+        style: {
+          padding: '24px',
+          fontSize: '18px',
+          fontWeight: 'bold',
+          backgroundColor: '#00B14F',
+          color: 'white',
+          border: 'none',
+        },
+        duration: 5000,
+      });
       form.reset();
       onOpenChange(false);
       onSuccess();
@@ -82,7 +129,7 @@ export function EmployeeFormDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-md">
+      <DialogContent className="sm:max-w-md max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>
             {isEdit ? "Edit Employee" : "Tambah Employee"}
@@ -123,18 +170,37 @@ export function EmployeeFormDialog({
             )}
           </div>
 
-          <div className="space-y-2">
-            <Label htmlFor="department">Department</Label>
-            <Input
-              id="department"
-              {...form.register("department")}
-              placeholder="Finance"
-            />
-            {form.formState.errors.department && (
-              <p className="text-sm text-destructive">
-                {form.formState.errors.department.message}
-              </p>
-            )}
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label htmlFor="department">Department</Label>
+              <Input
+                id="department"
+                {...form.register("department")}
+                placeholder="Finance"
+              />
+              {form.formState.errors.department && (
+                <p className="text-sm text-destructive">
+                  {form.formState.errors.department.message}
+                </p>
+              )}
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="role">Role</Label>
+              <Select 
+                value={form.watch("role")} 
+                onValueChange={(val: any) => form.setValue("role", val)}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Pilih role" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="EMPLOYEE">Employee</SelectItem>
+                  <SelectItem value="MANAGER">Manager</SelectItem>
+                  <SelectItem value="HR">HR</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
           </div>
 
           <div className="space-y-2">
@@ -151,7 +217,47 @@ export function EmployeeFormDialog({
             )}
           </div>
 
-          <DialogFooter>
+          {form.watch("role") === "EMPLOYEE" && (
+            <>
+              <div className="space-y-2">
+                <Label htmlFor="manager_id">Manager</Label>
+                <Select 
+                  value={form.watch("manager_id") || "none"} 
+                  onValueChange={(val) => form.setValue("manager_id", val === "none" ? null : val)}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Pilih Manager" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">-- Tanpa Manager --</SelectItem>
+                    {managers.map(m => (
+                      <SelectItem key={m.id} value={m.id}>{m.employee_name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="hr_id">HR</Label>
+                <Select 
+                  value={form.watch("hr_id") || "none"} 
+                  onValueChange={(val) => form.setValue("hr_id", val === "none" ? null : val)}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Pilih HR" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">-- Tanpa HR --</SelectItem>
+                    {hrs.map(h => (
+                      <SelectItem key={h.id} value={h.id}>{h.employee_name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </>
+          )}
+
+          <DialogFooter className="pt-2">
             <Button
               type="button"
               variant="outline"

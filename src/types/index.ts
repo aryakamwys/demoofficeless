@@ -22,9 +22,14 @@ export interface Employee {
   employee_name: string;
   department: string;
   phone_number: string;
+  role: 'EMPLOYEE' | 'MANAGER' | 'HR';
+  manager_id: string | null;
+  hr_id: string | null;
   is_active: boolean;
   created_at: string;
   updated_at: string;
+  manager?: Employee;
+  hr?: Employee;
 }
 
 export interface Upload {
@@ -46,6 +51,10 @@ export interface Claim {
   trip_count: number;
   total_amount: number;
   status: ClaimStatus;
+  manager_status: 'PENDING' | 'APPROVED' | 'REJECTED';
+  hr_status: 'PENDING' | 'APPROVED' | 'REJECTED';
+  manager_id: string | null;
+  hr_id: string | null;
   wa_sent: boolean;
   wa_sent_at: string | null;
   approved_at: string | null;

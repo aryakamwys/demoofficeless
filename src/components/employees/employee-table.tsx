@@ -60,6 +60,7 @@ export function EmployeeTable({
           <TableHead>Employee No.</TableHead>
           <TableHead>Nama</TableHead>
           <TableHead>Department</TableHead>
+          <TableHead>Role</TableHead>
           <TableHead>Phone</TableHead>
           <TableHead>Status</TableHead>
           <TableHead className="w-12" />
@@ -74,6 +75,11 @@ export function EmployeeTable({
             <TableCell>{emp.employee_name}</TableCell>
             <TableCell className="text-muted-foreground">
               {emp.department || "—"}
+            </TableCell>
+            <TableCell>
+              <Badge variant="outline" className="text-xs">
+                {emp.role}
+              </Badge>
             </TableCell>
             <TableCell className="text-muted-foreground">
               {emp.phone_number}

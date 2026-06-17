@@ -6,6 +6,7 @@ export async function GET(request: NextRequest) {
   const supabase = await createServerClient();
   const { searchParams } = new URL(request.url);
   const search = searchParams.get("search") || "";
+  const role = searchParams.get("role") || "";
 
   let query = supabase
     .from("employees")
@@ -17,6 +18,10 @@ export async function GET(request: NextRequest) {
     query = query.or(
       `employee_name.ilike.%${search}%,employee_number.ilike.%${search}%`
     );
+  }
+
+  if (role) {
+    query = query.eq("role", role);
   }
 
   const { data, error } = await query;
@@ -45,7 +50,15 @@ export async function POST(request: NextRequest) {
 
   const { data, error } = await supabase
     .from("employees")
-    .insert(result.data)
+    .insert({
+      employee_number: result.data.employee_number,
+      employee_name: result.data.employee_name,
+      department: result.data.department,
+      phone_number: result.data.phone_number,
+      role: result.data.role,
+      manager_id: result.data.manager_id || null,
+      hr_id: result.data.hr_id || null
+    })
     .select()
     .single();
 

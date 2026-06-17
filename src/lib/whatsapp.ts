@@ -119,6 +119,11 @@ export function buildDetailMessage(
 
   lines.push("");
   lines.push(`Total: Rp${total_amount.toLocaleString("id-ID")}`);
+  lines.push("");
+  lines.push(`Balas:`);
+  lines.push(`1 - Setuju`);
+  lines.push(`2 - Koreksi`);
+  lines.push(`3 - Detail`);
 
   return lines.join("\n");
 }
@@ -126,17 +131,124 @@ export function buildDetailMessage(
 /**
  * Build the confirmation message (after employee replies "1").
  */
-export function buildConfirmationMessage(): string {
+export function buildConfirmationMessage(managerName?: string): string {
+  if (managerName) {
+    return [
+      "Terima kasih.",
+      "",
+      `Data telah dikonfirmasi dan sedang diteruskan ke Manager Anda (${managerName}) untuk persetujuan.`,
+    ].join("\n");
+  }
   return [
     "Terima kasih.",
     "",
-    "Data telah dikonfirmasi.",
+    "Data telah dikonfirmasi dan sedang diproses lebih lanjut.",
+  ].join("\n");
+}
+
+export function buildCorrectionPrompt(): string {
+  return [
+    "Silakan tuliskan koreksi yang ingin disampaikan.",
+    "",
+    "Setelah Anda selesai, Anda dapat memilih:",
+    `1 - Setuju`,
+    `2 - Koreksi (Ulangi)`,
+    `3 - Detail`,
   ].join("\n");
 }
 
 /**
- * Build the correction prompt message (after employee replies "2").
+ * Build the manager approval message.
  */
-export function buildCorrectionPrompt(): string {
-  return "Silakan tuliskan koreksi yang ingin disampaikan.";
+export function buildManagerApprovalMessage(params: {
+  employee_name: string;
+  period: string;
+  total_amount: number;
+  trips: Array<{ trip_date: string; pickup: string; dropoff: string; fare: number }>;
+}): string {
+  const { employee_name, period, total_amount, trips } = params;
+  const formattedAmount = `Rp${total_amount.toLocaleString("id-ID")}`;
+
+  const tripDetails = trips.map((t) => {
+    const date = new Date(t.trip_date);
+    const day = date.getDate().toString().padStart(2, "0");
+    const monthNames = ["Jan", "Feb", "Mar", "Apr", "Mei", "Jun", "Jul", "Agu", "Sep", "Okt", "Nov", "Des"];
+    const dateStr = `${day} ${monthNames[date.getMonth()]}`;
+    const fare = `Rp${t.fare.toLocaleString("id-ID")}`;
+    return `- ${dateStr}: ${t.pickup} -> ${t.dropoff} (${fare})`;
+  }).join("\n");
+
+  return [
+    `Halo Manager,`,
+    ``,
+    `Terdapat pengajuan klaim Grab Business yang membutuhkan persetujuan Anda:`,
+    ``,
+    `Karyawan: ${employee_name}`,
+    `Periode: ${period}`,
+    ``,
+    `Detail Perjalanan:`,
+    tripDetails,
+    ``,
+    `Total Biaya: ${formattedAmount}`,
+    ``,
+    `Karyawan telah menyetujui data ini.`,
+    `Balas:`,
+    `1 - Approve`,
+    `2 - Reject`,
+  ].join("\n");
+}
+
+/**
+ * Build the HR approval message.
+ */
+export function buildHrApprovalMessage(params: {
+  employee_name: string;
+  manager_name: string;
+  period: string;
+  total_amount: number;
+  trips: Array<{ trip_date: string; pickup: string; dropoff: string; fare: number }>;
+}): string {
+  const { employee_name, manager_name, period, total_amount, trips } = params;
+  const formattedAmount = `Rp${total_amount.toLocaleString("id-ID")}`;
+
+  const tripDetails = trips.map((t) => {
+    const date = new Date(t.trip_date);
+    const day = date.getDate().toString().padStart(2, "0");
+    const monthNames = ["Jan", "Feb", "Mar", "Apr", "Mei", "Jun", "Jul", "Agu", "Sep", "Okt", "Nov", "Des"];
+    const dateStr = `${day} ${monthNames[date.getMonth()]}`;
+    const fare = `Rp${t.fare.toLocaleString("id-ID")}`;
+    return `- ${dateStr}: ${t.pickup} -> ${t.dropoff} (${fare})`;
+  }).join("\n");
+
+  return [
+    `Halo HR,`,
+    ``,
+    `Terdapat pengajuan klaim Grab Business yang telah disetujui oleh Manager (${manager_name}):`,
+    ``,
+    `Karyawan: ${employee_name}`,
+    `Periode: ${period}`,
+    ``,
+    `Detail Perjalanan:`,
+    tripDetails,
+    ``,
+    `Total Biaya: ${formattedAmount}`,
+    ``,
+    `Balas:`,
+    `1 - Approve`,
+    `2 - Reject`,
+  ].join("\n");
+}
+
+/**
+ * Build the Employee Notification message (Status Update).
+ */
+export function buildEmployeeStatusUpdateMessage(status: string, actorName: string, role: 'MANAGER' | 'HR'): string {
+  if (status === 'APPROVED') {
+    return `Klaim Anda telah disetujui oleh ${role} (${actorName}).`;
+  } else if (status === 'REJECTED') {
+    return `Mohon maaf, klaim Anda telah ditolak oleh ${role} (${actorName}).`;
+  } else if (status === 'FINALIZED') {
+    return `Klaim Anda telah selesai diproses dan disetujui oleh HR (${actorName}).`;
+  }
+  return `Status klaim Anda: ${status}`;
 }

@@ -24,6 +24,9 @@ export async function PUT(
       employee_name: result.data.employee_name,
       department: result.data.department,
       phone_number: result.data.phone_number,
+      role: result.data.role,
+      manager_id: result.data.manager_id || null,
+      hr_id: result.data.hr_id || null
     })
     .eq("id", id)
     .select()

@@ -16,6 +16,9 @@ export const employeeSchema = z.object({
     .string()
     .min(1, "Nomor telepon wajib diisi")
     .regex(/^628\d{8,13}$/, "Format nomor: 628xxxxxxxxxx"),
+  role: z.enum(['EMPLOYEE', 'MANAGER', 'HR']),
+  manager_id: z.string().uuid().nullable().optional(),
+  hr_id: z.string().uuid().nullable().optional(),
 });
 
 export const importEmployeeSchema = z.array(employeeSchema);
