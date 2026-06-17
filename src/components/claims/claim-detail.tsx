@@ -10,6 +10,12 @@ import { toast } from "sonner";
 import dayjs from "dayjs";
 import { useRouter } from "next/navigation";
 import { SendWADialog } from "@/components/claims/send-wa-dialog";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 
 interface ClaimDetailViewProps {
   claim: ClaimDetail;
@@ -41,6 +47,27 @@ export function ClaimDetailView({ claim }: ClaimDetailViewProps) {
       }
     } finally {
       setApproving(false);
+    }
+  };
+
+  const handleResend = async (target: "MANAGER" | "HR") => {
+    setSendingWA(true);
+    try {
+      const res = await fetch(`/api/whatsapp/send`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ claim_id: claim.id, target }),
+      });
+      const result = await res.json();
+      if (result.success) {
+        toast.success(`WhatsApp berhasil di-resend ke ${target}`);
+      } else {
+        toast.error(result.error || `Gagal resend ke ${target}`);
+      }
+    } catch (e) {
+      toast.error("Terjadi kesalahan sistem.");
+    } finally {
+      setSendingWA(false);
     }
   };
 
@@ -87,22 +114,48 @@ export function ClaimDetailView({ claim }: ClaimDetailViewProps) {
                   )}
                   {approving ? "Processing..." : "Approve Manual"}
                 </Button>
-                <Button
-                  onClick={handleSendWA}
-                  disabled={sendingWA}
-                  className="bg-[#00B14F] hover:bg-[#009040] text-white disabled:opacity-60"
-                >
-                  {sendingWA ? (
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  ) : (
-                    <Send className="mr-2 h-4 w-4" />
-                  )}
-                  {sendingWA
-                    ? "Sending..."
-                    : claim.wa_sent
-                      ? "Resend WhatsApp"
-                      : "Send WhatsApp"}
-                </Button>
+                
+                {claim.wa_sent ? (
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button
+                        disabled={sendingWA}
+                        className="bg-[#00B14F] hover:bg-[#009040] text-white disabled:opacity-60"
+                      >
+                        {sendingWA ? (
+                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        ) : (
+                          <Send className="mr-2 h-4 w-4" />
+                        )}
+                        {sendingWA ? "Sending..." : "Resend WhatsApp"}
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end">
+                      <DropdownMenuItem onClick={handleSendWA}>
+                        Kirim Ulang ke Karyawan
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => handleResend("MANAGER")}>
+                        Kirim Ulang ke Manager
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => handleResend("HR")}>
+                        Kirim Ulang ke HR
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                ) : (
+                  <Button
+                    onClick={handleSendWA}
+                    disabled={sendingWA}
+                    className="bg-[#00B14F] hover:bg-[#009040] text-white disabled:opacity-60"
+                  >
+                    {sendingWA ? (
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    ) : (
+                      <Send className="mr-2 h-4 w-4" />
+                    )}
+                    {sendingWA ? "Sending..." : "Send WhatsApp"}
+                  </Button>
+                )}
               </>
             )}
         </div>
