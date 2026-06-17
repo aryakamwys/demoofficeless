@@ -126,6 +126,8 @@ export function buildDetailMessage(
   lines.push(`1 - Setuju`);
   lines.push(`2 - Koreksi`);
   lines.push(`3 - Detail`);
+  lines.push("");
+  lines.push(`Ref: ${new Date().getTime().toString().slice(-6)}`);
 
   return lines.join("\n");
 }
@@ -139,12 +141,16 @@ export function buildConfirmationMessage(managerName?: string): string {
       "Terima kasih.",
       "",
       `Data telah dikonfirmasi dan sedang diteruskan ke Manager Anda (${managerName}) untuk persetujuan.`,
+      "",
+      `Ref: ${new Date().getTime().toString().slice(-6)}`
     ].join("\n");
   }
   return [
     "Terima kasih.",
     "",
     "Data telah dikonfirmasi dan sedang diproses lebih lanjut.",
+    "",
+    `Ref: ${new Date().getTime().toString().slice(-6)}`
   ].join("\n");
 }
 
@@ -156,6 +162,8 @@ export function buildCorrectionPrompt(): string {
     `1 - Setuju`,
     `2 - Koreksi (Ulangi)`,
     `3 - Detail`,
+    "",
+    `Ref: ${new Date().getTime().toString().slice(-6)}`
   ].join("\n");
 }
 
@@ -197,6 +205,8 @@ export function buildManagerApprovalMessage(params: {
     `Balas:`,
     `1 - Approve`,
     `2 - Reject`,
+    ``,
+    `Ref: ${new Date().getTime().toString().slice(-6)}`
   ].join("\n");
 }
 
@@ -238,6 +248,8 @@ export function buildHrApprovalMessage(params: {
     `Balas:`,
     `1 - Approve`,
     `2 - Reject`,
+    ``,
+    `Ref: ${new Date().getTime().toString().slice(-6)}`
   ].join("\n");
 }
 
@@ -245,12 +257,18 @@ export function buildHrApprovalMessage(params: {
  * Build the Employee Notification message (Status Update).
  */
 export function buildEmployeeStatusUpdateMessage(status: string, actorName: string, role: 'MANAGER' | 'HR'): string {
+  let msg = `Status klaim Anda: ${status}`;
   if (status === 'APPROVED') {
-    return `Klaim Anda telah disetujui oleh ${role} (${actorName}).`;
+    msg = `Klaim Anda telah disetujui oleh ${role} (${actorName}).`;
   } else if (status === 'REJECTED') {
-    return `Mohon maaf, klaim Anda telah ditolak oleh ${role} (${actorName}).`;
+    msg = `Mohon maaf, klaim Anda telah ditolak oleh ${role} (${actorName}).`;
   } else if (status === 'FINALIZED') {
-    return `Klaim Anda telah selesai diproses dan disetujui oleh HR (${actorName}).`;
+    msg = `Klaim Anda telah selesai diproses dan disetujui oleh HR (${actorName}).`;
   }
-  return `Status klaim Anda: ${status}`;
+  
+  return [
+    msg,
+    "",
+    `Ref: ${new Date().getTime().toString().slice(-6)}`
+  ].join("\n");
 }
