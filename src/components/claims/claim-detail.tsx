@@ -134,12 +134,16 @@ export function ClaimDetailView({ claim }: ClaimDetailViewProps) {
                       <DropdownMenuItem onClick={handleSendWA}>
                         Kirim Ulang ke Karyawan
                       </DropdownMenuItem>
-                      <DropdownMenuItem onClick={() => handleResend("MANAGER")}>
-                        Kirim Ulang ke Manager
-                      </DropdownMenuItem>
-                      <DropdownMenuItem onClick={() => handleResend("HR")}>
-                        Kirim Ulang ke HR
-                      </DropdownMenuItem>
+                      {claim.manager_id && (
+                        <DropdownMenuItem onClick={() => handleResend("MANAGER")}>
+                          Kirim Ulang ke Manager
+                        </DropdownMenuItem>
+                      )}
+                      {claim.hr_id && (
+                        <DropdownMenuItem onClick={() => handleResend("HR")}>
+                          Kirim Ulang ke HR
+                        </DropdownMenuItem>
+                      )}
                     </DropdownMenuContent>
                   </DropdownMenu>
                 ) : (
