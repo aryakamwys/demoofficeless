@@ -46,14 +46,14 @@ export async function sendTextMessage(
 
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
     try {
-      const res = await fetch(`${KIRIMI_BASE_URL}/v1/send-text`, {
+      const res = await fetch(`${KIRIMI_BASE_URL}/v1/send-message`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           user_code: config.user_code,
           secret: config.secret,
           device_id: config.device_id,
-          receiver: receiver,
+          phone: receiver,
           message,
         }),
       });
