@@ -36,7 +36,7 @@ export async function sendTextMessage(
   const config = getConfig();
   const maxRetries = options?.maxRetries ?? 3;
 
-  // Simulasi jeda / "typing" sebelum pesan dikirim (default 2 detik)
+  // Jeda sebelum pesan dikirim (default 2 detik, anti-bot detection)
   const delayMs = options?.delayMs ?? 2000;
   if (delayMs > 0) {
     await new Promise((resolve) => setTimeout(resolve, delayMs));
