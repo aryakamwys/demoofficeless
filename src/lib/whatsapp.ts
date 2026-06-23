@@ -95,7 +95,9 @@ export function buildClaimMessage(params: {
   const { employee_name, period, trip_count, total_amount } = params;
   const formattedAmount = `Rp${total_amount.toLocaleString("id-ID")}`;
 
+  const refId = Math.random().toString(36).substring(2, 8).toUpperCase();
   return [
+    `[Ref: ${refId}]`,
     `Halo ${employee_name},`,
     ``,
     `Data perjalanan Grab Business periode ${period} telah tersedia.`,
@@ -108,9 +110,7 @@ export function buildClaimMessage(params: {
     `Balas:`,
     `1 - Setuju`,
     `2 - Koreksi`,
-    `3 - Detail`,
-    ``,
-    `Ref: ${new Date().getTime().toString().slice(-6)}`
+    `3 - Detail`
   ].join("\n");
 }
 
@@ -133,6 +133,8 @@ export function buildDetailMessage(
     return `- ${day} ${month}: ${t.pickup} -> ${t.dropoff} (${fare})`;
   });
 
+  const refId = Math.random().toString(36).substring(2, 8).toUpperCase();
+  lines.unshift(`[Ref: ${refId}]`, "");
   lines.push("");
   lines.push(`Total: Rp${total_amount.toLocaleString("id-ID")}`);
   lines.push("");
@@ -140,8 +142,6 @@ export function buildDetailMessage(
   lines.push(`1 - Setuju`);
   lines.push(`2 - Koreksi`);
   lines.push(`3 - Detail`);
-  lines.push("");
-  lines.push(`Ref: ${new Date().getTime().toString().slice(-6)}`);
 
   return lines.join("\n");
 }
@@ -150,34 +150,33 @@ export function buildDetailMessage(
  * Build the confirmation message (after employee replies "1").
  */
 export function buildConfirmationMessage(managerName?: string): string {
+  const refId = Math.random().toString(36).substring(2, 8).toUpperCase();
   if (managerName) {
     return [
+      `[Ref: ${refId}]`,
       "Terima kasih.",
       "",
-      `Data telah dikonfirmasi dan sedang diteruskan ke Manager Anda (${managerName}) untuk persetujuan.`,
-      "",
-      `Ref: ${new Date().getTime().toString().slice(-6)}`
+      `Data telah dikonfirmasi dan sedang diteruskan ke Manager Anda (${managerName}) untuk persetujuan.`
     ].join("\n");
   }
   return [
+    `[Ref: ${refId}]`,
     "Terima kasih.",
     "",
-    "Data telah dikonfirmasi dan sedang diproses lebih lanjut.",
-    "",
-    `Ref: ${new Date().getTime().toString().slice(-6)}`
+    "Data telah dikonfirmasi dan sedang diproses lebih lanjut."
   ].join("\n");
 }
 
 export function buildCorrectionPrompt(): string {
+  const refId = Math.random().toString(36).substring(2, 8).toUpperCase();
   return [
+    `[Ref: ${refId}]`,
     "Silakan tuliskan koreksi yang ingin disampaikan.",
     "",
     "Setelah Anda selesai, Anda dapat memilih:",
     `1 - Setuju`,
     `2 - Koreksi (Ulangi)`,
-    `3 - Detail`,
-    "",
-    `Ref: ${new Date().getTime().toString().slice(-6)}`
+    `3 - Detail`
   ].join("\n");
 }
 
@@ -202,7 +201,9 @@ export function buildManagerApprovalMessage(params: {
     return `- ${dateStr}: ${t.pickup} -> ${t.dropoff} (${fare})`;
   }).join("\n");
 
+  const refId = Math.random().toString(36).substring(2, 8).toUpperCase();
   return [
+    `[Ref: ${refId}]`,
     `Halo Manager,`,
     ``,
     `Terdapat pengajuan klaim Grab Business yang membutuhkan persetujuan Anda:`,
@@ -218,9 +219,7 @@ export function buildManagerApprovalMessage(params: {
     `Karyawan telah menyetujui data ini.`,
     `Balas:`,
     `1 - Approve`,
-    `2 - Reject`,
-    ``,
-    `Ref: ${new Date().getTime().toString().slice(-6)}`
+    `2 - Reject`
   ].join("\n");
 }
 
@@ -246,7 +245,9 @@ export function buildHrApprovalMessage(params: {
     return `- ${dateStr}: ${t.pickup} -> ${t.dropoff} (${fare})`;
   }).join("\n");
 
+  const refId = Math.random().toString(36).substring(2, 8).toUpperCase();
   return [
+    `[Ref: ${refId}]`,
     `Halo HR,`,
     ``,
     `Terdapat pengajuan klaim Grab Business yang telah disetujui oleh Manager (${manager_name}):`,
@@ -261,9 +262,7 @@ export function buildHrApprovalMessage(params: {
     ``,
     `Balas:`,
     `1 - Approve`,
-    `2 - Reject`,
-    ``,
-    `Ref: ${new Date().getTime().toString().slice(-6)}`
+    `2 - Reject`
   ].join("\n");
 }
 
@@ -280,9 +279,9 @@ export function buildEmployeeStatusUpdateMessage(status: string, actorName: stri
     msg = `Klaim Anda telah selesai diproses dan disetujui oleh HR (${actorName}).`;
   }
   
+  const refId = Math.random().toString(36).substring(2, 8).toUpperCase();
   return [
-    msg,
-    "",
-    `Ref: ${new Date().getTime().toString().slice(-6)}`
+    `[Ref: ${refId}]`,
+    msg
   ].join("\n");
 }
