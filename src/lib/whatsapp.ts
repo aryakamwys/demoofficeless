@@ -34,7 +34,7 @@ export async function sendTextMessage(
   options?: { delayMs?: number; maxRetries?: number }
 ): Promise<SendTextResponse> {
   const config = getConfig();
-  const maxRetries = options?.maxRetries ?? 3;
+  const maxRetries = options?.maxRetries ?? 1;
 
   // Jeda sebelum pesan dikirim (default 2 detik, anti-bot detection)
   const delayMs = options?.delayMs ?? 2000;
