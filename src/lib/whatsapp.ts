@@ -31,9 +31,10 @@ interface SendTextResponse {
 export async function sendTextMessage(
   receiver: string,
   message: string,
-  options?: { delayMs?: number }
+  options?: { delayMs?: number; maxRetries?: number }
 ): Promise<SendTextResponse> {
   const config = getConfig();
+  const maxRetries = options?.maxRetries ?? 3;
 
   // Simulasi jeda / "typing" sebelum pesan dikirim (default 2 detik)
   const delayMs = options?.delayMs ?? 2000;
@@ -41,31 +42,44 @@ export async function sendTextMessage(
     await new Promise((resolve) => setTimeout(resolve, delayMs));
   }
 
-  try {
-    const res = await fetch(`${KIRIMI_BASE_URL}/v1/send-message`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        user_code: config.user_code,
-        secret: config.secret,
-        device_id: config.device_id,
-        phone: receiver,
-        message,
-      }),
-    });
+  let lastError: string | undefined;
 
-    const data = await res.json();
-    return {
-      success: res.ok && data.success !== false,
-      message: data.message,
-      error: data.error || (!res.ok ? data.message : undefined),
-    };
-  } catch (error) {
-    return {
-      success: false,
-      error: error instanceof Error ? error.message : "Unknown error",
-    };
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      const res = await fetch(`${KIRIMI_BASE_URL}/v1/send-message`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          user_code: config.user_code,
+          secret: config.secret,
+          device_id: config.device_id,
+          phone: receiver,
+          message,
+        }),
+      });
+
+      const data = await res.json();
+      const success = res.ok && data.success !== false;
+
+      if (success) {
+        return { success: true, message: data.message };
+      }
+
+      lastError = data.error || data.message || `HTTP ${res.status}`;
+      console.warn(`[WA] Send attempt ${attempt}/${maxRetries} failed for ${receiver}: ${lastError}`);
+    } catch (error) {
+      lastError = error instanceof Error ? error.message : "Unknown error";
+      console.warn(`[WA] Send attempt ${attempt}/${maxRetries} error for ${receiver}: ${lastError}`);
+    }
+
+    // Exponential backoff before retry (1s, 2s, 4s)
+    if (attempt < maxRetries) {
+      await new Promise((resolve) => setTimeout(resolve, 1000 * Math.pow(2, attempt - 1)));
+    }
   }
+
+  console.error(`[WA] All ${maxRetries} attempts failed for ${receiver}: ${lastError}`);
+  return { success: false, error: lastError };
 }
 
 /**

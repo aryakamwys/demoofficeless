@@ -15,6 +15,47 @@ function normalizePhone(phone: string | undefined | null) {
   return phone.replace(/^\+/, "").replace(/^0/, "62").replace("@lid", "");
 }
 
+// Helper: fetch a fresh claim with all relations
+async function fetchClaimFresh(supabase: ReturnType<typeof createServiceClient>, claimId: string) {
+  const { data } = await supabase
+    .from("claims")
+    .select(`
+      *,
+      employee:employees!claims_employee_id_fkey(*),
+      manager:employees!claims_manager_id_fkey(*),
+      hr:employees!claims_hr_id_fkey(*),
+      trips(*)
+    `)
+    .eq("id", claimId)
+    .single();
+  return data;
+}
+
+// Helper: send WA and log result, returns success boolean
+async function sendAndLog(
+  supabase: ReturnType<typeof createServiceClient>,
+  claimId: string,
+  phone: string,
+  message: string,
+  messageType: string
+): Promise<boolean> {
+  const result = await sendTextMessage(phone, message);
+
+  await supabase.from("whatsapp_logs").insert({
+    claim_id: claimId,
+    phone_number: phone,
+    message_type: messageType,
+    status: result.success ? "SENT" : "FAILED",
+    response: result.success ? message.slice(0, 200) : (result.error || "Unknown error"),
+  });
+
+  if (!result.success) {
+    console.error(`[WA] FAILED to send ${messageType} to ${phone} for claim ${claimId}: ${result.error}`);
+  }
+
+  return result.success;
+}
+
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
@@ -23,7 +64,7 @@ export async function POST(request: NextRequest) {
     // Log raw payload
     try {
       await supabase.from("whatsapp_logs").insert({
-        claim_id: "1aedea14-57ef-4929-8d27-f6b8b513cbe0", // Dummy/System ID
+        claim_id: "1aedea14-57ef-4929-8d27-f6b8b513cbe0",
         phone_number: "SYSTEM",
         message_type: "RAW_WEBHOOK",
         status: "RECEIVED",
@@ -51,8 +92,7 @@ export async function POST(request: NextRequest) {
     const phoneNumber = normalizePhone(sender);
     if (!phoneNumber) return NextResponse.json({ success: true });
 
-    // Find active claims
-    // We fetch claims that are SENT or NEED_REVIEW
+    // Fetch active claims (SENT or NEED_REVIEW)
     const { data: claims } = await supabase
       .from("claims")
       .select(`
@@ -75,26 +115,26 @@ export async function POST(request: NextRequest) {
     // Match sender to claim and role
     for (const c of claims) {
       if (!c.employee) continue;
-      
-      const empPhone = normalizePhone(c.employee.phone_number);
-      const mgrPhone = normalizePhone(c.manager?.phone_number);
-      const hrPhone = normalizePhone(c.hr?.phone_number);
 
-      // Check HR (If Manager approved, but HR is pending)
-      if (hrPhone === phoneNumber && c.approved_at && c.manager_status !== 'PENDING' && c.hr_status === 'PENDING') {
+      const empPhone = normalizePhone(c.employee.phone_number);
+      const mgrPhone = c.manager ? normalizePhone(c.manager.phone_number) : null;
+      const hrPhone = c.hr ? normalizePhone(c.hr.phone_number) : null;
+
+      // Check HR (Manager approved, HR pending)
+      if (hrPhone && hrPhone === phoneNumber && c.approved_at && c.manager_status === 'APPROVED' && c.hr_status === 'PENDING') {
         claim = c;
         role = 'HR';
         break;
       }
-      
-      // Check Manager (If Employee approved, but Manager is pending)
-      if (mgrPhone === phoneNumber && c.approved_at && c.manager_status === 'PENDING') {
+
+      // Check Manager (Employee approved, Manager pending)
+      if (mgrPhone && mgrPhone === phoneNumber && c.approved_at && c.manager_status === 'PENDING') {
         claim = c;
         role = 'MANAGER';
         break;
       }
-      
-      // Check Employee
+
+      // Check Employee (not yet approved)
       if (empPhone === phoneNumber && !c.approved_at) {
         claim = c;
         role = 'EMPLOYEE';
@@ -107,67 +147,67 @@ export async function POST(request: NextRequest) {
     }
 
     const reply = messageText.trim();
-    const targetPhone = normalizePhone(claim.employee?.phone_number) || phoneNumber;
-
-    // Helper to proceed to HR or Finalize
-    const proceedToHrOrFinalize = async (c: any) => {
-      if (c.hr) {
-        // Send to HR
-        await sendTextMessage(
-          normalizePhone(c.hr.phone_number)!,
-          buildHrApprovalMessage({
-            employee_name: c.employee.employee_name,
-            manager_name: c.manager ? c.manager.employee_name : "Sistem",
-            period: c.period,
-            total_amount: c.total_amount,
-            trips: c.trips || [],
-          })
-        );
-      } else {
-        // No HR, auto finalize
-        await supabase.from("claims").update({ status: "APPROVED", hr_status: "APPROVED" }).eq("id", c.id);
-        await sendTextMessage(
-          targetPhone,
-          buildEmployeeStatusUpdateMessage("FINALIZED", "Sistem", "HR")
-        );
-      }
-    };
+    const employeePhone = normalizePhone(claim.employee?.phone_number);
 
     // ==========================================
     // ROLE: EMPLOYEE
     // ==========================================
     if (role === 'EMPLOYEE') {
       if (reply === "1") {
-        await supabase.from("claims").update({ approved_at: new Date().toISOString() }).eq("id", claim.id);
-        
+        // Set approved_at + reset statuses for clean flow
+        await supabase.from("claims").update({
+          approved_at: new Date().toISOString(),
+          manager_status: claim.manager_id ? "PENDING" : "APPROVED",
+          hr_status: "PENDING",
+        }).eq("id", claim.id);
+
         const hasManager = !!claim.manager;
         const confirmMsg = buildConfirmationMessage(hasManager ? claim.manager.employee_name : undefined);
-        await sendTextMessage(targetPhone, confirmMsg);
+
+        if (employeePhone) {
+          await sendAndLog(supabase, claim.id, employeePhone, confirmMsg, "EMPLOYEE_CONFIRMATION");
+        }
 
         if (hasManager) {
-          // Send to Manager
+          // Forward to Manager
           const mgrPhone = normalizePhone(claim.manager.phone_number);
           if (mgrPhone) {
-            await sendTextMessage(mgrPhone, buildManagerApprovalMessage({
-              employee_name: claim.employee.employee_name,
-              period: claim.period,
-              total_amount: claim.total_amount,
-              trips: claim.trips || [],
-            }));
+            const sent = await sendAndLog(
+              supabase, claim.id, mgrPhone,
+              buildManagerApprovalMessage({
+                employee_name: claim.employee.employee_name,
+                period: claim.period,
+                total_amount: claim.total_amount,
+                trips: claim.trips || [],
+              }),
+              "MANAGER_APPROVAL_PROMPT"
+            );
+            if (!sent) {
+              console.error(`[FLOW] STUCK: Failed to send manager approval to ${mgrPhone} for claim ${claim.id}`);
+            }
+          } else {
+            console.error(`[FLOW] STUCK: Manager has no phone number for claim ${claim.id}`);
           }
         } else {
-          // No Manager, auto-approve manager step, proceed to HR
+          // No Manager → auto-approve manager step
           await supabase.from("claims").update({ manager_status: "APPROVED" }).eq("id", claim.id);
-          await proceedToHrOrFinalize(claim);
+
+          // Re-fetch fresh data before proceeding to HR
+          const freshClaim = await fetchClaimFresh(supabase, claim.id);
+          if (freshClaim) {
+            await proceedToHrOrFinalize(supabase, freshClaim, employeePhone);
+          }
         }
 
       } else if (reply === "2") {
         await supabase.from("claims").update({ status: "NEED_REVIEW" }).eq("id", claim.id);
-        await sendTextMessage(targetPhone, buildCorrectionPrompt());
+        if (employeePhone) {
+          await sendAndLog(supabase, claim.id, employeePhone, buildCorrectionPrompt(), "CORRECTION_PROMPT");
+        }
       } else if (reply === "3") {
         const { data: trips } = await supabase.from("trips").select("*").eq("claim_id", claim.id).order("trip_date", { ascending: true });
-        if (trips && trips.length > 0) {
-          await sendTextMessage(targetPhone, buildDetailMessage(trips, claim.total_amount));
+        if (trips && trips.length > 0 && employeePhone) {
+          await sendAndLog(supabase, claim.id, employeePhone, buildDetailMessage(trips, claim.total_amount), "DETAIL_MESSAGE");
         }
       } else {
         if (claim.status === "NEED_REVIEW" || reply.length > 5) {
@@ -186,17 +226,39 @@ export async function POST(request: NextRequest) {
       if (reply === "1") {
         // Approve
         await supabase.from("claims").update({ manager_status: "APPROVED" }).eq("id", claim.id);
-        await sendTextMessage(phoneNumber, "Terima kasih, klaim telah Anda setujui.");
-        await sendTextMessage(targetPhone, buildEmployeeStatusUpdateMessage("APPROVED", claim.manager?.employee_name || "Manager", "MANAGER"));
-        
-        await proceedToHrOrFinalize(claim);
+
+        await sendAndLog(supabase, claim.id, phoneNumber, "Terima kasih, klaim telah Anda setujui.", "MANAGER_CONFIRMED");
+
+        if (employeePhone) {
+          await sendAndLog(
+            supabase, claim.id, employeePhone,
+            buildEmployeeStatusUpdateMessage("APPROVED", claim.manager?.employee_name || "Manager", "MANAGER"),
+            "EMPLOYEE_STATUS_UPDATE"
+          );
+        }
+
+        // Re-fetch fresh claim AFTER manager_status update, before forwarding to HR
+        const freshClaim = await fetchClaimFresh(supabase, claim.id);
+        if (freshClaim) {
+          await proceedToHrOrFinalize(supabase, freshClaim, employeePhone);
+        } else {
+          console.error(`[FLOW] STUCK: Could not re-fetch claim ${claim.id} after manager approval`);
+        }
+
       } else if (reply === "2") {
         // Reject
         await supabase.from("claims").update({ manager_status: "REJECTED", status: "NEED_REVIEW" }).eq("id", claim.id);
-        await sendTextMessage(phoneNumber, "Klaim telah ditolak.");
-        await sendTextMessage(targetPhone, buildEmployeeStatusUpdateMessage("REJECTED", claim.manager?.employee_name || "Manager", "MANAGER"));
+        await sendAndLog(supabase, claim.id, phoneNumber, "Klaim telah ditolak.", "MANAGER_REJECTED");
+
+        if (employeePhone) {
+          await sendAndLog(
+            supabase, claim.id, employeePhone,
+            buildEmployeeStatusUpdateMessage("REJECTED", claim.manager?.employee_name || "Manager", "MANAGER"),
+            "EMPLOYEE_STATUS_UPDATE"
+          );
+        }
       } else {
-        await sendTextMessage(phoneNumber, "Balasan tidak valid. Silakan balas 1 untuk Approve atau 2 untuk Reject.");
+        await sendAndLog(supabase, claim.id, phoneNumber, "Balasan tidak valid. Silakan balas 1 untuk Approve atau 2 untuk Reject.", "INVALID_REPLY");
       }
     }
 
@@ -207,15 +269,29 @@ export async function POST(request: NextRequest) {
       if (reply === "1") {
         // Approve
         await supabase.from("claims").update({ hr_status: "APPROVED", status: "APPROVED" }).eq("id", claim.id);
-        await sendTextMessage(phoneNumber, "Terima kasih, klaim telah selesai Anda setujui.");
-        await sendTextMessage(targetPhone, buildEmployeeStatusUpdateMessage("FINALIZED", claim.hr?.employee_name || "HR", "HR"));
+        await sendAndLog(supabase, claim.id, phoneNumber, "Terima kasih, klaim telah selesai Anda setujui.", "HR_CONFIRMED");
+
+        if (employeePhone) {
+          await sendAndLog(
+            supabase, claim.id, employeePhone,
+            buildEmployeeStatusUpdateMessage("FINALIZED", claim.hr?.employee_name || "HR", "HR"),
+            "EMPLOYEE_STATUS_UPDATE"
+          );
+        }
       } else if (reply === "2") {
         // Reject
         await supabase.from("claims").update({ hr_status: "REJECTED", status: "NEED_REVIEW" }).eq("id", claim.id);
-        await sendTextMessage(phoneNumber, "Klaim telah ditolak.");
-        await sendTextMessage(targetPhone, buildEmployeeStatusUpdateMessage("REJECTED", claim.hr?.employee_name || "HR", "HR"));
+        await sendAndLog(supabase, claim.id, phoneNumber, "Klaim telah ditolak.", "HR_REJECTED");
+
+        if (employeePhone) {
+          await sendAndLog(
+            supabase, claim.id, employeePhone,
+            buildEmployeeStatusUpdateMessage("REJECTED", claim.hr?.employee_name || "HR", "HR"),
+            "EMPLOYEE_STATUS_UPDATE"
+          );
+        }
       } else {
-        await sendTextMessage(phoneNumber, "Balasan tidak valid. Silakan balas 1 untuk Approve atau 2 untuk Reject.");
+        await sendAndLog(supabase, claim.id, phoneNumber, "Balasan tidak valid. Silakan balas 1 untuk Approve atau 2 untuk Reject.", "INVALID_REPLY");
       }
     }
 
@@ -223,7 +299,7 @@ export async function POST(request: NextRequest) {
     await supabase.from("whatsapp_logs").insert({
       claim_id: claim.id,
       phone_number: phoneNumber,
-      message_type: role,
+      message_type: `${role}_REPLY`,
       status: "RECEIVED",
       response: reply,
     });
@@ -232,6 +308,45 @@ export async function POST(request: NextRequest) {
   } catch (error) {
     console.error("Webhook error:", error);
     return NextResponse.json({ success: true });
+  }
+}
+
+// Helper: proceed to HR approval or auto-finalize
+async function proceedToHrOrFinalize(
+  supabase: ReturnType<typeof createServiceClient>,
+  claim: NonNullable<Awaited<ReturnType<typeof fetchClaimFresh>>>,
+  employeePhone: string | null
+) {
+  if (claim.hr) {
+    const hrPhone = normalizePhone(claim.hr.phone_number);
+    if (hrPhone) {
+      const sent = await sendAndLog(
+        supabase, claim.id, hrPhone,
+        buildHrApprovalMessage({
+          employee_name: claim.employee?.employee_name || "Karyawan",
+          manager_name: claim.manager?.employee_name || "Manager",
+          period: claim.period,
+          total_amount: claim.total_amount,
+          trips: claim.trips || [],
+        }),
+        "HR_APPROVAL_PROMPT"
+      );
+      if (!sent) {
+        console.error(`[FLOW] STUCK: Failed to send HR approval to ${hrPhone} for claim ${claim.id}`);
+      }
+    } else {
+      console.error(`[FLOW] STUCK: HR has no phone number for claim ${claim.id}`);
+    }
+  } else {
+    // No HR → auto finalize
+    await supabase.from("claims").update({ status: "APPROVED", hr_status: "APPROVED" }).eq("id", claim.id);
+    if (employeePhone) {
+      await sendAndLog(
+        supabase, claim.id, employeePhone,
+        buildEmployeeStatusUpdateMessage("FINALIZED", "Sistem", "HR"),
+        "EMPLOYEE_STATUS_UPDATE"
+      );
+    }
   }
 }
 
