@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse, after } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { createServiceClient } from "@/lib/supabase-server";
 import {
   sendTextMessage,
@@ -332,10 +332,9 @@ export async function POST(request: NextRequest) {
 
     const reply = messageText.trim();
 
-    // Schedule WA processing in background — response returns immediately
-    after(async () => {
-      await processWebhookReply(claim, role!, reply, phoneNumber);
-    });
+    // Process directly. We await it so Vercel doesn't kill the process.
+    // With maxRetries=1, 2 messages * 2s delay = ~4-5s total, well within Vercel's 10s limit.
+    await processWebhookReply(claim, role!, reply, phoneNumber);
 
     // Respond immediately to Kirimi webhook (no timeout risk)
     return NextResponse.json({ success: true });
