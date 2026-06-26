@@ -70,7 +70,7 @@ export const exportDashboardToPPTX = async (
         
         pptSlide.addText(`[Chart Placeholder: ${widget.title}]`, {
            x, y, w, h, fontSize: 12, color: "94a3b8", align: "center", valign: "middle",
-           fill: { color: "f8fafc" }, border: { type: "solid", color: "cbd5e1" }
+           fill: { color: "f8fafc" }
         });
       }
     });

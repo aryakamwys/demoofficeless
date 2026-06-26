@@ -32,6 +32,25 @@ export default function ManagedServiceClaimsHRPage() {
     fetchClaims();
   }, []);
 
+  const handleMerge = async (managedClaimId: string, grabClaimId: string) => {
+    try {
+      const res = await fetch("/api/claims/managed-service/merge", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ managedClaimId, grabClaimId })
+      });
+      const result = await res.json();
+      if (result.success) {
+        toast.success("Klaim Grab berhasil digabungkan!");
+        fetchClaims();
+      } else {
+        toast.error(result.error || "Gagal menggabungkan klaim");
+      }
+    } catch (e) {
+      toast.error("Terjadi kesalahan saat menghubungi server");
+    }
+  };
+
   const downloadCSV = () => {
     if (data.length === 0) {
       toast.error("Tidak ada data untuk di-download");
@@ -81,6 +100,7 @@ export default function ManagedServiceClaimsHRPage() {
                   <th className="px-4 py-3 font-medium">Amount (Rp)</th>
                   <th className="px-4 py-3 font-medium">Status</th>
                   <th className="px-4 py-3 font-medium">Tanggal Upload</th>
+                  <th className="px-4 py-3 font-medium">Grab Match</th>
                   <th className="px-4 py-3 font-medium">Bukti File</th>
                 </tr>
               </thead>
@@ -94,7 +114,7 @@ export default function ManagedServiceClaimsHRPage() {
                   </tr>
                 ) : data.length === 0 ? (
                   <tr>
-                    <td colSpan={6} className="text-center py-8 text-slate-500">
+                    <td colSpan={7} className="text-center py-8 text-slate-500">
                       Belum ada klaim yang diunggah.
                     </td>
                   </tr>
@@ -111,6 +131,25 @@ export default function ManagedServiceClaimsHRPage() {
                       </td>
                       <td className="px-4 py-3 text-slate-500">
                         {dayjs(item.created_at).format("DD MMM YYYY, HH:mm")}
+                      </td>
+                      <td className="px-4 py-3">
+                        {item.grab_match ? (
+                          <div className="flex flex-col items-start gap-1">
+                            <span className="text-xs font-semibold text-green-700 bg-green-100 px-2 py-0.5 rounded border border-green-200">
+                              Grab: Rp {Number(item.grab_match.total_amount).toLocaleString('id-ID')}
+                            </span>
+                            <Button 
+                              variant="outline" 
+                              size="sm" 
+                              className="h-7 text-xs bg-white hover:bg-slate-50 border-slate-300"
+                              onClick={() => handleMerge(item.id, item.grab_match.id)}
+                            >
+                              Merge
+                            </Button>
+                          </div>
+                        ) : (
+                          <span className="text-xs text-slate-400 italic">No Match</span>
+                        )}
                       </td>
                       <td className="px-4 py-3">
                         <Button variant="ghost" size="sm" asChild>

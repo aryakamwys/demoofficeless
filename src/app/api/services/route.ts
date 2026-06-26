@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server";
 
+export const revalidate = 3600; // Cache for 1 hour (Redis-backed via Vercel Data Cache)
+
 export async function GET(request: Request) {
   try {
     const { searchParams } = new URL(request.url);

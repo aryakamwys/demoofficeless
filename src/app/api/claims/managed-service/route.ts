@@ -16,7 +16,39 @@ export async function GET() {
     );
   }
 
-  return NextResponse.json({ success: true, data });
+  // Fetch pending Grab claims
+  const { data: grabClaims, error: grabError } = await supabase
+    .from("claims")
+    .select(`
+      id,
+      total_amount,
+      status,
+      period,
+      employee:employees(name)
+    `)
+    .eq("status", "PENDING");
+
+  // Attach grab_match if customer_name matches employee name
+  const enrichedData = data.map((mClaim) => {
+    let grab_match = null;
+    if (grabClaims && mClaim.customer_name) {
+      const match = grabClaims.find(
+        (gc) => {
+          const empName = Array.isArray(gc.employee) ? gc.employee[0]?.name : (gc.employee as any)?.name;
+          return empName && empName.toLowerCase() === mClaim.customer_name?.toLowerCase();
+        }
+      );
+      if (match) {
+        grab_match = match;
+      }
+    }
+    return {
+      ...mClaim,
+      grab_match,
+    };
+  });
+
+  return NextResponse.json({ success: true, data: enrichedData });
 }
 
 export async function POST(request: NextRequest) {

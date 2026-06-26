@@ -34,13 +34,13 @@ export default function ChartWidget({ widgetId, slideId }: { widgetId: string, s
       series: [{ data: values, type: widget.type, smooth: true }]
     };
 
-    if (widget.type === 'pie' || widget.type === 'donut') {
+    if (widget.type === 'pie') {
       return {
         tooltip: { trigger: 'item' },
         series: [
           {
             type: 'pie',
-            radius: widget.type === 'donut' ? ['40%', '70%'] : '50%',
+            radius: '50%',
             data: entries.map(e => ({ name: e[0], value: e[1] })),
             emphasis: {
               itemStyle: {

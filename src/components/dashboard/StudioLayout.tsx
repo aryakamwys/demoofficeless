@@ -155,6 +155,7 @@ export default function StudioLayout({ onPresent }: { onPresent: () => void }) {
                 cols={{ lg: 12, md: 12, sm: 12, xs: 12, xxs: 12 }}
                 rowHeight={40}
                 onLayoutChange={handleLayoutChange}
+                // @ts-ignore
                 isDraggable={true}
                 isResizable={true}
                 margin={[16, 16]}
