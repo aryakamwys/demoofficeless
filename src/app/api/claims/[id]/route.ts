@@ -49,6 +49,7 @@ export async function GET(
       ticket = {
         ticket_id: "32535",
         ticket_title: "Preventive Maintenance (PM 1 of 4) Server DRC - Resona Indonesia Finance",
+        customer_name: "Resona Indonesia Finance",
         location: "Jabodetabek",
         amount: claim.total_amount
       };

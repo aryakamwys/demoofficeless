@@ -294,17 +294,25 @@ export function ClaimDetailView({ claim }: ClaimDetailViewProps) {
       {/* EnvGate Ticket Details (Print & Screen if linked) */}
       {claim.ticket && claim.status === 'APPROVED' && (
         <div className="mt-8 border border-slate-200 rounded-md overflow-hidden bg-white print:border-none print:mt-6 print:break-inside-avoid">
-          <div className="bg-slate-50 border-b border-slate-200 p-4 print:bg-white print:border-b-2 print:border-black print:pb-2">
-            <h3 className="text-lg font-semibold text-slate-800 print:text-base">
-              Linked Ticket: {claim.ticket.ticket_title || "No Subject"}
-            </h3>
-            <div className="flex items-center gap-2 mt-1 text-sm text-slate-500 print:text-xs">
-              <span>Technical Support</span>
-              <span>&raquo;</span>
-              <span>Managed Service</span>
-              <span>&raquo;</span>
-              <span>Others</span>
-              <span className="ml-auto font-medium text-slate-700 bg-slate-200 px-2 py-0.5 rounded print:border print:border-slate-300">#{claim.ticket.ticket_id}</span>
+          <div className="flex items-center justify-between bg-slate-50 border-b border-slate-200 p-4 print:bg-white print:border-b-2 print:border-black print:pb-2">
+            <div className="flex-1">
+              <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1 print:text-[10px]">Customer / Client</p>
+              <h3 className="text-lg font-bold text-slate-800 print:text-base">
+                {claim.ticket.customer_name || claim.ticket.ticket_title || "Internal"}
+              </h3>
+              <div className="flex items-center gap-2 mt-2 text-sm text-slate-500 print:text-xs">
+                <span>Technical Support</span>
+                <span>&raquo;</span>
+                <span>Managed Service</span>
+                <span>&raquo;</span>
+                <span>Others</span>
+              </div>
+            </div>
+            <div className="text-right">
+              <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1 print:text-[10px]">Ticket ID</p>
+              <span className="inline-block font-bold text-lg text-slate-800 bg-slate-200 px-3 py-1 rounded print:border print:border-slate-300 print:bg-slate-100 print:text-base">
+                #{claim.ticket.ticket_id}
+              </span>
             </div>
           </div>
           
@@ -367,9 +375,17 @@ export function ClaimDetailView({ claim }: ClaimDetailViewProps) {
                       <span className="text-[10px] font-semibold text-white uppercase tracking-wider bg-[#6281c0] px-2 py-0.5 rounded">Description</span>
                     </div>
                   </div>
-                  <div className="text-sm text-slate-600 prose-p:my-1 print:text-xs">
-                    <p>Mohon dibantu support Activity : {claim.ticket.ticket_title || "Preventive Maintenance"}</p>
-                    <p>Terima Kasih.</p>
+                  <div className="text-sm text-slate-600 prose-p:my-1 print:text-xs whitespace-pre-line">
+                    {claim.comments && claim.comments.length > 0 ? (
+                      claim.comments.map((comment, i) => (
+                        <p key={i} className="mb-2">{comment.message}</p>
+                      ))
+                    ) : (
+                      <>
+                        <p>Mohon dibantu support Activity : {claim.ticket.ticket_title || "Preventive Maintenance"}</p>
+                        <p>Terima Kasih.</p>
+                      </>
+                    )}
                   </div>
                 </div>
               </div>
