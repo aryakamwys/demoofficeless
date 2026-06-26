@@ -10,6 +10,7 @@ import { toast } from "sonner";
 import dayjs from "dayjs";
 import { useRouter } from "next/navigation";
 import { SendWADialog } from "@/components/claims/send-wa-dialog";
+import { SignaturePadDialog } from "@/components/claims/signature-pad-dialog";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -26,21 +27,36 @@ export function ClaimDetailView({ claim }: ClaimDetailViewProps) {
   const [sendWADialogOpen, setSendWADialogOpen] = useState(false);
   const [sendingWA, setSendingWA] = useState(false);
   const [approving, setApproving] = useState(false);
+  const [sigPadOpen, setSigPadOpen] = useState(false);
+  const [sigRole, setSigRole] = useState<"MANAGER" | "HR">("MANAGER");
 
   const handleSendWA = () => {
     setSendWADialogOpen(true);
   };
 
-  const handleApprove = async () => {
+  const handleApprove = async (signatureData: string) => {
     setApproving(true);
     try {
+      const payload: any = {
+        status: "APPROVED",
+        approved_at: new Date().toISOString()
+      };
+      
+      if (sigRole === "MANAGER") {
+        payload.manager_status = "APPROVED";
+        payload.manager_signature = signatureData;
+      } else {
+        payload.hr_status = "APPROVED";
+        payload.hr_signature = signatureData;
+      }
+      
       const res = await fetch(`/api/claims/${claim.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ status: "APPROVED", approved_at: new Date().toISOString() }),
+        body: JSON.stringify(payload),
       });
       if (res.ok) {
-        toast.success("Claim berhasil di-approve");
+        toast.success(`Claim berhasil di-approve sebagai ${sigRole}`);
         router.refresh();
       } else {
         toast.error("Gagal meng-approve claim");
@@ -48,6 +64,11 @@ export function ClaimDetailView({ claim }: ClaimDetailViewProps) {
     } finally {
       setApproving(false);
     }
+  };
+
+  const openSignaturePad = (role: "MANAGER" | "HR") => {
+    setSigRole(role);
+    setSigPadOpen(true);
   };
 
   const handleResend = async (target: "MANAGER" | "HR") => {
@@ -101,20 +122,30 @@ export function ClaimDetailView({ claim }: ClaimDetailViewProps) {
           {claim.employee &&
             (claim.status === "PENDING" || claim.status === "SENT") && (
               <>
-                <Button
-                  variant="outline"
-                  onClick={handleApprove}
-                  disabled={approving}
-                  className="border-[#00B14F] text-[#00B14F] hover:bg-[#00B14F]/10 disabled:opacity-60"
-                >
-                  {approving ? (
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  ) : (
-                    <UserCheck className="mr-2 h-4 w-4" />
-                  )}
-                  {approving ? "Processing..." : "Approve Manual"}
-                </Button>
-                
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button
+                      variant="outline"
+                      disabled={approving}
+                      className="border-[#00B14F] text-[#00B14F] hover:bg-[#00B14F]/10 disabled:opacity-60"
+                    >
+                      {approving ? (
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      ) : (
+                        <UserCheck className="mr-2 h-4 w-4" />
+                      )}
+                      {approving ? "Processing..." : "Approve Manual"}
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end">
+                    <DropdownMenuItem onClick={() => openSignaturePad("MANAGER")}>
+                      Approve as Manager
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => openSignaturePad("HR")}>
+                      Approve as HR
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
                 {claim.wa_sent ? (
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild>
@@ -314,11 +345,7 @@ export function ClaimDetailView({ claim }: ClaimDetailViewProps) {
               </div>
               <div className="flex items-center gap-4 mt-4 md:mt-0">
                 <div className="flex items-center gap-1.5 text-sm text-slate-600 font-medium">
-                  <span className="text-slate-400">📍</span>
                   {claim.ticket.location || "Jabodetabek"}
-                </div>
-                <div className="w-8 h-8 bg-slate-100 rounded flex items-center justify-center text-slate-400 print:hidden">
-                  🏁
                 </div>
                 <div className="bg-[#6b89c8] text-white text-sm font-semibold px-4 py-2 rounded-sm print:border print:border-slate-400 print:bg-slate-100 print:text-slate-800">
                   #PIM-{claim.ticket.ticket_id}
@@ -474,23 +501,37 @@ export function ClaimDetailView({ claim }: ClaimDetailViewProps) {
               </p>
             </div>
           </div>
-          <div className="space-y-16">
+          <div className="space-y-4">
             <p className="font-semibold text-sm">Disetujui Oleh (Manager),</p>
+            <div className="h-16 flex items-end justify-center">
+              {claim.manager_signature ? (
+                <img src={claim.manager_signature} alt="Manager Signature" className="max-h-16 object-contain" />
+              ) : (
+                <div className="h-16" />
+              )}
+            </div>
             <div>
               <p className="border-b border-black w-3/4 mx-auto"></p>
               <p className="text-sm mt-1">{claim.employee?.manager?.employee_name || "Manager"}</p>
               <p className="text-xs text-muted-foreground">
-                {claim.manager_status === 'APPROVED' ? "Telah Disetujui (By WA)" : "Pending"}
+                {claim.manager_status === 'APPROVED' ? "Telah Disetujui" : "Pending"}
               </p>
             </div>
           </div>
-          <div className="space-y-16">
+          <div className="space-y-4">
             <p className="font-semibold text-sm">Disetujui Oleh (HR),</p>
+            <div className="h-16 flex items-end justify-center">
+              {claim.hr_signature ? (
+                <img src={claim.hr_signature} alt="HR Signature" className="max-h-16 object-contain" />
+              ) : (
+                <div className="h-16" />
+              )}
+            </div>
             <div>
               <p className="border-b border-black w-3/4 mx-auto"></p>
               <p className="text-sm mt-1">{claim.employee?.hr?.employee_name || "HR"}</p>
               <p className="text-xs text-muted-foreground">
-                {claim.hr_status === 'APPROVED' ? "Telah Disetujui (By WA)" : "Pending"}
+                {claim.hr_status === 'APPROVED' ? "Telah Disetujui" : "Pending"}
               </p>
             </div>
           </div>
@@ -521,6 +562,13 @@ export function ClaimDetailView({ claim }: ClaimDetailViewProps) {
         onOpenChange={setSendWADialogOpen}
         claim={claim}
         onSuccess={() => router.refresh()}
+      />
+
+      <SignaturePadDialog
+        open={sigPadOpen}
+        onOpenChange={setSigPadOpen}
+        onSave={handleApprove}
+        roleTitle={sigRole === "MANAGER" ? "Manager" : "HR"}
       />
     </div>
   );

@@ -69,10 +69,37 @@ export async function PATCH(
   const { id } = await params;
   const supabase = await createServerClient();
   const body = await request.json();
+  const { manager_signature, hr_signature, ...updateData } = body;
+
+  // If there are signatures, fetch the claim first to get the employee IDs
+  if (manager_signature || hr_signature) {
+    const { data: claimInfo } = await supabase
+      .from("claims")
+      .select("manager_id, hr_id")
+      .eq("id", id)
+      .single();
+
+    if (claimInfo) {
+      if (manager_signature && claimInfo.manager_id) {
+        await supabase.from("signatures").upsert({
+          employee_id: claimInfo.manager_id,
+          signature: manager_signature,
+          updated_at: new Date().toISOString()
+        });
+      }
+      if (hr_signature && claimInfo.hr_id) {
+        await supabase.from("signatures").upsert({
+          employee_id: claimInfo.hr_id,
+          signature: hr_signature,
+          updated_at: new Date().toISOString()
+        });
+      }
+    }
+  }
 
   const { error } = await supabase
     .from("claims")
-    .update(body)
+    .update(updateData)
     .eq("id", id);
 
   if (error) {

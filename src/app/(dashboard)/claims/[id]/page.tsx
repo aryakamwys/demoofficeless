@@ -58,11 +58,35 @@ export default async function ClaimDetailPage({ params }: ClaimDetailPageProps) 
     }
   }
 
+  // Fetch manager signature
+  let manager_signature = null;
+  if (claim.manager_id) {
+    const { data: managerSig } = await supabase
+      .from("signatures")
+      .select("signature")
+      .eq("employee_id", claim.manager_id)
+      .single();
+    if (managerSig) manager_signature = managerSig.signature;
+  }
+
+  // Fetch HR signature
+  let hr_signature = null;
+  if (claim.hr_id) {
+    const { data: hrSig } = await supabase
+      .from("signatures")
+      .select("signature")
+      .eq("employee_id", claim.hr_id)
+      .single();
+    if (hrSig) hr_signature = hrSig.signature;
+  }
+
   const claimDetail: ClaimDetail = {
     ...claim,
     trips: trips || [],
     comments: comments || [],
-    ticket
+    ticket,
+    manager_signature,
+    hr_signature
   };
 
   return <ClaimDetailView claim={claimDetail} />;
