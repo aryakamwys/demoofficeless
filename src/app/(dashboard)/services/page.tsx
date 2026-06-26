@@ -281,10 +281,10 @@ export default function ServicesPage() {
                           {item.assigned_group_details?.name || (item.assigned_group_id ? `Helpdesk Level ${item.assigned_group_id}` : "—")}
                         </td>
                         <td className="px-2 py-2 align-middle text-slate-700 border border-slate-200">
-                          {item.assigned_user?.name || item.assigned_user?.full_name || item.assigned_user?.first_name || item.assigned_id || "—"}
+                          {item.assigned_user?.name || "—"}
                         </td>
                         <td className="px-2 py-2 align-middle text-slate-700 border border-slate-200">
-                          {item.assigned_user?.last_name || ""}
+                          {item.assigned_user?.lastname || ""}
                         </td>
                         <td className="px-2 py-2 align-middle text-slate-700 border border-slate-200 w-[140px]">
                           {dateStr}

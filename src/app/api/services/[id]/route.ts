@@ -53,70 +53,55 @@ export async function GET(
       );
     }
 
-    // Step 4: Fetch Categories (Now using /api/v1/categories)
-    if (data.category_id) {
-      try {
-        const catResponse = await fetch(`https://servicedesk.perkom.co.id/api/v1/categories?ids[]=${data.category_id}`, {
-          method: "GET",
-          headers: { "Authorization": authHeader, "Accept": "application/json" },
-        });
-        if (catResponse.ok) {
-          const catResult = await catResponse.json();
-          const catData = catResult.response || catResult.data || catResult;
-          if (Array.isArray(catData) && catData.length > 0) {
-            data.category_details = catData[0];
-          } else if (typeof catData === 'object' && catData[data.category_id]) {
-            data.category_details = catData[data.category_id];
-          }
+    // Step 4: Build combined Helpdesks + Levels map (same as list endpoint)
+    try {
+      let combinedMap: Record<number, any> = {};
+
+      const hdResponse = await fetch(`https://servicedesk.perkom.co.id/api/v1/helpdesks`, {
+        method: "GET",
+        headers: { "Authorization": authHeader, "Accept": "application/json" },
+      });
+      if (hdResponse.ok) {
+        const hdResult = await hdResponse.json();
+        const hdData = hdResult.response || hdResult.data || hdResult;
+        if (Array.isArray(hdData)) {
+          hdData.forEach(h => { if (h && h.id) combinedMap[h.id] = h; });
         }
-      } catch (e) {
-        console.error("Error fetching category details:", e);
       }
-    }
 
-    // Step 5: Fetch Groups & Helpdesks for assigned_group_id mapping
-    if (data.assigned_group_id) {
-      try {
-        let groupMap: Record<string, any> = {};
-        
-        // 5a. Fetch from Groups
-        const groupResponse = await fetch(`https://servicedesk.perkom.co.id/api/v1/groups?ids[]=${data.assigned_group_id}`, {
-          method: "GET",
-          headers: { "Authorization": authHeader, "Accept": "application/json" },
-        });
-        if (groupResponse.ok) {
-          const groupResult = await groupResponse.json();
-          const groupData = groupResult.response || groupResult.data || groupResult;
-          if (Array.isArray(groupData)) {
-            groupData.forEach(g => { if (g && g.id) groupMap[g.id] = g; });
-          } else if (typeof groupData === 'object' && groupData !== null) {
-            Object.assign(groupMap, groupData);
-          }
+      const lvlResponse = await fetch(`https://servicedesk.perkom.co.id/api/v1/levels`, {
+        method: "GET",
+        headers: { "Authorization": authHeader, "Accept": "application/json" },
+      });
+      if (lvlResponse.ok) {
+        const lvlResult = await lvlResponse.json();
+        const lvlData = lvlResult.response || lvlResult.data || lvlResult;
+        if (Array.isArray(lvlData)) {
+          lvlData.forEach(l => { if (l && l.id && !combinedMap[l.id]) combinedMap[l.id] = l; });
         }
-
-        // 5b. Fetch from Helpdesks if not in Groups
-        if (!groupMap[data.assigned_group_id]) {
-          const hdResponse = await fetch(`https://servicedesk.perkom.co.id/api/v1/helpdesks`, {
-            method: "GET",
-            headers: { "Authorization": authHeader, "Accept": "application/json" },
-          });
-          if (hdResponse.ok) {
-            const hdResult = await hdResponse.json();
-            const hdData = hdResult.response || hdResult.data || hdResult;
-            if (Array.isArray(hdData)) {
-              hdData.forEach(h => { if (h && h.id && !groupMap[h.id]) groupMap[h.id] = h; });
-            } else if (typeof hdData === 'object' && hdData !== null) {
-              Object.keys(hdData).forEach(k => { if (!groupMap[k]) groupMap[k] = hdData[k]; });
-            }
-          }
-        }
-
-        if (groupMap[data.assigned_group_id]) {
-          data.assigned_group_details = groupMap[data.assigned_group_id];
-        }
-      } catch (e) {
-        console.error("Error fetching assigned groups:", e);
       }
+
+      const resolveName = (id: number): string => {
+        const item = combinedMap[id];
+        if (!item) return "";
+        if (item.name) return item.name;
+        if (item.parent_id) {
+          const parent = combinedMap[Number(item.parent_id)];
+          if (parent && parent.name) return parent.name;
+        }
+        return "";
+      };
+
+      if (data.category_id) {
+        const name = resolveName(data.category_id);
+        if (name) data.category_details = { id: data.category_id, name };
+      }
+      if (data.assigned_group_id) {
+        const name = resolveName(data.assigned_group_id);
+        if (name) data.assigned_group_details = { id: data.assigned_group_id, name };
+      }
+    } catch (e) {
+      console.error("Error fetching helpdesks/levels:", e);
     }
 
     return NextResponse.json({ success: true, data });

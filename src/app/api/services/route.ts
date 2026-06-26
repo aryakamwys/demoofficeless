@@ -177,82 +177,72 @@ export async function GET(request: Request) {
       }
     }
 
-    // Step 4: Fetch Categories (Now using /api/v1/categories since access is granted)
-    const categoryIds = [...new Set(data.map(d => d.category_id).filter(id => id != null))];
-    if (categoryIds.length > 0) {
-      try {
-        const catQuery = categoryIds.map(id => `ids[]=${id}`).join("&");
-        const catResponse = await fetch(`https://servicedesk.perkom.co.id/api/v1/categories?${catQuery}`, {
-          method: "GET",
-          headers: { "Authorization": authHeader, "Accept": "application/json" },
-        });
-        if (catResponse.ok) {
-          const catResult = await catResponse.json();
-          const catData = catResult.response || catResult.data || catResult;
-          let catMap: Record<string, any> = {};
-          if (Array.isArray(catData)) {
-            catData.forEach(c => { if (c && c.id) catMap[c.id] = c; });
-          } else if (typeof catData === 'object' && catData !== null) {
-            catMap = catData;
-          }
-          data = data.map(item => {
-            if (item.category_id && catMap[item.category_id]) {
-              item.category_details = catMap[item.category_id];
-            }
-            return item;
-          });
+    // Step 4: Build combined Helpdesks + Levels map
+    // InvGate has TWO entity types in the same ID space:
+    //   - helpdesks (type_id=2): the queue/category nodes (e.g. 83="Network")
+    //   - levels (type_id=1): tier nodes under helpdesks (e.g. 66="Storage Level 1", 140="Managed Service Level 1")
+    // Both category_id AND assigned_group_id on incidents can reference EITHER entity.
+    try {
+      let combinedMap: Record<number, any> = {};
+
+      // 4a. Fetch all helpdesks
+      const hdResponse = await fetch(`https://servicedesk.perkom.co.id/api/v1/helpdesks`, {
+        method: "GET",
+        headers: { "Authorization": authHeader, "Accept": "application/json" },
+      });
+      if (hdResponse.ok) {
+        const hdResult = await hdResponse.json();
+        const hdData = hdResult.response || hdResult.data || hdResult;
+        if (Array.isArray(hdData)) {
+          hdData.forEach(h => { if (h && h.id) combinedMap[h.id] = h; });
         }
-      } catch (e) {
-        console.error("Error fetching categories:", e);
       }
-    }
 
-    // Step 5: Fetch Groups & Helpdesks for assigned_group_id mapping
-    const groupIds = [...new Set(data.map(d => d.assigned_group_id).filter(id => id != null))];
-    if (groupIds.length > 0) {
-      try {
-        let groupMap: Record<string, any> = {};
-        
-        // 5a. Fetch from Groups
-        const groupQuery = groupIds.map(id => `ids[]=${id}`).join("&");
-        const groupResponse = await fetch(`https://servicedesk.perkom.co.id/api/v1/groups?${groupQuery}`, {
-          method: "GET",
-          headers: { "Authorization": authHeader, "Accept": "application/json" },
-        });
-        if (groupResponse.ok) {
-          const groupResult = await groupResponse.json();
-          const groupData = groupResult.response || groupResult.data || groupResult;
-          if (Array.isArray(groupData)) {
-            groupData.forEach(g => { if (g && g.id) groupMap[g.id] = g; });
-          } else if (typeof groupData === 'object' && groupData !== null) {
-            Object.assign(groupMap, groupData);
-          }
+      // 4b. Fetch all levels
+      const lvlResponse = await fetch(`https://servicedesk.perkom.co.id/api/v1/levels`, {
+        method: "GET",
+        headers: { "Authorization": authHeader, "Accept": "application/json" },
+      });
+      if (lvlResponse.ok) {
+        const lvlResult = await lvlResponse.json();
+        const lvlData = lvlResult.response || lvlResult.data || lvlResult;
+        if (Array.isArray(lvlData)) {
+          lvlData.forEach(l => { if (l && l.id && !combinedMap[l.id]) combinedMap[l.id] = l; });
         }
-
-        // 5b. Fetch from Helpdesks (since assigned_group_id often references Helpdesks in InvGate)
-        const hdResponse = await fetch(`https://servicedesk.perkom.co.id/api/v1/helpdesks`, {
-          method: "GET",
-          headers: { "Authorization": authHeader, "Accept": "application/json" },
-        });
-        if (hdResponse.ok) {
-          const hdResult = await hdResponse.json();
-          const hdData = hdResult.response || hdResult.data || hdResult;
-          if (Array.isArray(hdData)) {
-            hdData.forEach(h => { if (h && h.id && !groupMap[h.id]) groupMap[h.id] = h; });
-          } else if (typeof hdData === 'object' && hdData !== null) {
-            Object.keys(hdData).forEach(k => { if (!groupMap[k]) groupMap[k] = hdData[k]; });
-          }
-        }
-
-        data = data.map(item => {
-          if (item.assigned_group_id && groupMap[item.assigned_group_id]) {
-            item.assigned_group_details = groupMap[item.assigned_group_id];
-          }
-          return item;
-        });
-      } catch (e) {
-        console.error("Error fetching assigned groups:", e);
       }
+
+      // Helper: resolve a name from ID by tracing parent chain
+      const resolveName = (id: number): string => {
+        const item = combinedMap[id];
+        if (!item) return "";
+        // If it's a helpdesk (has a name), return name directly
+        if (item.name) return item.name;
+        // If it's a level (no name, has parent_id), get parent helpdesk name
+        if (item.parent_id) {
+          const parent = combinedMap[Number(item.parent_id)];
+          if (parent && parent.name) return parent.name;
+        }
+        return "";
+      };
+
+      // Map category and assigned group details
+      data = data.map(item => {
+        if (item.category_id) {
+          const name = resolveName(item.category_id);
+          if (name) {
+            item.category_details = { id: item.category_id, name };
+          }
+        }
+        if (item.assigned_group_id) {
+          const name = resolveName(item.assigned_group_id);
+          if (name) {
+            item.assigned_group_details = { id: item.assigned_group_id, name };
+          }
+        }
+        return item;
+      });
+    } catch (e) {
+      console.error("Error fetching helpdesks/levels:", e);
     }
 
     return NextResponse.json({ success: true, data });
