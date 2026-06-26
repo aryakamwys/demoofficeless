@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
@@ -20,11 +20,26 @@ export default function ServicesPage() {
   const [pageSize, setPageSize] = useState(10);
   const [currentPage, setCurrentPage] = useState(1);
 
+  const [fromDate, setFromDate] = useState(() => {
+    const d = new Date();
+    d.setDate(d.getDate() - 7);
+    return d.toISOString().split('T')[0];
+  });
+  const [toDate, setToDate] = useState(() => {
+    const d = new Date();
+    return d.toISOString().split('T')[0];
+  });
+
+  useEffect(() => {
+    fetchServiceData();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const fetchServiceData = async () => {
     setLoading(true);
     setHasFetched(false);
     try {
-      const response = await fetch("/api/services");
+      const response = await fetch(`/api/services?from=${fromDate}&to=${toDate}`);
       
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`);
@@ -164,15 +179,24 @@ export default function ServicesPage() {
           <Button variant="outline" size="sm" onClick={downloadCSV} className="h-9 border-slate-300 bg-slate-50">
             Export
           </Button>
-          <Button size="sm" onClick={() => router.push("/services/upload")} className="h-9 bg-blue-600 hover:bg-blue-700">
-            Upload Klaim
-          </Button>
         </div>
 
         <div className="flex items-center gap-4">
           <div className="text-sm text-slate-600 flex items-center gap-2">
-            From <div className="border border-slate-300 bg-slate-50 rounded px-2 py-1 h-9 flex items-center min-w-[120px] text-muted-foreground"><CalendarIcon className="mr-2 h-4 w-4" /> 2026-06-14</div>
-            To <div className="border border-slate-300 bg-slate-50 rounded px-2 py-1 h-9 flex items-center min-w-[120px] text-muted-foreground"><CalendarIcon className="mr-2 h-4 w-4" /> 2026-06-20</div>
+            From 
+            <input 
+              type="date" 
+              value={fromDate}
+              onChange={(e) => setFromDate(e.target.value)}
+              className="border border-slate-300 bg-slate-50 rounded px-2 py-1 h-9 flex items-center min-w-[120px] text-slate-700 focus:outline-none focus:ring-1 focus:ring-blue-500" 
+            />
+            To 
+            <input 
+              type="date" 
+              value={toDate}
+              onChange={(e) => setToDate(e.target.value)}
+              className="border border-slate-300 bg-slate-50 rounded px-2 py-1 h-9 flex items-center min-w-[120px] text-slate-700 focus:outline-none focus:ring-1 focus:ring-blue-500" 
+            />
           </div>
           <Button onClick={fetchServiceData} disabled={loading} variant="outline" size="sm" className="h-9 border-slate-300">
             <RefreshCw className={`mr-2 h-4 w-4 ${loading ? 'animate-spin' : ''}`} />

@@ -1,7 +1,11 @@
 import { NextResponse } from "next/server";
 
-export async function GET() {
+export async function GET(request: Request) {
   try {
+    const { searchParams } = new URL(request.url);
+    const fromDateStr = searchParams.get("from");
+    const toDateStr = searchParams.get("to");
+
     const username = process.env.SERVICEDESK_USERNAME;
     const password = process.env.SERVICEDESK_PASSWORD;
 
@@ -15,7 +19,6 @@ export async function GET() {
     const authHeader = `Basic ${Buffer.from(`${username}:${password}`).toString("base64")}`;
 
     // Step 1: Hit incidents.by.status with multiple status IDs to get history (including closed)
-    // InvGate statuses usually 1: Open, 2: In Progress, 3: Waiting, 4: Resolved, 5: Closed
     const statusQuery = [1, 2, 3, 4, 5, 6].map(id => `status_ids[]=${id}`).join("&");
     
     // Hit first to get total
@@ -37,8 +40,8 @@ export async function GET() {
     const initialStatusResult = await statusResponse.json();
     const total = initialStatusResult.total || 0;
     
-    // We want the newest items. If there's no descending sort, we skip to the end of the list.
-    const fetchLimit = 50; // Get latest 50 items to show a good 1-year mapping
+    // We want the newest items. Let's fetch more if there's a date filter to ensure we get them.
+    const fetchLimit = (fromDateStr || toDateStr) ? 200 : 50; 
     let offset = 0;
     if (total > fetchLimit) {
       offset = total - fetchLimit;
@@ -106,6 +109,33 @@ export async function GET() {
         title: `RAW Detail: ${JSON.stringify(detailResult).substring(0, 200)}`,
         status_id: "N/A"
       }];
+    } else {
+      // Filter by date if provided
+      if (fromDateStr || toDateStr) {
+        data = data.filter(item => {
+          if (!item.created_at) return true;
+          // item.created_at is typically a timestamp
+          let d = new Date(item.created_at);
+          if (/^\d+$/.test(item.created_at.toString())) {
+             const num = parseInt(item.created_at);
+             d = new Date(num > 9999999999 ? num : num * 1000);
+          }
+          if (isNaN(d.getTime())) return true;
+          
+          let valid = true;
+          if (fromDateStr) {
+            const from = new Date(fromDateStr);
+            from.setHours(0, 0, 0, 0);
+            if (d < from) valid = false;
+          }
+          if (toDateStr) {
+            const to = new Date(toDateStr);
+            to.setHours(23, 59, 59, 999);
+            if (d > to) valid = false;
+          }
+          return valid;
+        });
+      }
     }
 
     // Step 3: Fetch User Details for Assigned Agents

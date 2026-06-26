@@ -40,6 +40,7 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
       (item) => pathname === item.href || pathname.startsWith(item.href)
     );
   });
+  const [servicesOpen, setServicesOpen] = useState(() => pathname.startsWith("/services"));
 
   const handleLogout = async () => {
     const supabase = createBrowserClient();
@@ -188,13 +189,45 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
 
             {/* Manage Service Module */}
             <div className="pt-2 mt-2 border-t border-slate-100">
-              <SidebarLink
-                href="/services"
-                icon={Settings}
-                label="Manage Service"
-                isActive={pathname.startsWith("/services")}
-                collapsed={collapsed}
-              />
+              {collapsed ? (
+                <>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <div className={cn("flex items-center justify-center rounded-lg p-2 cursor-default", pathname.startsWith("/services") ? "text-sidebar-primary" : "text-sidebar-foreground/50")}>
+                        <Settings className="h-4 w-4" />
+                      </div>
+                    </TooltipTrigger>
+                    <TooltipContent side="right">Manage Service</TooltipContent>
+                  </Tooltip>
+                  <SidebarLink href="/services" icon={LayoutDashboard} label="Dashboard" isActive={pathname === "/services"} collapsed={collapsed} />
+                  <SidebarLink href="/services/upload" icon={Upload} label="Upload Klaim" isActive={pathname === "/services/upload"} collapsed={collapsed} />
+                </>
+              ) : (
+                <div>
+                  <button
+                    onClick={() => setServicesOpen(!servicesOpen)}
+                    className={cn(
+                      "flex w-full items-center gap-3 py-2.5 px-3 mb-1 text-sm font-medium transition-colors relative rounded-r-lg",
+                      pathname.startsWith("/services") ? "text-blue-700" : "text-slate-600 hover:bg-slate-50 hover:text-slate-900"
+                    )}
+                  >
+                    {pathname.startsWith("/services") && <div className="absolute left-[-8px] top-0 bottom-0 w-1 bg-blue-600 rounded-r-md" />}
+                    <Settings className="h-5 w-5 shrink-0" />
+                    <span className="flex-1 text-left">Manage Service</span>
+                    <ChevronDown className={cn("h-4 w-4 transition-transform duration-200", servicesOpen && "rotate-180")} />
+                  </button>
+                  <div className={cn("overflow-hidden transition-all duration-200 ease-in-out", servicesOpen ? "max-h-48 opacity-100" : "max-h-0 opacity-0")}>
+                    <div className="ml-5 mt-1 space-y-0.5 border-l border-slate-200 pl-3">
+                      <Link href="/services" className={cn("flex items-center gap-3 py-2 px-3 text-sm font-medium transition-colors rounded-lg", pathname === "/services" ? "bg-blue-50/50 text-blue-700" : "text-slate-500 hover:bg-slate-50 hover:text-slate-800")}>
+                        <LayoutDashboard className="h-4 w-4 shrink-0" /> Dashboard
+                      </Link>
+                      <Link href="/services/upload" className={cn("flex items-center gap-3 py-2 px-3 text-sm font-medium transition-colors rounded-lg", pathname === "/services/upload" ? "bg-blue-50/50 text-blue-700" : "text-slate-500 hover:bg-slate-50 hover:text-slate-800")}>
+                        <Upload className="h-4 w-4 shrink-0" /> Upload Klaim
+                      </Link>
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
           </nav>
         </ScrollArea>
