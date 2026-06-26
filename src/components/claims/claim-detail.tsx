@@ -291,6 +291,93 @@ export function ClaimDetailView({ claim }: ClaimDetailViewProps) {
         </CardContent>
       </Card>
       
+      {/* EnvGate Ticket Details (Print & Screen if linked) */}
+      {claim.ticket && claim.status === 'APPROVED' && (
+        <div className="mt-8 border border-slate-200 rounded-md overflow-hidden bg-white print:border-none print:mt-6 print:break-inside-avoid">
+          <div className="bg-slate-50 border-b border-slate-200 p-4 print:bg-white print:border-b-2 print:border-black print:pb-2">
+            <h3 className="text-lg font-semibold text-slate-800 print:text-base">
+              Linked Ticket: {claim.ticket.ticket_title || "No Subject"}
+            </h3>
+            <div className="flex items-center gap-2 mt-1 text-sm text-slate-500 print:text-xs">
+              <span>Technical Support</span>
+              <span>&raquo;</span>
+              <span>Managed Service</span>
+              <span>&raquo;</span>
+              <span>Others</span>
+              <span className="ml-auto font-medium text-slate-700 bg-slate-200 px-2 py-0.5 rounded print:border print:border-slate-300">#{claim.ticket.ticket_id}</span>
+            </div>
+          </div>
+          
+          <div className="grid grid-cols-2 md:grid-cols-5 gap-4 p-4 border-b border-slate-100 print:border-b print:border-slate-300 print:py-2">
+            <div>
+              <p className="text-xs text-slate-500 mb-1 print:text-[10px]">Priority</p>
+              <p className="text-sm font-semibold text-slate-800 print:text-xs">Medium</p>
+            </div>
+            <div>
+              <p className="text-xs text-slate-500 mb-1 print:text-[10px]">Type</p>
+              <p className="text-sm font-semibold text-slate-800 print:text-xs">Service Request</p>
+            </div>
+            <div>
+              <p className="text-xs text-slate-500 mb-1 print:text-[10px]">Source</p>
+              <p className="text-sm font-semibold text-slate-800 print:text-xs">Email</p>
+            </div>
+            <div>
+              <p className="text-xs text-slate-500 mb-1 print:text-[10px]">First Response</p>
+              <p className="text-sm font-semibold text-emerald-500 print:text-xs">Correct</p>
+            </div>
+            <div>
+              <p className="text-xs text-slate-500 mb-1 print:text-[10px]">Resolution</p>
+              <p className="text-sm font-semibold text-slate-800 print:text-xs">Paused (0%)</p>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 p-4 border-b border-slate-100 bg-slate-50/50 print:bg-white print:border-b print:border-slate-300 print:py-2">
+            <div>
+              <p className="text-xs text-slate-500 mb-1 print:text-[10px]">Incident Location</p>
+              <p className="text-sm font-medium text-slate-800 print:text-xs">{claim.ticket.location || "Jabodetabek"}</p>
+            </div>
+            <div>
+              <p className="text-xs text-slate-500 mb-1 print:text-[10px]">Details Location</p>
+              <p className="text-sm font-medium text-slate-800 print:text-xs">-</p>
+            </div>
+            <div>
+              <p className="text-xs text-slate-500 mb-1 print:text-[10px]">SLA Type</p>
+              <p className="text-sm font-medium text-slate-800 print:text-xs">Managed Service</p>
+            </div>
+          </div>
+
+          {/* Timeline / Description Section */}
+          <div className="p-5 bg-slate-50/30 print:bg-white print:py-3 print:px-0 print:border-b print:border-black">
+            <div className="flex gap-4">
+              <div className="flex-shrink-0 mt-2 print:hidden">
+                <div className="h-10 w-10 rounded-full bg-slate-400 flex items-center justify-center text-white font-medium shadow-sm">
+                  {claim.employee?.employee_name?.substring(0, 2).toUpperCase() || "SY"}
+                </div>
+              </div>
+              <div className="flex-1">
+                <div className="bg-white border border-slate-200 rounded-lg rounded-tl-none p-4 shadow-sm relative print:border-none print:shadow-none print:p-0">
+                  {/* Little triangle for chat bubble */}
+                  <div className="absolute top-0 -left-[9px] w-0 h-0 border-t-[0px] border-t-transparent border-r-[10px] border-r-slate-200 border-b-[15px] border-b-transparent print:hidden"></div>
+                  <div className="absolute top-[1px] -left-[7px] w-0 h-0 border-t-[0px] border-t-transparent border-r-[8px] border-r-white border-b-[12px] border-b-transparent z-10 print:hidden"></div>
+                  
+                  <div className="flex justify-between items-start mb-3 print:mb-1">
+                    <h4 className="font-medium text-slate-800 print:text-sm print:font-semibold">{claim.employee?.employee_name || "System / Requestor"}</h4>
+                    <div className="flex items-center gap-2 print:hidden">
+                      <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider bg-slate-100 px-2 py-0.5 rounded">A Day Ago</span>
+                      <span className="text-[10px] font-semibold text-white uppercase tracking-wider bg-[#6281c0] px-2 py-0.5 rounded">Description</span>
+                    </div>
+                  </div>
+                  <div className="text-sm text-slate-600 prose-p:my-1 print:text-xs">
+                    <p>Mohon dibantu support Activity : {claim.ticket.ticket_title || "Preventive Maintenance"}</p>
+                    <p>Terima Kasih.</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Signature Section for Print */}
       <div className="hidden print:block mt-12 pt-8 print:break-inside-avoid">
         <div className="grid grid-cols-3 gap-8 text-center">

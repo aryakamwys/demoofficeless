@@ -103,6 +103,7 @@ export interface ClaimWithEmployee extends Claim {
 export interface ClaimDetail extends ClaimWithEmployee {
   trips: Trip[];
   comments: Comment[];
+  ticket?: any;
 }
 
 // ------- Form / Input Types -------
