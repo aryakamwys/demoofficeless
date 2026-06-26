@@ -119,8 +119,7 @@ export function ClaimDetailView({ claim }: ClaimDetailViewProps) {
             Print Bukti
           </Button>
 
-          {claim.employee &&
-            (claim.status === "PENDING" || claim.status === "SENT") && (
+          {claim.employee && (
               <>
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
