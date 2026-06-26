@@ -8,7 +8,10 @@ import { Loader2, RefreshCw, Download, Calendar as CalendarIcon, ChevronsUpDown 
 import { toast } from "sonner";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
+import { useRouter } from "next/navigation";
+
 export default function ServicesPage() {
+  const router = useRouter();
   const [data, setData] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
   const [search, setSearch] = useState("");
@@ -160,6 +163,9 @@ export default function ServicesPage() {
 
           <Button variant="outline" size="sm" onClick={downloadCSV} className="h-9 border-slate-300 bg-slate-50">
             Export
+          </Button>
+          <Button size="sm" onClick={() => router.push("/services/upload")} className="h-9 bg-blue-600 hover:bg-blue-700">
+            Upload Klaim
           </Button>
         </div>
 

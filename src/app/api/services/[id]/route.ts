@@ -55,15 +55,42 @@ export async function GET(
 
     // Fetch Category Name if present
     if (data.category_id) {
-      const catResponse = await fetch(`https://servicedesk.perkom.co.id/api/v1/categories?ids[]=${data.category_id}`, {
+      const hdResponse = await fetch(`https://servicedesk.perkom.co.id/api/v1/helpdesks`, {
         method: "GET",
         headers: { "Authorization": authHeader, "Accept": "application/json" },
       });
-      if (catResponse.ok) {
-        const catResult = await catResponse.json();
-        const catData = catResult.response || catResult.data || catResult;
-        let c = Array.isArray(catData) ? catData[0] : (catData[data.category_id] || Object.values(catData)[0]);
-        if (c) data.category_details = c;
+      if (hdResponse.ok) {
+        const hdResult = await hdResponse.json();
+        const hdData = hdResult.response || hdResult.data || hdResult;
+        
+        let hdMap: Record<string, any> = {};
+        if (Array.isArray(hdData)) {
+          hdData.forEach(h => { if (h && h.id) hdMap[h.id] = h; });
+        } else if (typeof hdData === 'object' && hdData !== null) {
+          hdMap = hdData;
+        }
+
+        // Helper to get full path
+        const getFullPath = (id: string | number): string => {
+          let current = hdMap[id];
+          if (!current) return `Category > ${id}`;
+          let path = current.name;
+          while (current.parent_id && hdMap[current.parent_id]) {
+            current = hdMap[current.parent_id];
+            path = `${current.name} > ${path}`;
+          }
+          return path;
+        };
+
+        if (hdMap[data.category_id]) {
+          data.category_details = {
+            ...hdMap[data.category_id],
+            full_name: getFullPath(data.category_id)
+          };
+        }
+        if (hdMap[data.assigned_group_id]) {
+          data.assigned_group_details = hdMap[data.assigned_group_id];
+        }
       }
     }
 
