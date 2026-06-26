@@ -147,6 +147,66 @@ export async function GET() {
       }
     }
 
+    // Step 4: Fetch Categories
+    const categoryIds = [...new Set(data.map(d => d.category_id).filter(id => id != null))];
+    if (categoryIds.length > 0) {
+      try {
+        const catQuery = categoryIds.map(id => `ids[]=${id}`).join("&");
+        const catResponse = await fetch(`https://servicedesk.perkom.co.id/api/v1/categories?${catQuery}`, {
+          method: "GET",
+          headers: { "Authorization": authHeader, "Accept": "application/json" },
+        });
+        if (catResponse.ok) {
+          const catResult = await catResponse.json();
+          const catData = catResult.response || catResult.data || catResult;
+          let catMap: Record<string, any> = {};
+          if (Array.isArray(catData)) {
+            catData.forEach(c => { if (c && c.id) catMap[c.id] = c; });
+          } else if (typeof catData === 'object' && catData !== null) {
+            catMap = catData;
+          }
+          data = data.map(item => {
+            if (item.category_id && catMap[item.category_id]) {
+              item.category_details = catMap[item.category_id];
+            }
+            return item;
+          });
+        }
+      } catch (e) {
+        console.error("Error fetching categories:", e);
+      }
+    }
+
+    // Step 5: Fetch Groups
+    const groupIds = [...new Set(data.map(d => d.assigned_group_id).filter(id => id != null))];
+    if (groupIds.length > 0) {
+      try {
+        const groupQuery = groupIds.map(id => `ids[]=${id}`).join("&");
+        const groupResponse = await fetch(`https://servicedesk.perkom.co.id/api/v1/groups?${groupQuery}`, {
+          method: "GET",
+          headers: { "Authorization": authHeader, "Accept": "application/json" },
+        });
+        if (groupResponse.ok) {
+          const groupResult = await groupResponse.json();
+          const groupData = groupResult.response || groupResult.data || groupResult;
+          let groupMap: Record<string, any> = {};
+          if (Array.isArray(groupData)) {
+            groupData.forEach(g => { if (g && g.id) groupMap[g.id] = g; });
+          } else if (typeof groupData === 'object' && groupData !== null) {
+            groupMap = groupData;
+          }
+          data = data.map(item => {
+            if (item.assigned_group_id && groupMap[item.assigned_group_id]) {
+              item.assigned_group_details = groupMap[item.assigned_group_id];
+            }
+            return item;
+          });
+        }
+      } catch (e) {
+        console.error("Error fetching groups:", e);
+      }
+    }
+
     return NextResponse.json({ success: true, data });
   } catch (error: any) {
     console.error("Service Desk API Error:", error);
