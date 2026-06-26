@@ -19,6 +19,7 @@ import {
   ChevronRight,
   Car,
   Settings,
+  BarChart3,
 } from "lucide-react";
 import { useState } from "react";
 
@@ -201,6 +202,7 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
                   </Tooltip>
                   <SidebarLink href="/services" icon={FileText} label="Request InvGate" isActive={pathname === "/services"} collapsed={collapsed} />
                   <SidebarLink href="/services/upload" icon={Upload} label="Upload Klaim" isActive={pathname === "/services/upload"} collapsed={collapsed} />
+                  <SidebarLink href="/services/auto-dashboard" icon={BarChart3} label="Auto Dashboard" isActive={pathname === "/services/auto-dashboard"} collapsed={collapsed} />
                 </>
               ) : (
                 <div>
@@ -216,13 +218,16 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
                     <span className="flex-1 text-left">Manage Service</span>
                     <ChevronDown className={cn("h-4 w-4 transition-transform duration-200", servicesOpen && "rotate-180")} />
                   </button>
-                  <div className={cn("overflow-hidden transition-all duration-200 ease-in-out", servicesOpen ? "max-h-48 opacity-100" : "max-h-0 opacity-0")}>
+                  <div className={cn("overflow-hidden transition-all duration-200 ease-in-out", servicesOpen ? "max-h-64 opacity-100" : "max-h-0 opacity-0")}>
                     <div className="ml-5 mt-1 space-y-0.5 border-l border-slate-200 pl-3">
                       <Link href="/services" className={cn("flex items-center gap-3 py-2 px-3 text-sm font-medium transition-colors rounded-lg", pathname === "/services" ? "bg-blue-50/50 text-blue-700" : "text-slate-500 hover:bg-slate-50 hover:text-slate-800")}>
                         <FileText className="h-4 w-4 shrink-0" /> Request InvGate
                       </Link>
                       <Link href="/services/upload" className={cn("flex items-center gap-3 py-2 px-3 text-sm font-medium transition-colors rounded-lg", pathname === "/services/upload" ? "bg-blue-50/50 text-blue-700" : "text-slate-500 hover:bg-slate-50 hover:text-slate-800")}>
                         <Upload className="h-4 w-4 shrink-0" /> Upload Klaim
+                      </Link>
+                      <Link href="/services/auto-dashboard" className={cn("flex items-center gap-3 py-2 px-3 text-sm font-medium transition-colors rounded-lg", pathname === "/services/auto-dashboard" ? "bg-blue-50/50 text-blue-700" : "text-slate-500 hover:bg-slate-50 hover:text-slate-800")}>
+                        <BarChart3 className="h-4 w-4 shrink-0" /> Auto Dashboard
                       </Link>
                     </div>
                   </div>
