@@ -50,9 +50,10 @@ export default function StudioLayout({ onPresent }: { onPresent: () => void }) {
     });
   };
 
-  const handleLayoutChange = (layout: any[]) => {
+  const handleLayoutChange = (layout: readonly any[]) => {
     if (activeSlideId) {
-      store.updateSlideLayout(activeSlideId, layout);
+      // Cast back to any[] to match the store if needed, or simply pass as any
+      store.updateSlideLayout(activeSlideId, layout as any[]);
     }
   };
 
