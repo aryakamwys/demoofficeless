@@ -293,104 +293,171 @@ export function ClaimDetailView({ claim }: ClaimDetailViewProps) {
       
       {/* EnvGate Ticket Details (Print & Screen if linked) */}
       {claim.ticket && claim.status === 'APPROVED' && (
-        <div className="mt-8 border border-slate-200 rounded-md overflow-hidden bg-white print:border-none print:mt-6 print:break-inside-avoid">
-          <div className="flex items-center justify-between bg-slate-50 border-b border-slate-200 p-4 print:bg-white print:border-b-2 print:border-black print:pb-2">
-            <div className="flex-1">
-              <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1 print:text-[10px]">Customer / Client</p>
-              <h3 className="text-lg font-bold text-slate-800 print:text-base">
-                {claim.ticket.customer_name || claim.ticket.ticket_title || "Internal"}
-              </h3>
-              <div className="flex items-center gap-2 mt-2 text-sm text-slate-500 print:text-xs">
-                <span>Technical Support</span>
-                <span>&raquo;</span>
-                <span>Managed Service</span>
-                <span>&raquo;</span>
-                <span>Others</span>
+        <div className="mt-8 flex flex-col md:flex-row gap-4 print:block print:border-none print:mt-6 print:break-inside-avoid">
+          
+          {/* Main Left Panel */}
+          <div className="flex-1 bg-white border border-slate-200 rounded-sm shadow-sm print:shadow-none print:border-none">
+            {/* Header */}
+            <div className="flex flex-col md:flex-row justify-between items-start p-6 print:p-0 print:border-b-2 print:border-black print:pb-2">
+              <div className="flex-1">
+                <h3 className="text-[20px] text-slate-800 print:text-base print:font-bold">
+                  {claim.ticket.ticket_title || "No Subject"}
+                </h3>
+                <div className="flex items-center gap-2 mt-2 text-[13px] text-slate-500 print:text-xs">
+                  <span>Technical Support</span>
+                  <span>&raquo;</span>
+                  <span>Managed Service</span>
+                  <span>&raquo;</span>
+                  <span>Others</span>
+                  <span className="ml-2 bg-[#5c5c5c] text-white text-[11px] px-2 py-0.5 rounded-sm print:border print:border-slate-300 print:bg-white print:text-slate-800">Status</span>
+                </div>
+              </div>
+              <div className="flex items-center gap-4 mt-4 md:mt-0">
+                <div className="flex items-center gap-1.5 text-sm text-slate-600 font-medium">
+                  <span className="text-slate-400">📍</span>
+                  {claim.ticket.location || "Jabodetabek"}
+                </div>
+                <div className="w-8 h-8 bg-slate-100 rounded flex items-center justify-center text-slate-400 print:hidden">
+                  🏁
+                </div>
+                <div className="bg-[#6b89c8] text-white text-sm font-semibold px-4 py-2 rounded-sm print:border print:border-slate-400 print:bg-slate-100 print:text-slate-800">
+                  #PIM-{claim.ticket.ticket_id}
+                </div>
               </div>
             </div>
-            <div className="text-right">
-              <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1 print:text-[10px]">Ticket ID</p>
-              <span className="inline-block font-bold text-lg text-slate-800 bg-slate-200 px-3 py-1 rounded print:border print:border-slate-300 print:bg-slate-100 print:text-base">
-                #{claim.ticket.ticket_id}
-              </span>
+
+            {/* Row 1 Stats */}
+            <div className="grid grid-cols-2 md:grid-cols-5 gap-4 p-6 border-y border-slate-100 print:border-y print:border-slate-300 print:py-2">
+              <div className="border-l-2 border-[#6b89c8] pl-3 print:border-none print:pl-0">
+                <p className="text-xs text-slate-500 mb-1 print:text-[10px]">Priority</p>
+                <p className="text-sm font-semibold text-slate-800 print:text-xs">Medium</p>
+              </div>
+              <div className="border-l-2 border-slate-200 pl-3 print:border-none print:pl-0">
+                <p className="text-xs text-slate-500 mb-1 print:text-[10px]">Type</p>
+                <p className="text-sm font-semibold text-slate-800 print:text-xs">Service Request</p>
+              </div>
+              <div className="border-l-2 border-slate-200 pl-3 print:border-none print:pl-0">
+                <p className="text-xs text-slate-500 mb-1 print:text-[10px]">Source</p>
+                <p className="text-sm font-semibold text-slate-800 print:text-xs">Email</p>
+              </div>
+              <div className="border-l-2 border-[#10b981] pl-3 print:border-none print:pl-0">
+                <p className="text-xs text-slate-500 mb-1 print:text-[10px]">First Response</p>
+                <p className="text-sm font-semibold text-emerald-500 print:text-xs">Correct</p>
+              </div>
+              <div className="border-l-2 border-slate-200 pl-3 print:border-none print:pl-0">
+                <p className="text-xs text-slate-500 mb-1 print:text-[10px]">Resolution</p>
+                <p className="text-sm font-semibold text-slate-800 print:text-xs">Paused (0%)</p>
+              </div>
+            </div>
+
+            {/* Row 2 Stats */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 p-6 bg-[#f9fafb] border-b border-slate-100 print:bg-white print:border-b print:border-slate-300 print:py-2">
+              <div className="pl-3 print:pl-0">
+                <p className="text-xs text-slate-500 mb-1 print:text-[10px]">Incident Location</p>
+                <p className="text-sm font-semibold text-slate-800 print:text-xs">{claim.ticket.location || "Jabodetabek"}</p>
+              </div>
+              <div className="border-l-2 border-slate-200 pl-3 print:border-none print:pl-0">
+                <p className="text-xs text-slate-500 mb-1 print:text-[10px]">Details Location</p>
+                <p className="text-sm font-semibold text-slate-800 print:text-xs">{claim.ticket.customer_name || "-"}</p>
+              </div>
+              <div className="border-l-2 border-slate-200 pl-3 print:border-none print:pl-0">
+                <p className="text-xs text-slate-500 mb-1 print:text-[10px]">SLA Type</p>
+                <p className="text-sm font-semibold text-slate-800 print:text-xs">Managed Service</p>
+              </div>
+            </div>
+
+            {/* Chat/Activity Block */}
+            <div className="p-8 bg-white print:py-3 print:px-0 print:border-b print:border-black">
+              <div className="flex gap-4">
+                <div className="flex-shrink-0 flex flex-col items-center mt-2 print:hidden">
+                  <div className="h-10 w-10 rounded-full bg-[#8b847c] flex items-center justify-center text-white font-medium text-sm">
+                    RR
+                  </div>
+                  <span className="text-[9px] font-semibold text-slate-400 mt-2 tracking-wider">COLLABO...</span>
+                </div>
+                <div className="flex-1">
+                  <div className="bg-[#f9fafb] border border-slate-200 rounded-sm p-5 relative print:border-none print:shadow-none print:p-0 print:bg-white">
+                    {/* Little triangle for chat bubble */}
+                    <div className="absolute top-4 -left-[9px] w-0 h-0 border-t-[0px] border-t-transparent border-r-[10px] border-r-slate-200 border-b-[15px] border-b-transparent print:hidden"></div>
+                    <div className="absolute top-[17px] -left-[7px] w-0 h-0 border-t-[0px] border-t-transparent border-r-[8px] border-r-[#f9fafb] border-b-[12px] border-b-transparent z-10 print:hidden"></div>
+                    
+                    <div className="flex justify-between items-center mb-6 print:mb-2 border-b border-slate-200 pb-3 print:border-none print:pb-0">
+                      <h4 className="font-semibold text-slate-800 text-[15px] print:text-sm print:font-semibold">Rahmadi Rahmadi</h4>
+                      <div className="flex items-center gap-2 print:hidden">
+                        <span className="text-[10px] font-semibold text-slate-500 border border-slate-200 bg-white px-2 py-1 rounded-sm">14 HOURS AGO</span>
+                        <span className="text-[10px] font-semibold text-white uppercase tracking-wider bg-[#6b89c8] px-3 py-1 rounded-sm shadow-sm">DESCRIPTION</span>
+                      </div>
+                    </div>
+                    <div className="text-[14px] leading-relaxed text-slate-700 whitespace-pre-line print:text-xs">
+                      {claim.comments && claim.comments.length > 0 ? (
+                        claim.comments.map((comment, i) => (
+                          <p key={i} className="mb-4">{comment.message}</p>
+                        ))
+                      ) : (
+                        <>
+                          <p className="mb-4">Dear Mas Haris & Mas Adrian,</p>
+                          <p className="mb-4">Mohon dibantu support Activity : {claim.ticket.ticket_title || "Preventive Maintenance"}</p>
+                          <p>Terima Kasih</p>
+                        </>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Right Sidebar (Hidden in print) */}
+          <div className="w-full md:w-80 flex-shrink-0 print:hidden">
+            <div className="bg-white border border-slate-200 rounded-sm shadow-sm">
+              <div className="p-4 flex items-center justify-between border-b border-slate-100">
+                <div className="flex items-center gap-3">
+                  <div className="h-10 w-10 rounded-full bg-[#7a8a9a] flex items-center justify-center text-white text-sm font-medium">
+                    {claim.ticket.customer_name?.substring(0, 2).toUpperCase() || "RF"}
+                  </div>
+                  <div>
+                    <h4 className="text-sm font-semibold text-slate-800">{claim.ticket.customer_name || "Resona Indonesia"}</h4>
+                    <p className="text-[11px] text-slate-500">Customer</p>
+                  </div>
+                </div>
+              </div>
+              
+              <div className="p-4 flex items-center justify-between border-b border-slate-100 bg-[#f9fafb]">
+                <div className="flex items-center gap-3">
+                  <div className="h-10 w-10 rounded-full bg-slate-200 flex items-center justify-center overflow-hidden border border-white shadow-sm">
+                    {/* Placeholder for avatar image */}
+                    <span className="text-xs text-slate-600 font-medium">
+                      {claim.employee?.employee_name?.substring(0, 2).toUpperCase() || "DH"}
+                    </span>
+                  </div>
+                  <div>
+                    <h4 className="text-sm font-semibold text-slate-800">{claim.employee?.employee_name || "Dede Haris Nugraha"}</h4>
+                    <p className="text-[11px] text-slate-500">Agent @ Perkom Indah Murni</p>
+                  </div>
+                </div>
+              </div>
+
+              <div className="p-4 flex items-center justify-between border-b border-slate-100">
+                <div className="flex items-center gap-3">
+                  <div className="h-8 w-8 rounded-full bg-slate-100 flex items-center justify-center text-slate-500 border border-slate-200">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>
+                  </div>
+                  <div>
+                    <h4 className="text-sm font-semibold text-slate-800">Managed Service Level 1</h4>
+                    <p className="text-[11px] text-slate-500">Help Desk</p>
+                  </div>
+                </div>
+                <div className="w-4 h-4 rounded-full bg-[#10b981] text-white flex items-center justify-center text-[10px]">
+                  ✓
+                </div>
+              </div>
+              
+              <div className="p-4 bg-slate-50/50 flex items-center justify-center border-b border-slate-100">
+                <span className="text-slate-400">⌄</span>
+              </div>
             </div>
           </div>
           
-          <div className="grid grid-cols-2 md:grid-cols-5 gap-4 p-4 border-b border-slate-100 print:border-b print:border-slate-300 print:py-2">
-            <div>
-              <p className="text-xs text-slate-500 mb-1 print:text-[10px]">Priority</p>
-              <p className="text-sm font-semibold text-slate-800 print:text-xs">Medium</p>
-            </div>
-            <div>
-              <p className="text-xs text-slate-500 mb-1 print:text-[10px]">Type</p>
-              <p className="text-sm font-semibold text-slate-800 print:text-xs">Service Request</p>
-            </div>
-            <div>
-              <p className="text-xs text-slate-500 mb-1 print:text-[10px]">Source</p>
-              <p className="text-sm font-semibold text-slate-800 print:text-xs">Email</p>
-            </div>
-            <div>
-              <p className="text-xs text-slate-500 mb-1 print:text-[10px]">First Response</p>
-              <p className="text-sm font-semibold text-emerald-500 print:text-xs">Correct</p>
-            </div>
-            <div>
-              <p className="text-xs text-slate-500 mb-1 print:text-[10px]">Resolution</p>
-              <p className="text-sm font-semibold text-slate-800 print:text-xs">Paused (0%)</p>
-            </div>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 p-4 border-b border-slate-100 bg-slate-50/50 print:bg-white print:border-b print:border-slate-300 print:py-2">
-            <div>
-              <p className="text-xs text-slate-500 mb-1 print:text-[10px]">Incident Location</p>
-              <p className="text-sm font-medium text-slate-800 print:text-xs">{claim.ticket.location || "Jabodetabek"}</p>
-            </div>
-            <div>
-              <p className="text-xs text-slate-500 mb-1 print:text-[10px]">Details Location</p>
-              <p className="text-sm font-medium text-slate-800 print:text-xs">-</p>
-            </div>
-            <div>
-              <p className="text-xs text-slate-500 mb-1 print:text-[10px]">SLA Type</p>
-              <p className="text-sm font-medium text-slate-800 print:text-xs">Managed Service</p>
-            </div>
-          </div>
-
-          {/* Timeline / Description Section */}
-          <div className="p-5 bg-slate-50/30 print:bg-white print:py-3 print:px-0 print:border-b print:border-black">
-            <div className="flex gap-4">
-              <div className="flex-shrink-0 mt-2 print:hidden">
-                <div className="h-10 w-10 rounded-full bg-slate-400 flex items-center justify-center text-white font-medium shadow-sm">
-                  {claim.employee?.employee_name?.substring(0, 2).toUpperCase() || "SY"}
-                </div>
-              </div>
-              <div className="flex-1">
-                <div className="bg-white border border-slate-200 rounded-lg rounded-tl-none p-4 shadow-sm relative print:border-none print:shadow-none print:p-0">
-                  {/* Little triangle for chat bubble */}
-                  <div className="absolute top-0 -left-[9px] w-0 h-0 border-t-[0px] border-t-transparent border-r-[10px] border-r-slate-200 border-b-[15px] border-b-transparent print:hidden"></div>
-                  <div className="absolute top-[1px] -left-[7px] w-0 h-0 border-t-[0px] border-t-transparent border-r-[8px] border-r-white border-b-[12px] border-b-transparent z-10 print:hidden"></div>
-                  
-                  <div className="flex justify-between items-start mb-3 print:mb-1">
-                    <h4 className="font-medium text-slate-800 print:text-sm print:font-semibold">{claim.employee?.employee_name || "System / Requestor"}</h4>
-                    <div className="flex items-center gap-2 print:hidden">
-                      <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider bg-slate-100 px-2 py-0.5 rounded">A Day Ago</span>
-                      <span className="text-[10px] font-semibold text-white uppercase tracking-wider bg-[#6281c0] px-2 py-0.5 rounded">Description</span>
-                    </div>
-                  </div>
-                  <div className="text-sm text-slate-600 prose-p:my-1 print:text-xs whitespace-pre-line">
-                    {claim.comments && claim.comments.length > 0 ? (
-                      claim.comments.map((comment, i) => (
-                        <p key={i} className="mb-2">{comment.message}</p>
-                      ))
-                    ) : (
-                      <>
-                        <p>Mohon dibantu support Activity : {claim.ticket.ticket_title || "Preventive Maintenance"}</p>
-                        <p>Terima Kasih.</p>
-                      </>
-                    )}
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
         </div>
       )}
 
