@@ -4,7 +4,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
 import { 
   BarChart3, Hash, Type, Image as ImageIcon, Layout as LayoutIcon, 
-  Presentation, Settings, Layers, Download, Plus, Trash2, X
+  Presentation, Settings, Layers, Download, Plus, Trash2, X, LayoutGrid
 } from "lucide-react";
 import { Responsive } from "react-grid-layout";
 import { useRef, useState, useEffect } from "react";
@@ -12,6 +12,7 @@ import 'react-resizable/css/styles.css';
 import ChartWidget from './widgets/ChartWidget';
 import TextWidget from './widgets/TextWidget';
 import KPICard from './widgets/KPICard';
+import TableWidget from './widgets/TableWidget';
 import { exportDashboardToPPTX } from '@/lib/export/pptx';
 
 function useContainerWidth(ref: React.RefObject<HTMLDivElement | null>) {
@@ -32,7 +33,7 @@ export default function StudioLayout({ onPresent }: { onPresent: () => void }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const width = useContainerWidth(containerRef);
 
-  const addWidget = (type: "chart" | "kpi" | "text") => {
+  const addWidget = (type: "chart" | "kpi" | "text" | "table") => {
     if (!activeSlideId) return;
     const id = `widget-${Date.now()}`;
     
@@ -84,6 +85,10 @@ export default function StudioLayout({ onPresent }: { onPresent: () => void }) {
               <Button variant="outline" className="h-20 flex flex-col gap-2 bg-slate-50 hover:bg-slate-100" onClick={() => addWidget('text')}>
                 <Type className="h-5 w-5 text-amber-600" />
                 <span className="text-xs text-slate-600">Text</span>
+              </Button>
+              <Button variant="outline" className="h-20 flex flex-col gap-2 bg-slate-50 hover:bg-slate-100" onClick={() => addWidget('table')}>
+                <LayoutGrid className="h-5 w-5 text-purple-600" />
+                <span className="text-xs text-slate-600">Table</span>
               </Button>
             </div>
           </div>
@@ -191,8 +196,8 @@ export default function StudioLayout({ onPresent }: { onPresent: () => void }) {
                         <div className="flex-1 w-full h-full relative">
                            {widget.type === 'text' && <TextWidget widgetId={l.i} slideId={activeSlide.id} />}
                            {widget.type === 'kpi' && <KPICard widgetId={l.i} slideId={activeSlide.id} />}
-                           {['bar', 'pie', 'line', 'donut'].includes(widget.type) && <ChartWidget widgetId={l.i} slideId={activeSlide.id} />}
-                           {widget.type === 'table' && <div className="text-sm text-slate-400 p-4">Table view coming soon</div>}
+                           {['bar', 'pie', 'line', 'donut', 'gauge'].includes(widget.type) && <ChartWidget widgetId={l.i} slideId={activeSlide.id} />}
+                           {widget.type === 'table' && <TableWidget widgetId={l.i} slideId={activeSlide.id} />}
                         </div>
                       </div>
                     </div>
@@ -218,16 +223,76 @@ export default function StudioLayout({ onPresent }: { onPresent: () => void }) {
         <ScrollArea className="flex-1">
           {selectedWidgetId && activeSlide ? (
             <div className="p-4 space-y-4">
-              {/* Properties editor goes here */}
+              {/* Title */}
               <div>
                  <label className="text-xs font-medium text-slate-600 block mb-1">Title</label>
                  <input 
                    type="text" 
-                   className="w-full text-sm border rounded p-1.5"
+                   className="w-full text-sm border rounded p-1.5 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none"
                    value={activeSlide.widgets[selectedWidgetId]?.title || ""}
                    onChange={(e) => store.updateWidget(activeSlide.id, selectedWidgetId, { title: e.target.value })}
                  />
               </div>
+
+              {/* Chart Properties */}
+              {['bar', 'pie', 'line', 'kpi', 'donut', 'gauge', 'table'].includes(activeSlide.widgets[selectedWidgetId]?.type) && (
+                <div className="space-y-4 pt-4 border-t border-slate-100">
+                  <h3 className="text-xs font-semibold text-slate-800 uppercase tracking-wider">Data Config</h3>
+                  
+                  {activeSlide.widgets[selectedWidgetId]?.type !== 'kpi' && activeSlide.widgets[selectedWidgetId]?.type !== 'table' && (
+                    <div>
+                      <label className="text-xs font-medium text-slate-600 block mb-1">Chart Type</label>
+                      <select 
+                        className="w-full text-sm border rounded p-1.5 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none bg-white"
+                        value={activeSlide.widgets[selectedWidgetId]?.type || "bar"}
+                        onChange={(e) => store.updateWidget(activeSlide.id, selectedWidgetId, { type: e.target.value as any })}
+                      >
+                        <option value="bar">Bar Chart</option>
+                        <option value="line">Line Chart</option>
+                        <option value="pie">Pie Chart</option>
+                        <option value="donut">Donut Chart</option>
+                        <option value="gauge">Gauge Chart</option>
+                      </select>
+                    </div>
+                  )}
+
+                  {activeSlide.widgets[selectedWidgetId]?.type !== 'table' && (
+                  <div>
+                    <label className="text-xs font-medium text-slate-600 block mb-1">
+                      {activeSlide.widgets[selectedWidgetId]?.type === 'kpi' ? 'Label (Optional)' : 'X-Axis (Label)'}
+                    </label>
+                    <select 
+                      className="w-full text-sm border rounded p-1.5 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none bg-white"
+                      value={activeSlide.widgets[selectedWidgetId]?.labelColumn || ""}
+                      onChange={(e) => store.updateWidget(activeSlide.id, selectedWidgetId, { labelColumn: e.target.value })}
+                    >
+                      <option value="">-- Select Column --</option>
+                      {store.columns.map(c => (
+                        <option key={c.name} value={c.name}>{c.name}</option>
+                      ))}
+                    </select>
+                  </div>
+                  )}
+
+                  {activeSlide.widgets[selectedWidgetId]?.type !== 'table' && (
+                  <div>
+                    <label className="text-xs font-medium text-slate-600 block mb-1">
+                      {activeSlide.widgets[selectedWidgetId]?.type === 'kpi' ? 'Metric Value' : 'Y-Axis (Value)'}
+                    </label>
+                    <select 
+                      className="w-full text-sm border rounded p-1.5 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none bg-white"
+                      value={activeSlide.widgets[selectedWidgetId]?.valueColumn || ""}
+                      onChange={(e) => store.updateWidget(activeSlide.id, selectedWidgetId, { valueColumn: e.target.value })}
+                    >
+                      <option value="">-- Select Column --</option>
+                      {store.columns.filter(c => c.type === 'number').map(c => (
+                        <option key={c.name} value={c.name}>{c.name}</option>
+                      ))}
+                    </select>
+                  </div>
+                  )}
+                </div>
+              )}
             </div>
           ) : (
             <div className="p-4 text-center text-sm text-slate-500 mt-10">

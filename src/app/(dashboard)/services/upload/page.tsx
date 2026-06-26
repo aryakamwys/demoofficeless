@@ -114,63 +114,102 @@ export default function UploadClaimPage() {
             <CardTitle className="text-base">2. Detail Klaim Transport</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
-            <div className="bg-slate-50 border rounded-lg p-5 space-y-5">
-              <div className="flex items-start justify-between">
-                <div>
-                  <div className="flex items-center gap-2 mb-1">
-                    <h3 className="text-lg font-medium text-slate-800">{ticketData.title || ticketData.subject || "No Subject"}</h3>
-                    <span className="px-2.5 py-0.5 rounded text-xs font-semibold bg-blue-100 text-blue-700">
+              <div className="bg-white border rounded-md shadow-sm">
+                {/* Header Section */}
+                <div className="flex flex-col md:flex-row md:items-start justify-between p-5 border-b border-slate-100">
+                  <div className="flex-1">
+                    <h3 className="text-xl font-medium text-slate-800 mb-2">
+                      {ticketData.title || ticketData.subject || "No Subject"}
+                    </h3>
+                    <div className="text-[13px] text-slate-500 flex flex-wrap items-center gap-2">
+                      <span>{ticketData.category_details?.name || "Uncategorized"}</span>
+                      <span>&raquo;</span>
+                      <span>{ticketData.assigned_group_details?.name || "Unassigned"}</span>
+                      <span>&raquo;</span>
+                      <span>Others</span>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-4 mt-4 md:mt-0">
+                    <div className="flex items-center gap-2 text-sm text-slate-600 bg-slate-50 px-3 py-1.5 rounded-md border border-slate-200">
+                      <span className="text-slate-400">📍</span>
+                      {ticketData.location?.name || ticketData.custom_fields?.location || "Unknown Location"}
+                    </div>
+                    <div className="bg-[#6281c0] text-white px-4 py-2 rounded-md font-medium shadow-sm">
                       #{ticketData.id}
-                    </span>
+                    </div>
                   </div>
-                  <div className="text-sm text-slate-500 flex items-center gap-2">
-                    <span className="font-medium">{ticketData.category_details?.name || "Uncategorized"}</span>
-                    <span>&bull;</span>
-                    <span>{ticketData.assigned_group_details?.name || "Unassigned"}</span>
-                    <span>&bull;</span>
-                    <span className="flex items-center gap-1 text-slate-400">
-                       📍 {ticketData.location?.name || ticketData.custom_fields?.location || "Unknown Location"}
-                    </span>
+                </div>
+
+                {/* Grid Section 1 */}
+                <div className="grid grid-cols-2 md:grid-cols-5 gap-4 p-5 border-b border-slate-100">
+                  <div>
+                    <p className="text-xs text-slate-500 mb-1">Priority</p>
+                    <p className="text-sm font-semibold text-slate-800">{ticketData.priority?.name || "Medium"}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-slate-500 mb-1">Type</p>
+                    <p className="text-sm font-semibold text-slate-800">{ticketData.type?.name || "Service Request"}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-slate-500 mb-1">Source</p>
+                    <p className="text-sm font-semibold text-slate-800">{ticketData.source?.name || "Email"}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-slate-500 mb-1">First Response</p>
+                    <p className="text-sm font-semibold text-emerald-500">Correct</p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-slate-500 mb-1">Resolution</p>
+                    <p className="text-sm font-semibold text-slate-800">Paused (0%)</p>
+                  </div>
+                </div>
+
+                {/* Grid Section 2 */}
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 p-5 border-b border-slate-100 bg-slate-50/50">
+                  <div>
+                    <p className="text-xs text-slate-500 mb-1">Incident Location</p>
+                    <p className="text-sm font-medium text-slate-800">{ticketData.location?.name || "Jabodetabek"}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-slate-500 mb-1">Details Location</p>
+                    <p className="text-sm font-medium text-slate-800">-</p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-slate-500 mb-1">SLA Type</p>
+                    <p className="text-sm font-medium text-slate-800">Managed Service</p>
+                  </div>
+                </div>
+
+                {/* Timeline / Description Section */}
+                <div className="p-5 bg-slate-50/30">
+                  <div className="flex gap-4">
+                    <div className="flex-shrink-0 mt-2">
+                      <div className="h-10 w-10 rounded-full bg-slate-400 flex items-center justify-center text-white font-medium shadow-sm">
+                        SY
+                      </div>
+                    </div>
+                    <div className="flex-1">
+                      <div className="bg-white border border-slate-200 rounded-lg rounded-tl-none p-4 shadow-sm relative">
+                        {/* Little triangle for chat bubble */}
+                        <div className="absolute top-0 -left-[9px] w-0 h-0 border-t-[0px] border-t-transparent border-r-[10px] border-r-slate-200 border-b-[15px] border-b-transparent"></div>
+                        <div className="absolute top-[1px] -left-[7px] w-0 h-0 border-t-[0px] border-t-transparent border-r-[8px] border-r-white border-b-[12px] border-b-transparent z-10"></div>
+                        
+                        <div className="flex justify-between items-start mb-3">
+                          <h4 className="font-medium text-slate-800">System / Requestor</h4>
+                          <div className="flex items-center gap-2">
+                            <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider bg-slate-100 px-2 py-0.5 rounded">A Day Ago</span>
+                            <span className="text-[10px] font-semibold text-white uppercase tracking-wider bg-[#6281c0] px-2 py-0.5 rounded">Description</span>
+                          </div>
+                        </div>
+                        <div 
+                          className="prose prose-sm max-w-none text-slate-600 prose-p:my-1 prose-headings:my-2 prose-a:text-blue-600 font-sans"
+                          dangerouslySetInnerHTML={{ __html: ticketData.description || "<p>No description provided.</p>" }}
+                        />
+                      </div>
+                    </div>
                   </div>
                 </div>
               </div>
-
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4 py-4 border-y border-slate-200">
-                <div>
-                  <p className="text-[11px] font-semibold text-slate-400 uppercase mb-1">Priority</p>
-                  <p className="text-sm font-medium text-slate-700">{ticketData.priority?.name || "Medium"}</p>
-                </div>
-                <div>
-                  <p className="text-[11px] font-semibold text-slate-400 uppercase mb-1">Type</p>
-                  <p className="text-sm font-medium text-slate-700">{ticketData.type?.name || "Service Request"}</p>
-                </div>
-                <div>
-                  <p className="text-[11px] font-semibold text-slate-400 uppercase mb-1">Source</p>
-                  <p className="text-sm font-medium text-slate-700">{ticketData.source?.name || "Email"}</p>
-                </div>
-                <div>
-                  <p className="text-[11px] font-semibold text-slate-400 uppercase mb-1">Resolution</p>
-                  <p className="text-sm font-medium text-slate-700">{ticketData.status?.name || "Pending"}</p>
-                </div>
-                <div>
-                  <p className="text-[11px] font-semibold text-slate-400 uppercase mb-1">Incident Location</p>
-                  <p className="text-sm font-medium text-slate-700">{ticketData.custom_fields?.incident_location || ticketData.location?.name || "-"}</p>
-                </div>
-                <div>
-                  <p className="text-[11px] font-semibold text-slate-400 uppercase mb-1">Details Location</p>
-                  <p className="text-sm font-medium text-slate-700">{ticketData.custom_fields?.details_location || "-"}</p>
-                </div>
-                <div>
-                  <p className="text-[11px] font-semibold text-slate-400 uppercase mb-1">SLA Type</p>
-                  <p className="text-sm font-medium text-slate-700">{ticketData.sla?.name || ticketData.custom_fields?.sla_type || "Managed Service"}</p>
-                </div>
-              </div>
-
-              {ticketData.description && (
-                <div className="bg-white border rounded p-4 text-sm text-slate-600 prose prose-sm max-w-none" 
-                     dangerouslySetInnerHTML={{ __html: ticketData.description }} />
-              )}
-            </div>
 
             <div className="space-y-2 pt-2">
               <label className="text-sm font-medium">Nominal Klaim (Rp)</label>

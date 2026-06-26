@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 
-export type ChartType = "kpi" | "bar" | "pie" | "line" | "table" | "text";
+export type ChartType = "kpi" | "bar" | "pie" | "donut" | "line" | "table" | "text" | "gauge";
 
 export interface DashboardWidget {
   id: string;

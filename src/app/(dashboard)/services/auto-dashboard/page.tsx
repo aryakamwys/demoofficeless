@@ -67,25 +67,46 @@ export default function AutoDashboardPage() {
       currentY += 3;
 
       // 2. KPI Cards
+      // 2. Generate Top Row (KPIs + Gauge)
       const numCols = detected.filter(c => c.type === 'number');
+      let currentX = 0;
+      
+      // Top row KPIs
       numCols.slice(0, 3).forEach((col, idx) => {
         const kpiId = `widget-kpi-${idx}`;
         initialWidgets[kpiId] = {
           id: kpiId, type: "kpi", title: col.name, valueColumn: col.name
         };
-        initialLayout.push({ i: kpiId, x: idx * 4, y: currentY, w: 4, h: 3 });
+        initialLayout.push({ i: kpiId, x: currentX, y: currentY, w: 3, h: 4 });
+        currentX += 3;
       });
-      if (numCols.length > 0) currentY += 3;
 
-      // 3. Bar Chart
-      const catCols = detected.filter(c => c.type === 'category');
+      // Gauge chart
+      if (numCols.length > 3) {
+        const gaugeId = "widget-gauge-1";
+        initialWidgets[gaugeId] = {
+          id: gaugeId, type: "gauge", title: numCols[3].name + ' Score', valueColumn: numCols[3].name
+        };
+        initialLayout.push({ i: gaugeId, x: currentX, y: currentY, w: 3, h: 4 });
+      }
+
+      currentY += 4;
+
+      // 3. Bottom Row (Line Chart + Table)
+      const catCols = detected.filter(c => c.type === 'category' || c.type === 'text');
       if (catCols.length > 0 && numCols.length > 0) {
-        const chartId = "widget-chart-1";
+        const chartId = "widget-line-1";
         initialWidgets[chartId] = {
-          id: chartId, type: "bar", title: `${numCols[0].name} by ${catCols[0].name}`,
+          id: chartId, type: "line", title: `${numCols[0].name} Trend`,
           labelColumn: catCols[0].name, valueColumn: numCols[0].name
         };
-        initialLayout.push({ i: chartId, x: 0, y: currentY, w: 12, h: 8 });
+        initialLayout.push({ i: chartId, x: 0, y: currentY, w: 8, h: 8 });
+
+        const tableId = "widget-table-1";
+        initialWidgets[tableId] = {
+          id: tableId, type: "table", title: "Data Overview"
+        };
+        initialLayout.push({ i: tableId, x: 8, y: currentY, w: 4, h: 8 });
       }
 
       store.addSlide({ id: slideId, title: "Executive Summary", layout: initialLayout, widgets: initialWidgets });
