@@ -53,44 +53,69 @@ export async function GET(
       );
     }
 
-    // Fetch Category Name if present
+    // Step 4: Fetch Categories (Now using /api/v1/categories)
     if (data.category_id) {
-      const hdResponse = await fetch(`https://servicedesk.perkom.co.id/api/v1/helpdesks`, {
-        method: "GET",
-        headers: { "Authorization": authHeader, "Accept": "application/json" },
-      });
-      if (hdResponse.ok) {
-        const hdResult = await hdResponse.json();
-        const hdData = hdResult.response || hdResult.data || hdResult;
-        
-        let hdMap: Record<string, any> = {};
-        if (Array.isArray(hdData)) {
-          hdData.forEach(h => { if (h && h.id) hdMap[h.id] = h; });
-        } else if (typeof hdData === 'object' && hdData !== null) {
-          hdMap = hdData;
-        }
-
-        // Helper to get full path
-        const getFullPath = (id: string | number): string => {
-          let current = hdMap[id];
-          if (!current) return `Category > ${id}`;
-          let path = current.name;
-          while (current.parent_id && hdMap[current.parent_id]) {
-            current = hdMap[current.parent_id];
-            path = `${current.name} > ${path}`;
+      try {
+        const catResponse = await fetch(`https://servicedesk.perkom.co.id/api/v1/categories?ids[]=${data.category_id}`, {
+          method: "GET",
+          headers: { "Authorization": authHeader, "Accept": "application/json" },
+        });
+        if (catResponse.ok) {
+          const catResult = await catResponse.json();
+          const catData = catResult.response || catResult.data || catResult;
+          if (Array.isArray(catData) && catData.length > 0) {
+            data.category_details = catData[0];
+          } else if (typeof catData === 'object' && catData[data.category_id]) {
+            data.category_details = catData[data.category_id];
           }
-          return path;
-        };
+        }
+      } catch (e) {
+        console.error("Error fetching category details:", e);
+      }
+    }
 
-        if (hdMap[data.category_id]) {
-          data.category_details = {
-            ...hdMap[data.category_id],
-            full_name: getFullPath(data.category_id)
-          };
+    // Step 5: Fetch Groups & Helpdesks for assigned_group_id mapping
+    if (data.assigned_group_id) {
+      try {
+        let groupMap: Record<string, any> = {};
+        
+        // 5a. Fetch from Groups
+        const groupResponse = await fetch(`https://servicedesk.perkom.co.id/api/v1/groups?ids[]=${data.assigned_group_id}`, {
+          method: "GET",
+          headers: { "Authorization": authHeader, "Accept": "application/json" },
+        });
+        if (groupResponse.ok) {
+          const groupResult = await groupResponse.json();
+          const groupData = groupResult.response || groupResult.data || groupResult;
+          if (Array.isArray(groupData)) {
+            groupData.forEach(g => { if (g && g.id) groupMap[g.id] = g; });
+          } else if (typeof groupData === 'object' && groupData !== null) {
+            Object.assign(groupMap, groupData);
+          }
         }
-        if (hdMap[data.assigned_group_id]) {
-          data.assigned_group_details = hdMap[data.assigned_group_id];
+
+        // 5b. Fetch from Helpdesks if not in Groups
+        if (!groupMap[data.assigned_group_id]) {
+          const hdResponse = await fetch(`https://servicedesk.perkom.co.id/api/v1/helpdesks`, {
+            method: "GET",
+            headers: { "Authorization": authHeader, "Accept": "application/json" },
+          });
+          if (hdResponse.ok) {
+            const hdResult = await hdResponse.json();
+            const hdData = hdResult.response || hdResult.data || hdResult;
+            if (Array.isArray(hdData)) {
+              hdData.forEach(h => { if (h && h.id && !groupMap[h.id]) groupMap[h.id] = h; });
+            } else if (typeof hdData === 'object' && hdData !== null) {
+              Object.keys(hdData).forEach(k => { if (!groupMap[k]) groupMap[k] = hdData[k]; });
+            }
+          }
         }
+
+        if (groupMap[data.assigned_group_id]) {
+          data.assigned_group_details = groupMap[data.assigned_group_id];
+        }
+      } catch (e) {
+        console.error("Error fetching assigned groups:", e);
       }
     }
 

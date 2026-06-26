@@ -7,16 +7,11 @@ const password = process.env.SERVICEDESK_PASSWORD;
 const authHeader = `Basic ${Buffer.from(`${username}:${password}`).toString("base64")}`;
 
 async function test() {
-  const res = await fetch("https://servicedesk.perkom.co.id/api/v1/helpdesks", {
+  const res = await fetch("https://servicedesk.perkom.co.id/api/v1/incidents?ids[]=32409&with_details=true&expand=all", {
     headers: { "Authorization": authHeader, "Accept": "application/json" }
   });
   const json = await res.json();
-  const arr = json.response || json.data || json;
-  const map = {};
-  arr.forEach(h => map[h.id] = h);
-
-  console.log("Category 83:", map[83]);
-  console.log("Assigned 140:", map[140]);
+  console.log(JSON.stringify(json, null, 2));
 }
 
 test();

@@ -147,49 +147,82 @@ export async function GET() {
       }
     }
 
-    // Step 4: Fetch Categories (mapped from helpdesks API because categories API is 403)
-    try {
-      const helpdeskResponse = await fetch(`https://servicedesk.perkom.co.id/api/v1/helpdesks`, {
-        method: "GET",
-        headers: { "Authorization": authHeader, "Accept": "application/json" },
-      });
-      if (helpdeskResponse.ok) {
-        const hdResult = await helpdeskResponse.json();
-        const hdData = hdResult.response || hdResult.data || hdResult;
-        let hdMap: Record<string, any> = {};
-        if (Array.isArray(hdData)) {
-          hdData.forEach(h => { if (h && h.id) hdMap[h.id] = h; });
-        } else if (typeof hdData === 'object' && hdData !== null) {
-          hdMap = hdData;
-        }
-        
-        // Helper to get full path
-        const getFullPath = (id: string | number): string => {
-          let current = hdMap[id];
-          if (!current) return `Category > ${id}`;
-          let path = current.name;
-          while (current.parent_id && hdMap[current.parent_id]) {
-            current = hdMap[current.parent_id];
-            path = `${current.name} > ${path}`;
+    // Step 4: Fetch Categories (Now using /api/v1/categories since access is granted)
+    const categoryIds = [...new Set(data.map(d => d.category_id).filter(id => id != null))];
+    if (categoryIds.length > 0) {
+      try {
+        const catQuery = categoryIds.map(id => `ids[]=${id}`).join("&");
+        const catResponse = await fetch(`https://servicedesk.perkom.co.id/api/v1/categories?${catQuery}`, {
+          method: "GET",
+          headers: { "Authorization": authHeader, "Accept": "application/json" },
+        });
+        if (catResponse.ok) {
+          const catResult = await catResponse.json();
+          const catData = catResult.response || catResult.data || catResult;
+          let catMap: Record<string, any> = {};
+          if (Array.isArray(catData)) {
+            catData.forEach(c => { if (c && c.id) catMap[c.id] = c; });
+          } else if (typeof catData === 'object' && catData !== null) {
+            catMap = catData;
           }
-          return path;
-        };
+          data = data.map(item => {
+            if (item.category_id && catMap[item.category_id]) {
+              item.category_details = catMap[item.category_id];
+            }
+            return item;
+          });
+        }
+      } catch (e) {
+        console.error("Error fetching categories:", e);
+      }
+    }
+
+    // Step 5: Fetch Groups & Helpdesks for assigned_group_id mapping
+    const groupIds = [...new Set(data.map(d => d.assigned_group_id).filter(id => id != null))];
+    if (groupIds.length > 0) {
+      try {
+        let groupMap: Record<string, any> = {};
+        
+        // 5a. Fetch from Groups
+        const groupQuery = groupIds.map(id => `ids[]=${id}`).join("&");
+        const groupResponse = await fetch(`https://servicedesk.perkom.co.id/api/v1/groups?${groupQuery}`, {
+          method: "GET",
+          headers: { "Authorization": authHeader, "Accept": "application/json" },
+        });
+        if (groupResponse.ok) {
+          const groupResult = await groupResponse.json();
+          const groupData = groupResult.response || groupResult.data || groupResult;
+          if (Array.isArray(groupData)) {
+            groupData.forEach(g => { if (g && g.id) groupMap[g.id] = g; });
+          } else if (typeof groupData === 'object' && groupData !== null) {
+            Object.assign(groupMap, groupData);
+          }
+        }
+
+        // 5b. Fetch from Helpdesks (since assigned_group_id often references Helpdesks in InvGate)
+        const hdResponse = await fetch(`https://servicedesk.perkom.co.id/api/v1/helpdesks`, {
+          method: "GET",
+          headers: { "Authorization": authHeader, "Accept": "application/json" },
+        });
+        if (hdResponse.ok) {
+          const hdResult = await hdResponse.json();
+          const hdData = hdResult.response || hdResult.data || hdResult;
+          if (Array.isArray(hdData)) {
+            hdData.forEach(h => { if (h && h.id && !groupMap[h.id]) groupMap[h.id] = h; });
+          } else if (typeof hdData === 'object' && hdData !== null) {
+            Object.keys(hdData).forEach(k => { if (!groupMap[k]) groupMap[k] = hdData[k]; });
+          }
+        }
 
         data = data.map(item => {
-          if (item.category_id && hdMap[item.category_id]) {
-            item.category_details = { 
-              ...hdMap[item.category_id],
-              full_name: getFullPath(item.category_id)
-            };
-          }
-          if (item.assigned_group_id && hdMap[item.assigned_group_id]) {
-            item.assigned_group_details = hdMap[item.assigned_group_id];
+          if (item.assigned_group_id && groupMap[item.assigned_group_id]) {
+            item.assigned_group_details = groupMap[item.assigned_group_id];
           }
           return item;
         });
+      } catch (e) {
+        console.error("Error fetching assigned groups:", e);
       }
-    } catch (e) {
-      console.error("Error fetching helpdesks for categories:", e);
     }
 
     return NextResponse.json({ success: true, data });
