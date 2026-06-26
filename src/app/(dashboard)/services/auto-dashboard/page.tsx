@@ -5,7 +5,7 @@ import { FileUp, Loader2, Play } from "lucide-react";
 import * as XLSX from "xlsx";
 import { toast } from "sonner";
 import { useDashboardStore, DetectedColumn } from "@/store/dashboard-store";
-import DarkFixedDashboard from '@/components/dashboard/DarkFixedDashboard';
+import StudioLayout from "@/components/dashboard/StudioLayout";
 
 function detectColumnType(values: any[]): "number" | "date" | "category" | "text" {
   const nonEmpty = values.filter(v => v != null && v !== "");
@@ -167,5 +167,5 @@ export default function AutoDashboardPage() {
     );
   }
 
-  return <DarkFixedDashboard />;
+  return <StudioLayout onPresent={() => setPresentationMode(true)} />;
 }
