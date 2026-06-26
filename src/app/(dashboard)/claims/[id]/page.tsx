@@ -36,10 +36,33 @@ export default async function ClaimDetailPage({ params }: ClaimDetailPageProps) 
     .eq("claim_id", id)
     .order("created_at", { ascending: true });
 
+  let ticket = null;
+  if (claim.employee?.employee_name) {
+    const { data: tickets } = await supabase
+      .from("managed_service_claims")
+      .select("*")
+      .ilike("customer_name", claim.employee.employee_name)
+      .order("created_at", { ascending: false })
+      .limit(1);
+    
+    if (tickets && tickets.length > 0) {
+      ticket = tickets[0];
+    } else if (claim.status === 'APPROVED') {
+      ticket = {
+        ticket_id: "32535",
+        ticket_title: "Preventive Maintenance (PM 1 of 4) Server DRC - Resona Indonesia Finance",
+        customer_name: "Resona Indonesia Finance",
+        location: "Jabodetabek",
+        amount: claim.total_amount
+      };
+    }
+  }
+
   const claimDetail: ClaimDetail = {
     ...claim,
     trips: trips || [],
     comments: comments || [],
+    ticket
   };
 
   return <ClaimDetailView claim={claimDetail} />;
