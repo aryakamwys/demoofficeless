@@ -91,10 +91,22 @@ export function buildClaimMessage(params: {
   period: string;
   trip_count: number;
   total_amount: number;
+  trips: Array<{ trip_date: string; pickup: string; dropoff: string; fare: number; cost_code?: string }>;
 }): string {
-  const { employee_name, period, trip_count, total_amount } = params;
+  const { employee_name, period, trip_count, total_amount, trips } = params;
   const numAmount = typeof total_amount === 'string' ? parseFloat(total_amount) : total_amount;
   const formattedAmount = `Rp${numAmount.toLocaleString("id-ID")}`;
+
+  const tripDetails = trips.map((t) => {
+    const date = new Date(t.trip_date);
+    const day = date.getDate().toString().padStart(2, "0");
+    const monthNames = ["Jan", "Feb", "Mar", "Apr", "Mei", "Jun", "Jul", "Agu", "Sep", "Okt", "Nov", "Des"];
+    const dateStr = `${day} ${monthNames[date.getMonth()]}`;
+    const numFare = typeof t.fare === 'string' ? parseFloat(t.fare) : t.fare;
+    const fare = `Rp${numFare.toLocaleString("id-ID")}`;
+    const costCode = t.cost_code ? ` [Code: ${t.cost_code}]` : "";
+    return `- ${dateStr}: ${t.pickup} -> ${t.dropoff} (${fare})${costCode}`;
+  }).join("\n");
 
   const refId = Math.random().toString(36).substring(2, 8).toUpperCase();
   return [
@@ -102,6 +114,9 @@ export function buildClaimMessage(params: {
     `Halo ${employee_name},`,
     ``,
     `Data perjalanan Grab Business periode ${period} telah tersedia.`,
+    ``,
+    `Detail Perjalanan:`,
+    tripDetails,
     ``,
     `Total perjalanan: ${trip_count} Trip`,
     `Total biaya: ${formattedAmount}`,

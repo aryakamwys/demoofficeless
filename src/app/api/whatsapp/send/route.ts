@@ -51,6 +51,7 @@ export async function POST(request: NextRequest) {
       period: claim.period,
       trip_count: claim.trip_count,
       total_amount: claim.total_amount,
+      trips: claim.trips || []
     });
   } else if (target === "MANAGER") {
     if (!claim.manager) {
