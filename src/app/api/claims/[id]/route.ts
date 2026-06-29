@@ -58,6 +58,12 @@ export async function GET(
 
   let manager_signature = null;
   let hr_signature = null;
+  let employee_signature = null;
+
+  if (claim.employee_id) {
+    const { data: empSig } = await supabase.from('signatures').select('signature').eq('employee_id', claim.employee_id).single();
+    if (empSig) employee_signature = empSig.signature;
+  }
 
   if (claim.manager_id) {
     const { data: managerSig } = await supabase.from('signatures').select('signature').eq('employee_id', claim.manager_id).single();
@@ -77,7 +83,8 @@ export async function GET(
       comments: comments || [], 
       ticket,
       manager_signature,
-      hr_signature
+      hr_signature,
+      employee_signature
     },
   });
 }

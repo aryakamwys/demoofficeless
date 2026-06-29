@@ -10,7 +10,7 @@ export async function GET(request: NextRequest) {
 
   let query = supabase
     .from("employees")
-    .select("*, signatures(signature)")
+    .select("*")
     .eq("is_active", true)
     .order("employee_name", { ascending: true });
 
@@ -33,10 +33,23 @@ export async function GET(request: NextRequest) {
     );
   }
 
+  let signaturesMap: Record<string, string> = {};
+  
+  // Try fetching signatures safely, so it doesn't break if the table doesn't exist yet
+  try {
+    const { data: sigData, error: sigError } = await supabase.from("signatures").select("employee_id, signature");
+    if (!sigError && sigData) {
+      sigData.forEach((s: any) => {
+        signaturesMap[s.employee_id] = s.signature;
+      });
+    }
+  } catch (e) {
+    // Ignore error if table doesn't exist
+  }
+
   const mappedData = data?.map((emp: any) => ({
     ...emp,
-    signature: emp.signatures?.[0]?.signature || emp.signatures?.signature || null,
-    signatures: undefined
+    signature: signaturesMap[emp.id] || null,
   }));
 
   return NextResponse.json({ success: true, data: mappedData });

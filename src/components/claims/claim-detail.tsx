@@ -496,8 +496,15 @@ export function ClaimDetailView({ claim }: ClaimDetailViewProps) {
       {/* Signature Section for Print */}
       <div className="hidden print:block mt-12 pt-8 print:break-inside-avoid">
         <div className="grid grid-cols-3 gap-8 text-center">
-          <div className="space-y-16">
+          <div className="space-y-4">
             <p className="font-semibold text-sm">Disetujui Oleh (Karyawan),</p>
+            <div className="h-16 flex items-end justify-center">
+              {claim.employee_signature && claim.approved_at ? (
+                <img src={claim.employee_signature} alt="Employee Signature" className="max-h-16 object-contain mix-blend-multiply" />
+              ) : (
+                <div className="h-16" />
+              )}
+            </div>
             <div>
               <p className="border-b border-black w-3/4 mx-auto"></p>
               <p className="text-sm mt-1">{claim.employee?.employee_name}</p>

@@ -107,6 +107,7 @@ export interface ClaimDetail extends ClaimWithEmployee {
   ticket?: any;
   manager_signature?: string | null;
   hr_signature?: string | null;
+  employee_signature?: string | null;
 }
 
 // ------- Form / Input Types -------
