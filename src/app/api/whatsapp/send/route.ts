@@ -3,10 +3,11 @@ import { createServerClient } from "@/lib/supabase-server";
 import { sendTextMessage, buildClaimMessage, buildManagerApprovalMessage, buildHrApprovalMessage } from "@/lib/whatsapp";
 
 export async function POST(request: NextRequest) {
-  const supabase = await createServerClient();
-  const { claim_id, manager_id, hr_id, target = "EMPLOYEE" } = await request.json();
+  try {
+    const supabase = await createServerClient();
+    const { claim_id, manager_id, hr_id, target = "EMPLOYEE" } = await request.json();
 
-  if (!claim_id) {
+    if (!claim_id) {
     return NextResponse.json(
       { success: false, error: "claim_id wajib diisi" },
       { status: 400 }
@@ -114,5 +115,12 @@ export async function POST(request: NextRequest) {
       .eq("id", claim_id);
   }
 
-  return NextResponse.json({ success: true });
+    return NextResponse.json({ success: true });
+  } catch (error: any) {
+    console.error("Unhandled error in /api/whatsapp/send:", error);
+    return NextResponse.json(
+      { success: false, error: error.message || "Internal Server Error" },
+      { status: 500 }
+    );
+  }
 }
