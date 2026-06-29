@@ -118,7 +118,7 @@ export function buildClaimMessage(params: {
  * Build the trip detail message.
  */
 export function buildDetailMessage(
-  trips: Array<{ trip_date: string; pickup: string; dropoff: string; fare: number }>,
+  trips: Array<{ trip_date: string; pickup: string; dropoff: string; fare: number; cost_code?: string }>,
   total_amount: number
 ): string {
   const lines = trips.map((t) => {
@@ -130,7 +130,8 @@ export function buildDetailMessage(
     ];
     const month = monthNames[date.getMonth()];
     const fare = `Rp${t.fare.toLocaleString("id-ID")}`;
-    return `- ${day} ${month}: ${t.pickup} -> ${t.dropoff} (${fare})`;
+    const costCode = t.cost_code ? ` [Code: ${t.cost_code}]` : "";
+    return `- ${day} ${month}: ${t.pickup} -> ${t.dropoff} (${fare})${costCode}`;
   });
 
   const refId = Math.random().toString(36).substring(2, 8).toUpperCase();
@@ -187,7 +188,7 @@ export function buildManagerApprovalMessage(params: {
   employee_name: string;
   period: string;
   total_amount: number;
-  trips: Array<{ trip_date: string; pickup: string; dropoff: string; fare: number }>;
+  trips: Array<{ trip_date: string; pickup: string; dropoff: string; fare: number; cost_code?: string }>;
 }): string {
   const { employee_name, period, total_amount, trips } = params;
   const formattedAmount = `Rp${total_amount.toLocaleString("id-ID")}`;
@@ -198,7 +199,8 @@ export function buildManagerApprovalMessage(params: {
     const monthNames = ["Jan", "Feb", "Mar", "Apr", "Mei", "Jun", "Jul", "Agu", "Sep", "Okt", "Nov", "Des"];
     const dateStr = `${day} ${monthNames[date.getMonth()]}`;
     const fare = `Rp${t.fare.toLocaleString("id-ID")}`;
-    return `- ${dateStr}: ${t.pickup} -> ${t.dropoff} (${fare})`;
+    const costCode = t.cost_code ? ` [Code: ${t.cost_code}]` : "";
+    return `- ${dateStr}: ${t.pickup} -> ${t.dropoff} (${fare})${costCode}`;
   }).join("\n");
 
   const refId = Math.random().toString(36).substring(2, 8).toUpperCase();
@@ -231,7 +233,7 @@ export function buildHrApprovalMessage(params: {
   manager_name: string;
   period: string;
   total_amount: number;
-  trips: Array<{ trip_date: string; pickup: string; dropoff: string; fare: number }>;
+  trips: Array<{ trip_date: string; pickup: string; dropoff: string; fare: number; cost_code?: string }>;
 }): string {
   const { employee_name, manager_name, period, total_amount, trips } = params;
   const formattedAmount = `Rp${total_amount.toLocaleString("id-ID")}`;
@@ -242,7 +244,8 @@ export function buildHrApprovalMessage(params: {
     const monthNames = ["Jan", "Feb", "Mar", "Apr", "Mei", "Jun", "Jul", "Agu", "Sep", "Okt", "Nov", "Des"];
     const dateStr = `${day} ${monthNames[date.getMonth()]}`;
     const fare = `Rp${t.fare.toLocaleString("id-ID")}`;
-    return `- ${dateStr}: ${t.pickup} -> ${t.dropoff} (${fare})`;
+    const costCode = t.cost_code ? ` [Code: ${t.cost_code}]` : "";
+    return `- ${dateStr}: ${t.pickup} -> ${t.dropoff} (${fare})${costCode}`;
   }).join("\n");
 
   const refId = Math.random().toString(36).substring(2, 8).toUpperCase();
