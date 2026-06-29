@@ -34,15 +34,16 @@ export function ClaimDetailView({ claim }: ClaimDetailViewProps) {
     setSendWADialogOpen(true);
   };
 
-  const handleApprove = async (signatureData: string) => {
+  const handleApprove = async (signatureData: string, overrideRole?: "MANAGER" | "HR") => {
     setApproving(true);
+    const roleToUse = overrideRole || sigRole;
     try {
       const payload: any = {
         status: "APPROVED",
         approved_at: new Date().toISOString()
       };
       
-      if (sigRole === "MANAGER") {
+      if (roleToUse === "MANAGER") {
         payload.manager_status = "APPROVED";
         payload.manager_signature = signatureData;
       } else {
@@ -56,7 +57,7 @@ export function ClaimDetailView({ claim }: ClaimDetailViewProps) {
         body: JSON.stringify(payload),
       });
       if (res.ok) {
-        toast.success(`Claim berhasil di-approve sebagai ${sigRole}`);
+        toast.success(`Claim berhasil di-approve sebagai ${roleToUse}`);
         router.refresh();
       } else {
         toast.error("Gagal meng-approve claim");
@@ -66,9 +67,14 @@ export function ClaimDetailView({ claim }: ClaimDetailViewProps) {
     }
   };
 
-  const openSignaturePad = (role: "MANAGER" | "HR") => {
-    setSigRole(role);
-    setSigPadOpen(true);
+  const openSignaturePad = async (role: "MANAGER" | "HR") => {
+    const existingSig = role === "MANAGER" ? claim.manager_signature : claim.hr_signature;
+    if (existingSig) {
+      await handleApprove(existingSig, role);
+    } else {
+      setSigRole(role);
+      setSigPadOpen(true);
+    }
   };
 
   const handleResend = async (target: "MANAGER" | "HR") => {
@@ -503,8 +509,8 @@ export function ClaimDetailView({ claim }: ClaimDetailViewProps) {
           <div className="space-y-4">
             <p className="font-semibold text-sm">Disetujui Oleh (Manager),</p>
             <div className="h-16 flex items-end justify-center">
-              {claim.manager_signature ? (
-                <img src={claim.manager_signature} alt="Manager Signature" className="max-h-16 object-contain" />
+              {claim.manager_signature && claim.manager_status === 'APPROVED' ? (
+                <img src={claim.manager_signature} alt="Manager Signature" className="max-h-16 object-contain mix-blend-multiply" />
               ) : (
                 <div className="h-16" />
               )}
@@ -520,8 +526,8 @@ export function ClaimDetailView({ claim }: ClaimDetailViewProps) {
           <div className="space-y-4">
             <p className="font-semibold text-sm">Disetujui Oleh (HR),</p>
             <div className="h-16 flex items-end justify-center">
-              {claim.hr_signature ? (
-                <img src={claim.hr_signature} alt="HR Signature" className="max-h-16 object-contain" />
+              {claim.hr_signature && claim.hr_status === 'APPROVED' ? (
+                <img src={claim.hr_signature} alt="HR Signature" className="max-h-16 object-contain mix-blend-multiply" />
               ) : (
                 <div className="h-16" />
               )}

@@ -32,6 +32,19 @@ export async function PUT(
     .select()
     .single();
 
+  if (data && result.data.signature !== undefined) {
+    if (result.data.signature) {
+      await supabase.from("signatures").upsert({
+        employee_id: data.id,
+        signature: result.data.signature,
+        updated_at: new Date().toISOString()
+      });
+    } else if (result.data.signature === null) {
+      // If signature is explicitly set to null, delete it
+      await supabase.from("signatures").delete().eq("employee_id", data.id);
+    }
+  }
+
   if (error) {
     return NextResponse.json(
       { success: false, error: error.message },

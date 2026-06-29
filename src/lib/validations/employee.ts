@@ -19,6 +19,7 @@ export const employeeSchema = z.object({
   role: z.enum(['EMPLOYEE', 'MANAGER', 'HR']),
   manager_id: z.string().uuid().nullable().optional(),
   hr_id: z.string().uuid().nullable().optional(),
+  signature: z.string().nullable().optional(),
 });
 
 export const importEmployeeSchema = z.array(employeeSchema);

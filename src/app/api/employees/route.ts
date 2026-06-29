@@ -10,7 +10,7 @@ export async function GET(request: NextRequest) {
 
   let query = supabase
     .from("employees")
-    .select("*")
+    .select("*, signatures(signature)")
     .eq("is_active", true)
     .order("employee_name", { ascending: true });
 
@@ -33,7 +33,13 @@ export async function GET(request: NextRequest) {
     );
   }
 
-  return NextResponse.json({ success: true, data });
+  const mappedData = data?.map((emp: any) => ({
+    ...emp,
+    signature: emp.signatures?.[0]?.signature || emp.signatures?.signature || null,
+    signatures: undefined
+  }));
+
+  return NextResponse.json({ success: true, data: mappedData });
 }
 
 export async function POST(request: NextRequest) {
@@ -61,6 +67,14 @@ export async function POST(request: NextRequest) {
     })
     .select()
     .single();
+
+  if (data && result.data.signature) {
+    await supabase.from("signatures").upsert({
+      employee_id: data.id,
+      signature: result.data.signature,
+      updated_at: new Date().toISOString()
+    });
+  }
 
   if (error) {
     if (error.code === "23505") {

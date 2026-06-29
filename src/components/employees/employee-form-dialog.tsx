@@ -26,8 +26,9 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Loader2 } from "lucide-react";
+import { Loader2, PenTool, Trash2 } from "lucide-react";
 import { toast } from "sonner";
+import { SignaturePadDialog } from "@/components/claims/signature-pad-dialog";
 
 interface EmployeeFormDialogProps {
   open: boolean;
@@ -45,6 +46,7 @@ export function EmployeeFormDialog({
   const [loading, setLoading] = useState(false);
   const [managers, setManagers] = useState<Employee[]>([]);
   const [hrs, setHrs] = useState<Employee[]>([]);
+  const [sigPadOpen, setSigPadOpen] = useState(false);
   const isEdit = !!employee;
 
   const form = useForm<EmployeeSchemaType>({
@@ -57,6 +59,7 @@ export function EmployeeFormDialog({
       role: employee?.role || "EMPLOYEE",
       manager_id: employee?.manager_id || null,
       hr_id: employee?.hr_id || null,
+      signature: employee?.signature || null,
     },
   });
 
@@ -70,6 +73,7 @@ export function EmployeeFormDialog({
       role: employee?.role || "EMPLOYEE",
       manager_id: employee?.manager_id || null,
       hr_id: employee?.hr_id || null,
+      signature: employee?.signature || null,
     });
   }, [employee, form]);
 
@@ -257,6 +261,33 @@ export function EmployeeFormDialog({
             </>
           )}
 
+          {form.watch("role") !== "EMPLOYEE" && (
+            <div className="space-y-2">
+              <Label>Tanda Tangan</Label>
+              <div className="flex flex-col gap-2">
+                {form.watch("signature") ? (
+                  <div className="relative border rounded-md p-2 bg-slate-50 flex items-center justify-center">
+                    <img src={form.watch("signature") || ""} alt="Signature" className="h-20 object-contain mix-blend-multiply" />
+                    <Button 
+                      type="button"
+                      variant="destructive" 
+                      size="icon" 
+                      className="absolute top-2 right-2 h-7 w-7 rounded-full" 
+                      onClick={() => form.setValue("signature", null)}
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </div>
+                ) : (
+                  <Button type="button" variant="outline" className="w-full h-24 border-dashed" onClick={() => setSigPadOpen(true)}>
+                    <PenTool className="mr-2 h-5 w-5 text-slate-500" />
+                    Gambar Tanda Tangan
+                  </Button>
+                )}
+              </div>
+            </div>
+          )}
+
           <DialogFooter className="pt-2">
             <Button
               type="button"
@@ -272,6 +303,13 @@ export function EmployeeFormDialog({
           </DialogFooter>
         </form>
       </DialogContent>
+
+      <SignaturePadDialog
+        open={sigPadOpen}
+        onOpenChange={setSigPadOpen}
+        onSave={async (sig) => { form.setValue("signature", sig); }}
+        roleTitle={form.watch("role") === "MANAGER" ? "Manager" : "HR"}
+      />
     </Dialog>
   );
 }

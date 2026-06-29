@@ -56,9 +56,29 @@ export async function GET(
     }
   }
 
+  let manager_signature = null;
+  let hr_signature = null;
+
+  if (claim.manager_id) {
+    const { data: managerSig } = await supabase.from('signatures').select('signature').eq('employee_id', claim.manager_id).single();
+    if (managerSig) manager_signature = managerSig.signature;
+  }
+
+  if (claim.hr_id) {
+    const { data: hrSig } = await supabase.from('signatures').select('signature').eq('employee_id', claim.hr_id).single();
+    if (hrSig) hr_signature = hrSig.signature;
+  }
+
   return NextResponse.json({
     success: true,
-    data: { ...claim, trips: trips || [], comments: comments || [], ticket },
+    data: { 
+      ...claim, 
+      trips: trips || [], 
+      comments: comments || [], 
+      ticket,
+      manager_signature,
+      hr_signature
+    },
   });
 }
 

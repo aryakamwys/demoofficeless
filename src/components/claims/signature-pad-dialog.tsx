@@ -74,7 +74,7 @@ export function SignaturePadDialog({ open, onOpenChange, onSave, roleTitle }: Si
         <DialogHeader>
           <DialogTitle>Draw Signature ({roleTitle})</DialogTitle>
           <DialogDescription>
-            Please draw your signature below to approve this document.
+            Please draw your signature below to approve this document. 
           </DialogDescription>
         </DialogHeader>
 

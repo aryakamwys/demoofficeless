@@ -30,6 +30,7 @@ export interface Employee {
   updated_at: string;
   manager?: Employee;
   hr?: Employee;
+  signature?: string | null;
 }
 
 export interface Upload {
