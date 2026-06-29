@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createServerClient } from "@/lib/supabase-server";
+import { createServerClient, createServiceClient } from "@/lib/supabase-server";
 
 export async function GET(
   _request: NextRequest,
@@ -94,7 +94,8 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params;
-  const supabase = await createServerClient();
+  const supabase = createServerClient();
+  const serviceClient = createServiceClient();
   const body = await request.json();
   const { manager_signature, hr_signature, ...updateData } = body;
 
@@ -108,18 +109,18 @@ export async function PATCH(
 
     if (claimInfo) {
       if (manager_signature && claimInfo.manager_id) {
-        await supabase.from("signatures").upsert({
+        await serviceClient.from("signatures").upsert({
           employee_id: claimInfo.manager_id,
           signature: manager_signature,
           updated_at: new Date().toISOString()
-        });
+        }, { onConflict: 'employee_id' });
       }
       if (hr_signature && claimInfo.hr_id) {
-        await supabase.from("signatures").upsert({
+        await serviceClient.from("signatures").upsert({
           employee_id: claimInfo.hr_id,
           signature: hr_signature,
           updated_at: new Date().toISOString()
-        });
+        }, { onConflict: 'employee_id' });
       }
     }
   }
