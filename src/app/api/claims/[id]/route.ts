@@ -112,8 +112,9 @@ export async function PATCH(
       .single();
 
     if (claimInfo) {
-      const managerIdToUse = claimInfo.manager_id || claimInfo.employee?.manager_id;
-      const hrIdToUse = claimInfo.hr_id || claimInfo.employee?.hr_id;
+      const employee = claimInfo.employee as any;
+      const managerIdToUse = claimInfo.manager_id || employee?.manager_id;
+      const hrIdToUse = claimInfo.hr_id || employee?.hr_id;
 
       if (manager_signature && managerIdToUse) {
         await serviceClient.from("signatures").upsert({
