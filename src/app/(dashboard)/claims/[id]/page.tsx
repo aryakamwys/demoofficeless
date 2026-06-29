@@ -1,4 +1,4 @@
-import { createServerClient } from "@/lib/supabase-server";
+import { createServerClient, createServiceClient } from "@/lib/supabase-server";
 import { notFound } from "next/navigation";
 import { ClaimDetail } from "@/types";
 import { ClaimDetailView } from "@/components/claims/claim-detail";
@@ -10,6 +10,7 @@ interface ClaimDetailPageProps {
 export default async function ClaimDetailPage({ params }: ClaimDetailPageProps) {
   const { id } = await params;
   const supabase = await createServerClient();
+  const serviceClient = createServiceClient();
 
   // Fetch claim with employee
   const { data: claim, error } = await supabase
@@ -65,7 +66,7 @@ export default async function ClaimDetailPage({ params }: ClaimDetailPageProps) 
   // Fetch employee signature
   let employee_signature = null;
   if (employeeIdToUse) {
-    const { data: empSig } = await supabase
+    const { data: empSig } = await serviceClient
       .from("signatures")
       .select("signature")
       .eq("employee_id", employeeIdToUse)
@@ -76,7 +77,7 @@ export default async function ClaimDetailPage({ params }: ClaimDetailPageProps) 
   // Fetch manager signature
   let manager_signature = null;
   if (managerIdToUse) {
-    const { data: managerSig } = await supabase
+    const { data: managerSig } = await serviceClient
       .from("signatures")
       .select("signature")
       .eq("employee_id", managerIdToUse)
@@ -87,7 +88,7 @@ export default async function ClaimDetailPage({ params }: ClaimDetailPageProps) 
   // Fetch HR signature
   let hr_signature = null;
   if (hrIdToUse) {
-    const { data: hrSig } = await supabase
+    const { data: hrSig } = await serviceClient
       .from("signatures")
       .select("signature")
       .eq("employee_id", hrIdToUse)

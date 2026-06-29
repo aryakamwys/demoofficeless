@@ -7,6 +7,7 @@ export async function GET(
 ) {
   const { id } = await params;
   const supabase = await createServerClient();
+  const serviceClient = createServiceClient();
 
   const { data: claim, error } = await supabase
     .from("claims")
@@ -65,17 +66,17 @@ export async function GET(
   const hrIdToUse = claim.hr_id || claim.employee?.hr_id;
 
   if (employeeIdToUse) {
-    const { data: empSig } = await supabase.from('signatures').select('signature').eq('employee_id', employeeIdToUse).single();
+    const { data: empSig } = await serviceClient.from('signatures').select('signature').eq('employee_id', employeeIdToUse).single();
     if (empSig) employee_signature = empSig.signature;
   }
 
   if (managerIdToUse) {
-    const { data: managerSig } = await supabase.from('signatures').select('signature').eq('employee_id', managerIdToUse).single();
+    const { data: managerSig } = await serviceClient.from('signatures').select('signature').eq('employee_id', managerIdToUse).single();
     if (managerSig) manager_signature = managerSig.signature;
   }
 
   if (hrIdToUse) {
-    const { data: hrSig } = await supabase.from('signatures').select('signature').eq('employee_id', hrIdToUse).single();
+    const { data: hrSig } = await serviceClient.from('signatures').select('signature').eq('employee_id', hrIdToUse).single();
     if (hrSig) hr_signature = hrSig.signature;
   }
 
