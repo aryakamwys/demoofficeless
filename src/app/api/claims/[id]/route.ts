@@ -60,18 +60,22 @@ export async function GET(
   let hr_signature = null;
   let employee_signature = null;
 
-  if (claim.employee_id) {
-    const { data: empSig } = await supabase.from('signatures').select('signature').eq('employee_id', claim.employee_id).single();
+  const employeeIdToUse = claim.employee_id;
+  const managerIdToUse = claim.manager_id || claim.employee?.manager_id;
+  const hrIdToUse = claim.hr_id || claim.employee?.hr_id;
+
+  if (employeeIdToUse) {
+    const { data: empSig } = await supabase.from('signatures').select('signature').eq('employee_id', employeeIdToUse).single();
     if (empSig) employee_signature = empSig.signature;
   }
 
-  if (claim.manager_id) {
-    const { data: managerSig } = await supabase.from('signatures').select('signature').eq('employee_id', claim.manager_id).single();
+  if (managerIdToUse) {
+    const { data: managerSig } = await supabase.from('signatures').select('signature').eq('employee_id', managerIdToUse).single();
     if (managerSig) manager_signature = managerSig.signature;
   }
 
-  if (claim.hr_id) {
-    const { data: hrSig } = await supabase.from('signatures').select('signature').eq('employee_id', claim.hr_id).single();
+  if (hrIdToUse) {
+    const { data: hrSig } = await supabase.from('signatures').select('signature').eq('employee_id', hrIdToUse).single();
     if (hrSig) hr_signature = hrSig.signature;
   }
 
@@ -103,21 +107,24 @@ export async function PATCH(
   if (manager_signature || hr_signature) {
     const { data: claimInfo } = await supabase
       .from("claims")
-      .select("manager_id, hr_id")
+      .select("manager_id, hr_id, employee:employees!claims_employee_id_fkey(manager_id, hr_id)")
       .eq("id", id)
       .single();
 
     if (claimInfo) {
-      if (manager_signature && claimInfo.manager_id) {
+      const managerIdToUse = claimInfo.manager_id || claimInfo.employee?.manager_id;
+      const hrIdToUse = claimInfo.hr_id || claimInfo.employee?.hr_id;
+
+      if (manager_signature && managerIdToUse) {
         await serviceClient.from("signatures").upsert({
-          employee_id: claimInfo.manager_id,
+          employee_id: managerIdToUse,
           signature: manager_signature,
           updated_at: new Date().toISOString()
         }, { onConflict: 'employee_id' });
       }
-      if (hr_signature && claimInfo.hr_id) {
+      if (hr_signature && hrIdToUse) {
         await serviceClient.from("signatures").upsert({
-          employee_id: claimInfo.hr_id,
+          employee_id: hrIdToUse,
           signature: hr_signature,
           updated_at: new Date().toISOString()
         }, { onConflict: 'employee_id' });
