@@ -58,24 +58,39 @@ export default async function ClaimDetailPage({ params }: ClaimDetailPageProps) 
     }
   }
 
+  const employeeIdToUse = claim.employee_id;
+  const managerIdToUse = claim.manager_id || claim.employee?.manager_id;
+  const hrIdToUse = claim.hr_id || claim.employee?.hr_id;
+
+  // Fetch employee signature
+  let employee_signature = null;
+  if (employeeIdToUse) {
+    const { data: empSig } = await supabase
+      .from("signatures")
+      .select("signature")
+      .eq("employee_id", employeeIdToUse)
+      .single();
+    if (empSig) employee_signature = empSig.signature;
+  }
+
   // Fetch manager signature
   let manager_signature = null;
-  if (claim.manager_id) {
+  if (managerIdToUse) {
     const { data: managerSig } = await supabase
       .from("signatures")
       .select("signature")
-      .eq("employee_id", claim.manager_id)
+      .eq("employee_id", managerIdToUse)
       .single();
     if (managerSig) manager_signature = managerSig.signature;
   }
 
   // Fetch HR signature
   let hr_signature = null;
-  if (claim.hr_id) {
+  if (hrIdToUse) {
     const { data: hrSig } = await supabase
       .from("signatures")
       .select("signature")
-      .eq("employee_id", claim.hr_id)
+      .eq("employee_id", hrIdToUse)
       .single();
     if (hrSig) hr_signature = hrSig.signature;
   }
@@ -86,7 +101,8 @@ export default async function ClaimDetailPage({ params }: ClaimDetailPageProps) 
     comments: comments || [],
     ticket,
     manager_signature,
-    hr_signature
+    hr_signature,
+    employee_signature
   };
 
   return <ClaimDetailView claim={claimDetail} />;
