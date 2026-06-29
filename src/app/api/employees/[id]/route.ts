@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createServerClient } from "@/lib/supabase-server";
+import { createServiceClient } from "@/lib/supabase-server";
 import { employeeSchema } from "@/lib/validations/employee";
 
 export async function PUT(
@@ -7,7 +7,7 @@ export async function PUT(
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params;
-  const supabase = await createServerClient();
+  const supabase = createServiceClient();
   const body = await request.json();
 
   const result = employeeSchema.safeParse(body);
@@ -34,11 +34,18 @@ export async function PUT(
 
   if (data && result.data.signature !== undefined) {
     if (result.data.signature) {
-      await supabase.from("signatures").upsert({
+      const { error: sigError } = await supabase.from("signatures").upsert({
         employee_id: data.id,
         signature: result.data.signature,
         updated_at: new Date().toISOString()
-      });
+      }, { onConflict: 'employee_id' });
+      
+      if (sigError) {
+        return NextResponse.json(
+          { success: false, error: "Gagal menyimpan tanda tangan: " + sigError.message },
+          { status: 500 }
+        );
+      }
     } else if (result.data.signature === null) {
       // If signature is explicitly set to null, delete it
       await supabase.from("signatures").delete().eq("employee_id", data.id);
@@ -60,7 +67,7 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params;
-  const supabase = await createServerClient();
+  const supabase = createServiceClient();
 
   const { error } = await supabase
     .from("employees")

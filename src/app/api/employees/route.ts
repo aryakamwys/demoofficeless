@@ -1,9 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createServerClient } from "@/lib/supabase-server";
+import { createServiceClient } from "@/lib/supabase-server";
 import { employeeSchema } from "@/lib/validations/employee";
 
 export async function GET(request: NextRequest) {
-  const supabase = await createServerClient();
+  const supabase = createServiceClient();
   const { searchParams } = new URL(request.url);
   const search = searchParams.get("search") || "";
   const role = searchParams.get("role") || "";
@@ -56,7 +56,7 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
-  const supabase = await createServerClient();
+  const supabase = createServiceClient();
   const body = await request.json();
 
   const result = employeeSchema.safeParse(body);
@@ -82,11 +82,18 @@ export async function POST(request: NextRequest) {
     .single();
 
   if (data && result.data.signature) {
-    await supabase.from("signatures").upsert({
+    const { error: sigError } = await supabase.from("signatures").upsert({
       employee_id: data.id,
       signature: result.data.signature,
       updated_at: new Date().toISOString()
-    });
+    }, { onConflict: 'employee_id' });
+
+    if (sigError) {
+      return NextResponse.json(
+        { success: false, error: "Gagal menyimpan tanda tangan: " + sigError.message },
+        { status: 500 }
+      );
+    }
   }
 
   if (error) {
