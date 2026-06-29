@@ -125,7 +125,7 @@ export function ClaimDetailView({ claim }: ClaimDetailViewProps) {
             Print Bukti
           </Button>
 
-          {claim.employee && (
+          {claim.employee && claim.status !== 'APPROVED' && (
               <>
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
