@@ -94,7 +94,7 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params;
-  const supabase = createServerClient();
+  const supabase = await createServerClient();
   const serviceClient = createServiceClient();
   const body = await request.json();
   const { manager_signature, hr_signature, ...updateData } = body;

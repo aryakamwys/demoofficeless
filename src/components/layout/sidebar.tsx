@@ -57,7 +57,7 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
     <TooltipProvider delayDuration={0}>
       <aside
         className={cn(
-          "hidden lg:flex lg:flex-col lg:border-r bg-sidebar transition-all duration-300 ease-in-out relative",
+          "hidden lg:flex lg:flex-col lg:border-r bg-sidebar transition-all duration-300 ease-in-out relative print:hidden",
           collapsed ? "lg:w-[68px]" : "lg:w-64"
         )}
       >
