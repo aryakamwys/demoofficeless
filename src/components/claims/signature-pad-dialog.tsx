@@ -97,17 +97,22 @@ export function SignaturePadDialog({ open, onOpenChange, onSave, roleTitle }: Si
 
         <div 
           ref={containerRef}
-          className="relative border-2 border-dashed border-slate-300 rounded-lg bg-slate-50 overflow-hidden w-full h-[250px]"
+          className="relative border-2 border-dashed border-slate-300 rounded-lg bg-slate-50 overflow-hidden w-full h-[250px] touch-none"
           style={{
             backgroundImage: "radial-gradient(#e2e8f0 1px, transparent 1px)",
             backgroundSize: "20px 20px"
           }}
+          onPointerDown={(e) => e.stopPropagation()}
+          onPointerMove={(e) => e.stopPropagation()}
+          onTouchStart={(e) => e.stopPropagation()}
+          onTouchMove={(e) => e.stopPropagation()}
         >
           <SignatureCanvas
             ref={sigRef}
             penColor="black"
             canvasProps={{
-              className: "w-full h-full cursor-crosshair touch-none"
+              className: "w-full h-full cursor-crosshair touch-none",
+              style: { touchAction: "none" }
             }}
           />
         </div>
