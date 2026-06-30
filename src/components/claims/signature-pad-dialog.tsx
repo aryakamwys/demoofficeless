@@ -25,18 +25,35 @@ export function SignaturePadDialog({ open, onOpenChange, onSave, roleTitle }: Si
   const [isSaving, setIsSaving] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
 
-  // Handle resize to fix canvas size issues on mount
+  // Handle resize and DPI scaling robustly
   useEffect(() => {
-    if (open) {
-      setTimeout(() => {
-        if (sigRef.current && containerRef.current) {
-          // Adjust canvas size to parent
+    if (!open || !containerRef.current) return;
+
+    const container = containerRef.current;
+    
+    const resizeObserver = new ResizeObserver((entries) => {
+      for (const entry of entries) {
+        const { width, height } = entry.contentRect;
+        if (width > 0 && height > 0 && sigRef.current) {
           const canvas = sigRef.current.getCanvas();
-          canvas.width = containerRef.current.offsetWidth;
-          canvas.height = 250;
+          const ratio = Math.max(window.devicePixelRatio || 1, 1);
+          
+          // Only resize if the physical size actually changed to avoid clearing unnecessarily
+          if (canvas.width !== width * ratio || canvas.height !== height * ratio) {
+            canvas.width = width * ratio;
+            canvas.height = height * ratio;
+            canvas.getContext("2d")?.scale(ratio, ratio);
+            sigRef.current.clear();
+          }
         }
-      }, 100);
-    }
+      }
+    });
+
+    resizeObserver.observe(container);
+
+    return () => {
+      resizeObserver.disconnect();
+    };
   }, [open]);
 
   const clear = () => {
