@@ -33,13 +33,26 @@ export async function proxy(request: NextRequest) {
     data: { user },
   } = await supabase.auth.getUser();
 
-  // Protected routes
-  const protectedPaths = ["/dashboard", "/employees", "/upload", "/claims"];
+  // Protected routes (pages and API endpoints)
+  const protectedPaths = [
+    "/dashboard", 
+    "/employees", 
+    "/upload", 
+    "/claims",
+    "/services",
+    "/api/services",
+    "/api/upload",
+    "/api/claims",
+    "/api/employees"
+  ];
   const isProtected = protectedPaths.some((path) =>
     request.nextUrl.pathname.startsWith(path)
   );
 
   if (isProtected && !user) {
+    if (request.nextUrl.pathname.startsWith("/api/")) {
+      return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 });
+    }
     const url = request.nextUrl.clone();
     url.pathname = "/login";
     return NextResponse.redirect(url);
