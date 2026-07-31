@@ -2,11 +2,10 @@
 
 import { useState, useEffect, useRef } from "react";
 import SignatureCanvas from "react-signature-canvas";
-import { ArrowRight, Trash2, CheckCircle2, ShieldCheck, User, Building, Phone, Hash } from "lucide-react";
+import { ArrowRight, Trash2, CheckCircle2, User, Building, Phone } from "lucide-react";
 
 export default function SignaturesPublicPage() {
   const [employeeName, setEmployeeName] = useState("");
-  const [employeeNumber, setEmployeeNumber] = useState("");
   const [department, setDepartment] = useState("");
   const [phoneNumber, setPhoneNumber] = useState("");
 
@@ -53,8 +52,8 @@ export default function SignaturesPublicPage() {
     e.preventDefault();
     setErrorMessage("");
 
-    if (!employeeName.trim() || !employeeNumber.trim() || !phoneNumber.trim()) {
-      setErrorMessage("Nama Lengkap, NIP, dan No WhatsApp wajib diisi.");
+    if (!employeeName.trim() || !phoneNumber.trim()) {
+      setErrorMessage("Nama Lengkap dan No WhatsApp wajib diisi.");
       return;
     }
     if (sigRef.current?.isEmpty()) {
@@ -71,7 +70,6 @@ export default function SignaturesPublicPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           employee_name: employeeName.trim(),
-          employee_number: employeeNumber.trim(),
           department: department.trim(),
           phone_number: phoneNumber.trim(),
           signature: signatureData,
@@ -106,7 +104,6 @@ export default function SignaturesPublicPage() {
             onClick={() => {
               setSuccess(false);
               setEmployeeName("");
-              setEmployeeNumber("");
               setDepartment("");
               setPhoneNumber("");
               setTimeout(() => sigRef.current?.clear(), 100);
@@ -121,16 +118,12 @@ export default function SignaturesPublicPage() {
   }
 
   return (
-    <div className="min-h-screen bg-slate-50 flex flex-col md:flex-row font-sans selection:bg-blue-100 selection:text-blue-900">
+    <form onSubmit={handleSaveSignature} className="min-h-screen bg-slate-50 flex flex-col md:flex-row font-sans selection:bg-blue-100 selection:text-blue-900">
       
       {/* Left Column: Modern Form */}
       <div className="w-full md:w-[45%] lg:w-[35%] bg-white border-b md:border-b-0 md:border-r border-slate-200 flex flex-col z-10 shadow-[4px_0_24px_rgba(0,0,0,0.02)] shrink-0 md:h-screen">
         
         <div className="p-6 md:p-8 pb-4">
-          <div className="flex items-center gap-2 text-blue-600 mb-4">
-            <ShieldCheck className="w-6 h-6" />
-            <span className="font-bold tracking-wide text-sm uppercase">Secure System</span>
-          </div>
           <h1 className="text-2xl md:text-3xl font-bold text-slate-900 leading-tight mb-2">
             Registrasi Tanda Tangan
           </h1>
@@ -139,8 +132,8 @@ export default function SignaturesPublicPage() {
           </p>
         </div>
 
-        <form onSubmit={handleSaveSignature} className="flex-1 flex flex-col overflow-hidden">
-          <div className="flex-1 overflow-y-auto px-6 md:px-8 py-4 space-y-6">
+        <div className="flex-1 flex flex-col overflow-hidden">
+          <div className="flex-1 md:overflow-y-auto px-6 md:px-8 py-4 space-y-6">
             
             {/* Identity Information */}
             <div className="space-y-4">
@@ -163,38 +156,20 @@ export default function SignaturesPublicPage() {
                 </div>
               </div>
               
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-xs font-medium text-slate-500 mb-1">NIP <span className="text-red-500">*</span></label>
-                  <div className="relative">
-                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                      <Hash className="h-4 w-4 text-slate-400" />
-                    </div>
-                    <input
-                      type="text"
-                      placeholder="Contoh: EMP001"
-                      value={employeeNumber}
-                      onChange={e => setEmployeeNumber(e.target.value)}
-                      disabled={isSaving}
-                      className="w-full pl-10 bg-white border border-slate-300 p-2.5 text-sm rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 placeholder:text-slate-400 disabled:opacity-50 transition-all"
-                    />
+              <div>
+                <label className="block text-xs font-medium text-slate-500 mb-1">DEPARTEMEN</label>
+                <div className="relative">
+                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                    <Building className="h-4 w-4 text-slate-400" />
                   </div>
-                </div>
-                <div>
-                  <label className="block text-xs font-medium text-slate-500 mb-1">DEPARTEMEN</label>
-                  <div className="relative">
-                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                      <Building className="h-4 w-4 text-slate-400" />
-                    </div>
-                    <input
-                      type="text"
-                      placeholder="Marketing"
-                      value={department}
-                      onChange={e => setDepartment(e.target.value)}
-                      disabled={isSaving}
-                      className="w-full pl-10 bg-white border border-slate-300 p-2.5 text-sm rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 placeholder:text-slate-400 disabled:opacity-50 transition-all"
-                    />
-                  </div>
+                  <input
+                    type="text"
+                    placeholder="Contoh: Marketing"
+                    value={department}
+                    onChange={e => setDepartment(e.target.value)}
+                    disabled={isSaving}
+                    className="w-full pl-10 bg-white border border-slate-300 p-2.5 text-sm rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 placeholder:text-slate-400 disabled:opacity-50 transition-all"
+                  />
                 </div>
               </div>
             </div>
@@ -228,8 +203,8 @@ export default function SignaturesPublicPage() {
             )}
           </div>
 
-          {/* Submit Button */}
-          <div className="p-6 md:p-8 bg-white border-t border-slate-100 mt-auto">
+          {/* Submit Button (Desktop Only) */}
+          <div className="hidden md:block p-8 bg-white border-t border-slate-100 mt-auto">
             <button
               type="submit"
               disabled={isSaving}
@@ -239,7 +214,7 @@ export default function SignaturesPublicPage() {
               {!isSaving && <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />}
             </button>
           </div>
-        </form>
+        </div>
       </div>
 
       {/* Right Column: Canvas Dashboard Area */}
@@ -264,7 +239,7 @@ export default function SignaturesPublicPage() {
           {/* Area Kanvas */}
           <div 
             ref={containerRef}
-            className="flex-1 w-full h-full relative cursor-crosshair bg-slate-50/50"
+            className="flex-1 w-full h-full relative cursor-crosshair bg-slate-50/50 min-h-[300px]"
             style={{
               backgroundImage: "radial-gradient(#cbd5e1 1px, transparent 1px)",
               backgroundSize: "24px 24px",
@@ -282,7 +257,19 @@ export default function SignaturesPublicPage() {
             />
           </div>
         </div>
+        
+        {/* Submit Button (Mobile Only) */}
+        <div className="mt-4 md:hidden">
+          <button
+            type="submit"
+            disabled={isSaving}
+            className="w-full bg-blue-600 hover:bg-blue-700 text-white disabled:bg-slate-300 disabled:cursor-not-allowed py-3.5 px-6 rounded-xl font-semibold transition-all flex items-center justify-center gap-2 shadow-md"
+          >
+            <span>{isSaving ? "Memproses..." : "Simpan Data"}</span>
+            {!isSaving && <ArrowRight className="w-5 h-5" />}
+          </button>
+        </div>
       </div>
-    </div>
+    </form>
   );
 }

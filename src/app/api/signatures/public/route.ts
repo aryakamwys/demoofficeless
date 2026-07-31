@@ -3,7 +3,6 @@ import { createServiceClient } from "@/lib/supabase-server";
 import { z } from "zod";
 
 const publicRegistrationSchema = z.object({
-  employee_number: z.string().min(1, "NIP wajib diisi"),
   employee_name: z.string().min(1, "Nama wajib diisi"),
   department: z.string().optional(),
   phone_number: z.string().min(1, "Nomor telepon wajib diisi"),
@@ -24,15 +23,15 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const { employee_number, employee_name, department, phone_number, signature } = result.data;
+    const { employee_name, department, phone_number, signature } = result.data;
 
-    // 1. Cek apakah employee sudah ada berdasarkan NIP
+    // 1. Cek apakah employee sudah ada berdasarkan Nomor Telepon
     let employeeId: string;
     
     const { data: existingEmp, error: checkError } = await supabase
       .from("employees")
       .select("id")
-      .eq("employee_number", employee_number)
+      .eq("phone_number", phone_number)
       .single();
 
     if (existingEmp && !checkError) {
@@ -43,7 +42,6 @@ export async function POST(request: NextRequest) {
         .update({
           employee_name,
           department,
-          phone_number,
         })
         .eq("id", employeeId);
         
@@ -55,10 +53,12 @@ export async function POST(request: NextRequest) {
       }
     } else {
       // Jika belum ada, buat employee baru
+      const generatedEmpNumber = `EMP-${Math.floor(Date.now() / 1000)}`; // Generate random NIP
+      
       const { data: newEmp, error: insertError } = await supabase
         .from("employees")
         .insert({
-          employee_number,
+          employee_number: generatedEmpNumber,
           employee_name,
           department,
           phone_number,
