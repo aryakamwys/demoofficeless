@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef } from "react";
 import SignatureCanvas from "react-signature-canvas";
-import { ArrowRight } from "lucide-react";
+import { ArrowRight, Trash2, CheckCircle2, ShieldCheck, User, Building, Phone, Hash } from "lucide-react";
 
 export default function SignaturesPublicPage() {
   const [employeeName, setEmployeeName] = useState("");
@@ -21,23 +21,20 @@ export default function SignaturesPublicPage() {
     if (!containerRef.current || !sigRef.current) return;
     const container = containerRef.current;
     
-    // Resize observer to keep canvas responsive
     const resizeObserver = new ResizeObserver((entries) => {
       for (const entry of entries) {
         const { width, height } = entry.contentRect;
         if (width > 0 && height > 0 && sigRef.current) {
           const canvas = sigRef.current.getCanvas();
           const ratio = Math.max(window.devicePixelRatio || 1, 1);
-          // Only resize if dimensions actually changed to avoid clearing while drawing
+          
           if (canvas.width !== width * ratio || canvas.height !== height * ratio) {
-            // Save current signature data before resizing
             const data = !sigRef.current.isEmpty() ? sigRef.current.toDataURL() : null;
             
             canvas.width = width * ratio;
             canvas.height = height * ratio;
             canvas.getContext("2d")?.scale(ratio, ratio);
             
-            // Restore data if existed
             if (data) {
               sigRef.current.fromDataURL(data);
             } else {
@@ -57,11 +54,11 @@ export default function SignaturesPublicPage() {
     setErrorMessage("");
 
     if (!employeeName.trim() || !employeeNumber.trim() || !phoneNumber.trim()) {
-      setErrorMessage("NAMA, NIP, DAN NO TELEPON WAJIB DIISI.");
+      setErrorMessage("Nama Lengkap, NIP, dan No WhatsApp wajib diisi.");
       return;
     }
     if (sigRef.current?.isEmpty()) {
-      setErrorMessage("KANVAS KOSONG. GAMBAR TANDA TANGAN ANDA.");
+      setErrorMessage("Tanda tangan tidak boleh kosong. Silakan gambar pada kanvas.");
       return;
     }
 
@@ -83,12 +80,12 @@ export default function SignaturesPublicPage() {
 
       const json = await res.json();
       if (!res.ok || !json.success) {
-        throw new Error(json.error || "GAGAL MENYIMPAN.");
+        throw new Error(json.error || "Gagal menyimpan data.");
       }
 
       setSuccess(true);
     } catch (err: any) {
-      setErrorMessage(err.message || "SYSTEM ERROR.");
+      setErrorMessage(err.message || "Terjadi kesalahan sistem.");
     } finally {
       setIsSaving(false);
     }
@@ -96,161 +93,194 @@ export default function SignaturesPublicPage() {
 
   if (success) {
     return (
-      <div className="min-h-screen bg-[#0a0a0a] text-[#F4F4F0] flex flex-col items-center justify-center p-6 md:p-8 uppercase tracking-tighter text-center">
-        <h1 className="text-5xl md:text-7xl lg:text-9xl font-black mb-6 md:mb-8 text-[#FF4500]">AUTHORIZED.</h1>
-        <p className="text-lg md:text-2xl lg:text-3xl max-w-2xl font-medium leading-tight">
-          Tanda tangan untuk {employeeName} telah berhasil direkam.
-        </p>
-        <button 
-          onClick={() => {
-            setSuccess(false);
-            setEmployeeName("");
-            setEmployeeNumber("");
-            setDepartment("");
-            setPhoneNumber("");
-            setTimeout(() => sigRef.current?.clear(), 100);
-          }}
-          className="mt-10 md:mt-12 border-2 border-[#FF4500] text-[#FF4500] hover:bg-[#FF4500] hover:text-[#0a0a0a] px-6 py-3 md:px-8 md:py-4 text-lg md:text-xl font-bold transition-all duration-300"
-        >
-          DAFTARKAN YANG LAIN
-        </button>
+      <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-6 text-center">
+        <div className="bg-white p-8 md:p-12 rounded-2xl shadow-sm border border-slate-200 max-w-md w-full">
+          <div className="mx-auto w-16 h-16 bg-blue-50 text-blue-600 rounded-full flex items-center justify-center mb-6">
+            <CheckCircle2 className="w-8 h-8" />
+          </div>
+          <h1 className="text-2xl font-bold text-slate-900 mb-2">Berhasil Terdaftar!</h1>
+          <p className="text-slate-500 mb-8 leading-relaxed">
+            Data karyawan dan tanda tangan digital untuk <span className="font-semibold text-slate-700">{employeeName}</span> telah berhasil disimpan ke dalam sistem.
+          </p>
+          <button 
+            onClick={() => {
+              setSuccess(false);
+              setEmployeeName("");
+              setEmployeeNumber("");
+              setDepartment("");
+              setPhoneNumber("");
+              setTimeout(() => sigRef.current?.clear(), 100);
+            }}
+            className="w-full bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg font-medium transition-colors"
+          >
+            Daftarkan Karyawan Lain
+          </button>
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-[#F4F4F0] text-[#0a0a0a] flex flex-col md:flex-row overflow-x-hidden font-sans selection:bg-[#FF4500] selection:text-[#F4F4F0]">
-      {/* Left Column: Typographic Brutalism & Form */}
-      <div className="w-full md:w-[45%] lg:w-[35%] flex flex-col border-b-4 md:border-b-0 md:border-r-4 border-[#0a0a0a] relative z-10 bg-[#F4F4F0] min-h-[50vh] md:min-h-screen">
-        <div className="p-6 md:p-8 pb-4 border-b-4 border-[#0a0a0a] bg-[#0a0a0a] text-[#F4F4F0]">
-          <h1 className="text-4xl md:text-5xl lg:text-7xl font-black uppercase tracking-tighter leading-none mb-2">
-            REGIS<br/>TER
+    <div className="min-h-screen bg-slate-50 flex flex-col md:flex-row font-sans selection:bg-blue-100 selection:text-blue-900">
+      
+      {/* Left Column: Modern Form */}
+      <div className="w-full md:w-[45%] lg:w-[35%] bg-white border-b md:border-b-0 md:border-r border-slate-200 flex flex-col z-10 shadow-[4px_0_24px_rgba(0,0,0,0.02)] shrink-0 md:h-screen">
+        
+        <div className="p-6 md:p-8 pb-4">
+          <div className="flex items-center gap-2 text-blue-600 mb-4">
+            <ShieldCheck className="w-6 h-6" />
+            <span className="font-bold tracking-wide text-sm uppercase">Secure System</span>
+          </div>
+          <h1 className="text-2xl md:text-3xl font-bold text-slate-900 leading-tight mb-2">
+            Registrasi Tanda Tangan
           </h1>
-          <p className="text-base md:text-lg lg:text-xl font-medium tracking-tight text-[#FF4500]">
-            DIGITAL SIGNATURE
+          <p className="text-slate-500 text-sm">
+            Lengkapi profil Anda dan gambarkan tanda tangan digital yang akan digunakan untuk dokumen resmi.
           </p>
         </div>
 
         <form onSubmit={handleSaveSignature} className="flex-1 flex flex-col overflow-hidden">
-          <div className="flex-1 overflow-y-auto">
-            {/* Identity Form */}
-            <div className="p-6 md:p-8 border-b-4 border-[#0a0a0a]">
-              <label className="block text-xl md:text-2xl font-black uppercase tracking-tighter mb-4 md:mb-6">
-                01. IDENTITAS
-              </label>
+          <div className="flex-1 overflow-y-auto px-6 md:px-8 py-4 space-y-6">
+            
+            {/* Identity Information */}
+            <div className="space-y-4">
+              <h2 className="text-sm font-semibold text-slate-900 border-b border-slate-100 pb-2">Informasi Karyawan</h2>
               
-              <div className="space-y-4 md:space-y-6">
-                <div>
-                  <p className="text-xs font-bold text-gray-500 uppercase mb-1">NAMA LENGKAP *</p>
+              <div>
+                <label className="block text-xs font-medium text-slate-500 mb-1">NAMA LENGKAP <span className="text-red-500">*</span></label>
+                <div className="relative">
+                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                    <User className="h-4 w-4 text-slate-400" />
+                  </div>
                   <input
                     type="text"
-                    placeholder="JOHN DOE"
+                    placeholder="Masukkan nama lengkap"
                     value={employeeName}
                     onChange={e => setEmployeeName(e.target.value)}
                     disabled={isSaving}
-                    className="w-full bg-transparent border-4 border-[#0a0a0a] p-3 md:p-4 text-lg md:text-xl font-bold rounded-none focus:outline-none focus:ring-4 focus:ring-[#FF4500]/50 placeholder:text-gray-400 disabled:opacity-50 transition-all uppercase"
+                    className="w-full pl-10 bg-white border border-slate-300 p-2.5 text-sm rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 placeholder:text-slate-400 disabled:opacity-50 transition-all"
                   />
                 </div>
-                
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <p className="text-xs font-bold text-gray-500 uppercase mb-1">NIP *</p>
+              </div>
+              
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-medium text-slate-500 mb-1">NIP <span className="text-red-500">*</span></label>
+                  <div className="relative">
+                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                      <Hash className="h-4 w-4 text-slate-400" />
+                    </div>
                     <input
                       type="text"
-                      placeholder="EMP001"
+                      placeholder="Contoh: EMP001"
                       value={employeeNumber}
                       onChange={e => setEmployeeNumber(e.target.value)}
                       disabled={isSaving}
-                      className="w-full bg-transparent border-4 border-[#0a0a0a] p-3 md:p-4 text-lg md:text-xl font-bold rounded-none focus:outline-none focus:ring-4 focus:ring-[#FF4500]/50 placeholder:text-gray-400 disabled:opacity-50 transition-all uppercase"
+                      className="w-full pl-10 bg-white border border-slate-300 p-2.5 text-sm rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 placeholder:text-slate-400 disabled:opacity-50 transition-all"
                     />
                   </div>
-                  <div>
-                    <p className="text-xs font-bold text-gray-500 uppercase mb-1">DEPT</p>
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-slate-500 mb-1">DEPARTEMEN</label>
+                  <div className="relative">
+                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                      <Building className="h-4 w-4 text-slate-400" />
+                    </div>
                     <input
                       type="text"
-                      placeholder="MARKETING"
+                      placeholder="Marketing"
                       value={department}
                       onChange={e => setDepartment(e.target.value)}
                       disabled={isSaving}
-                      className="w-full bg-transparent border-4 border-[#0a0a0a] p-3 md:p-4 text-lg md:text-xl font-bold rounded-none focus:outline-none focus:ring-4 focus:ring-[#FF4500]/50 placeholder:text-gray-400 disabled:opacity-50 transition-all uppercase"
+                      className="w-full pl-10 bg-white border border-slate-300 p-2.5 text-sm rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 placeholder:text-slate-400 disabled:opacity-50 transition-all"
                     />
                   </div>
                 </div>
               </div>
             </div>
 
-            {/* Phone Verification */}
-            <div className="p-6 md:p-8 border-b-4 border-[#0a0a0a] bg-[#e6e6e2]">
-              <label className="block text-xl md:text-2xl font-black uppercase tracking-tighter mb-4">
-                02. KONTAK
-              </label>
+            {/* Contact Information */}
+            <div className="space-y-4 pt-2">
+              <h2 className="text-sm font-semibold text-slate-900 border-b border-slate-100 pb-2">Kontak</h2>
               <div>
-                <p className="text-xs font-bold text-gray-500 uppercase mb-1">NO. WHATSAPP *</p>
-                <input
-                  type="tel"
-                  placeholder="0812..."
-                  value={phoneNumber}
-                  onChange={e => setPhoneNumber(e.target.value)}
-                  disabled={isSaving}
-                  className="w-full bg-[#F4F4F0] border-4 border-[#0a0a0a] p-3 md:p-4 text-lg md:text-xl font-bold rounded-none focus:outline-none focus:ring-4 focus:ring-[#FF4500]/50 placeholder:text-gray-400 disabled:opacity-50 transition-all"
-                />
+                <label className="block text-xs font-medium text-slate-500 mb-1">NO WHATSAPP <span className="text-red-500">*</span></label>
+                <div className="relative">
+                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                    <Phone className="h-4 w-4 text-slate-400" />
+                  </div>
+                  <input
+                    type="tel"
+                    placeholder="08123456789"
+                    value={phoneNumber}
+                    onChange={e => setPhoneNumber(e.target.value)}
+                    disabled={isSaving}
+                    className="w-full pl-10 bg-white border border-slate-300 p-2.5 text-sm rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 placeholder:text-slate-400 disabled:opacity-50 transition-all"
+                  />
+                </div>
               </div>
             </div>
             
             {/* Error Message */}
             {errorMessage && (
-              <div className="p-4 md:p-6 bg-[#FF4500] text-[#F4F4F0] font-bold text-base md:text-lg uppercase tracking-tight">
+              <div className="p-3 bg-red-50 border border-red-100 text-red-600 rounded-lg text-sm font-medium">
                 {errorMessage}
               </div>
             )}
           </div>
 
           {/* Submit Button */}
-          <button
-            type="submit"
-            disabled={isSaving}
-            className="w-full bg-[#FF4500] hover:bg-[#e03d00] text-[#F4F4F0] disabled:bg-gray-400 disabled:text-gray-600 disabled:cursor-not-allowed p-5 md:p-6 text-2xl md:text-3xl font-black uppercase tracking-tighter transition-colors flex items-center justify-between group mt-auto"
-          >
-            <span>{isSaving ? "MEMPROSES..." : "REKAM"}</span>
-            {!isSaving && <ArrowRight className="w-6 h-6 md:w-8 md:h-8 group-hover:translate-x-2 transition-transform" strokeWidth={3} />}
-          </button>
+          <div className="p-6 md:p-8 bg-white border-t border-slate-100 mt-auto">
+            <button
+              type="submit"
+              disabled={isSaving}
+              className="w-full bg-blue-600 hover:bg-blue-700 text-white disabled:bg-slate-300 disabled:cursor-not-allowed py-3.5 px-6 rounded-xl font-semibold transition-all flex items-center justify-center gap-2 group shadow-sm hover:shadow"
+            >
+              <span>{isSaving ? "Memproses..." : "Simpan Data"}</span>
+              {!isSaving && <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />}
+            </button>
+          </div>
         </form>
       </div>
 
-      {/* Right Column: Massive Whiteboard */}
-      <div className="w-full md:w-[55%] lg:w-[65%] h-[60vh] md:h-screen flex flex-col bg-[#F4F4F0] relative overflow-hidden">
-        <div className="p-4 md:p-6 lg:p-8 flex items-center justify-between absolute top-0 left-0 right-0 z-10 pointer-events-none">
-          <label className="text-xl md:text-3xl lg:text-4xl font-black uppercase tracking-tighter text-[#0a0a0a]/20 whitespace-nowrap overflow-hidden text-ellipsis">
-            03. KANVAS TANDA TANGAN
-          </label>
-          
-          <button 
-            type="button"
-            onClick={() => sigRef.current?.clear()}
-            className="pointer-events-auto bg-[#0a0a0a] text-[#F4F4F0] px-3 py-2 md:px-4 md:py-2 font-bold uppercase text-xs md:text-sm hover:bg-[#FF4500] transition-colors shrink-0 ml-2"
-          >
-            HAPUS
-          </button>
-        </div>
+      {/* Right Column: Canvas Dashboard Area */}
+      <div className="flex-1 p-4 md:p-8 h-[60vh] md:h-screen flex flex-col bg-slate-50/50 relative">
+        <div className="bg-white border border-slate-200 rounded-2xl shadow-sm flex-1 flex flex-col overflow-hidden">
+          {/* Header Kanvas */}
+          <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between bg-white">
+            <div>
+              <h3 className="font-semibold text-slate-800">Kanvas Tanda Tangan</h3>
+              <p className="text-xs text-slate-500 mt-0.5">Gambar dengan jelas di dalam area kotak</p>
+            </div>
+            <button 
+              type="button"
+              onClick={() => sigRef.current?.clear()}
+              className="flex items-center gap-1.5 text-red-600 hover:bg-red-50 hover:text-red-700 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors border border-transparent hover:border-red-100"
+            >
+              <Trash2 className="w-4 h-4" />
+              <span>Bersihkan</span>
+            </button>
+          </div>
 
-        <div 
-          ref={containerRef}
-          className="flex-1 w-full h-full relative cursor-crosshair mt-14 md:mt-0"
-          style={{
-            backgroundImage: "radial-gradient(#0a0a0a 1px, transparent 1px)",
-            backgroundSize: "40px 40px",
-            backgroundPosition: "center",
-          }}
-        >
-          <SignatureCanvas
-            ref={sigRef}
-            penColor="#0a0a0a"
-            minWidth={2}
-            maxWidth={5}
-            canvasProps={{
-              className: "w-full h-full touch-none",
+          {/* Area Kanvas */}
+          <div 
+            ref={containerRef}
+            className="flex-1 w-full h-full relative cursor-crosshair bg-slate-50/50"
+            style={{
+              backgroundImage: "radial-gradient(#cbd5e1 1px, transparent 1px)",
+              backgroundSize: "24px 24px",
+              backgroundPosition: "center",
             }}
-          />
+          >
+            <SignatureCanvas
+              ref={sigRef}
+              penColor="#0f172a"
+              minWidth={2.5}
+              maxWidth={4}
+              canvasProps={{
+                className: "w-full h-full touch-none",
+              }}
+            />
+          </div>
         </div>
       </div>
     </div>
