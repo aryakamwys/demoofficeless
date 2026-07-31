@@ -26,30 +26,37 @@ export async function POST(request: NextRequest) {
     const { employee_name, department, phone_number, signature } = result.data;
 
     // 1. Cek apakah employee sudah ada berdasarkan Nomor Telepon atau Nama
-    let employeeId: string;
-    
-    const { data: existingEmp, error: checkError } = await supabase
+    // Kita gunakan dua query terpisah untuk mencegah error jika nama atau telepon mengandung koma (yang merusak syntax .or di Supabase)
+    const { data: existingPhone } = await supabase
       .from("employees")
-      .select("id, phone_number, employee_name")
-      .or(`phone_number.eq.${phone_number},employee_name.eq.${employee_name}`);
+      .select("id")
+      .eq("phone_number", phone_number)
+      .limit(1)
+      .maybeSingle();
 
-    if (existingEmp && existingEmp.length > 0) {
-      // Cek field mana yang duplikat untuk pesan error yang lebih spesifik
-      const match = existingEmp[0];
-      if (match.phone_number === phone_number) {
-        return NextResponse.json(
-          { success: false, error: "Nomor WhatsApp ini sudah pernah didaftarkan." },
-          { status: 400 }
-        );
-      } else {
-        return NextResponse.json(
-          { success: false, error: "Nama ini sudah pernah didaftarkan." },
-          { status: 400 }
-        );
-      }
+    if (existingPhone) {
+      return NextResponse.json(
+        { success: false, error: "Nomor WhatsApp ini sudah pernah didaftarkan." },
+        { status: 400 }
+      );
+    }
+
+    const { data: existingName } = await supabase
+      .from("employees")
+      .select("id")
+      .ilike("employee_name", employee_name) // gunakan ilike agar case-insensitive
+      .limit(1)
+      .maybeSingle();
+
+    if (existingName) {
+      return NextResponse.json(
+        { success: false, error: "Nama ini sudah pernah didaftarkan." },
+        { status: 400 }
+      );
     }
 
     // Jika belum ada, buat employee baru
+    let employeeId: string;
     const generatedEmpNumber = `EMP-${Math.floor(Date.now() / 1000)}`; // Generate random NIP
     
     const { data: newEmp, error: insertError } = await supabase
