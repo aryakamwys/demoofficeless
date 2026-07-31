@@ -2,75 +2,52 @@
 
 import { useState, useEffect, useRef } from "react";
 import SignatureCanvas from "react-signature-canvas";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
-import { Loader2, Trash2, CheckCircle2, AlertCircle } from "lucide-react";
-
-interface Employee {
-  id: string;
-  employee_number: string;
-  employee_name: string;
-  department: string;
-  has_signature: boolean;
-}
+import { ArrowRight } from "lucide-react";
 
 export default function SignaturesPublicPage() {
-  const [employees, setEmployees] = useState<Employee[]>([]);
-  const [loadingEmployees, setLoadingEmployees] = useState(true);
-  
-  const [selectedEmpId, setSelectedEmpId] = useState<string>("");
-  const selectedEmployee = employees.find(e => e.id === selectedEmpId) || null;
-
+  const [employeeName, setEmployeeName] = useState("");
+  const [employeeNumber, setEmployeeNumber] = useState("");
+  const [department, setDepartment] = useState("");
   const [phoneNumber, setPhoneNumber] = useState("");
+
   const [isSaving, setIsSaving] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
-
-  const [successModalOpen, setSuccessModalOpen] = useState(false);
-  const [savedSignaturePreview, setSavedSignaturePreview] = useState<string | null>(null);
+  const [success, setSuccess] = useState(false);
 
   const sigRef = useRef<SignatureCanvas>(null);
   const containerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    fetch("/api/signatures/public")
-      .then(res => res.json())
-      .then(json => {
-        if (json.success) {
-          setEmployees(json.data || []);
-        }
-      })
-      .finally(() => {
-        setLoadingEmployees(false);
-      });
-  }, []);
-
-  useEffect(() => {
     if (!containerRef.current || !sigRef.current) return;
     const container = containerRef.current;
+    
+    // Resize observer to keep canvas responsive
     const resizeObserver = new ResizeObserver((entries) => {
       for (const entry of entries) {
         const { width, height } = entry.contentRect;
         if (width > 0 && height > 0 && sigRef.current) {
           const canvas = sigRef.current.getCanvas();
           const ratio = Math.max(window.devicePixelRatio || 1, 1);
+          // Only resize if dimensions actually changed to avoid clearing while drawing
           if (canvas.width !== width * ratio || canvas.height !== height * ratio) {
+            // Save current signature data before resizing
+            const data = !sigRef.current.isEmpty() ? sigRef.current.toDataURL() : null;
+            
             canvas.width = width * ratio;
             canvas.height = height * ratio;
             canvas.getContext("2d")?.scale(ratio, ratio);
-            sigRef.current.clear();
+            
+            // Restore data if existed
+            if (data) {
+              sigRef.current.fromDataURL(data);
+            } else {
+              sigRef.current.clear();
+            }
           }
         }
       }
     });
+    
     resizeObserver.observe(container);
     return () => resizeObserver.disconnect();
   }, []);
@@ -79,16 +56,12 @@ export default function SignaturesPublicPage() {
     e.preventDefault();
     setErrorMessage("");
 
-    if (!selectedEmployee) {
-      setErrorMessage("Silakan pilih karyawan terlebih dahulu.");
-      return;
-    }
-    if (!phoneNumber.trim()) {
-      setErrorMessage("Nomor telepon wajib diisi.");
+    if (!employeeName.trim() || !employeeNumber.trim() || !phoneNumber.trim()) {
+      setErrorMessage("NAMA, NIP, DAN NO TELEPON WAJIB DIISI.");
       return;
     }
     if (sigRef.current?.isEmpty()) {
-      setErrorMessage("Silakan gambar tanda tangan Anda di kotak yang tersedia.");
+      setErrorMessage("KANVAS KOSONG. GAMBAR TANDA TANGAN ANDA.");
       return;
     }
 
@@ -100,7 +73,9 @@ export default function SignaturesPublicPage() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          employee_id: selectedEmployee.id,
+          employee_name: employeeName.trim(),
+          employee_number: employeeNumber.trim(),
+          department: department.trim(),
           phone_number: phoneNumber.trim(),
           signature: signatureData,
         }),
@@ -108,192 +83,176 @@ export default function SignaturesPublicPage() {
 
       const json = await res.json();
       if (!res.ok || !json.success) {
-        throw new Error(json.error || "Gagal menyimpan tanda tangan.");
+        throw new Error(json.error || "GAGAL MENYIMPAN.");
       }
 
-      setSavedSignaturePreview(signatureData || null);
-      setSuccessModalOpen(true);
-      
-      setEmployees(prev => prev.map(emp => emp.id === selectedEmployee.id ? { ...emp, has_signature: true } : emp));
-    } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : "Terjadi kesalahan sistem.";
-      setErrorMessage(msg);
+      setSuccess(true);
+    } catch (err: any) {
+      setErrorMessage(err.message || "SYSTEM ERROR.");
     } finally {
       setIsSaving(false);
     }
   };
 
-  const handleCloseSuccessModal = () => {
-    setSuccessModalOpen(false);
-    setSavedSignaturePreview(null);
-    setSelectedEmpId("");
-    setPhoneNumber("");
-    sigRef.current?.clear();
-  };
+  if (success) {
+    return (
+      <div className="min-h-screen bg-[#0a0a0a] text-[#F4F4F0] flex flex-col items-center justify-center p-6 md:p-8 uppercase tracking-tighter text-center">
+        <h1 className="text-5xl md:text-7xl lg:text-9xl font-black mb-6 md:mb-8 text-[#FF4500]">AUTHORIZED.</h1>
+        <p className="text-lg md:text-2xl lg:text-3xl max-w-2xl font-medium leading-tight">
+          Tanda tangan untuk {employeeName} telah berhasil direkam.
+        </p>
+        <button 
+          onClick={() => {
+            setSuccess(false);
+            setEmployeeName("");
+            setEmployeeNumber("");
+            setDepartment("");
+            setPhoneNumber("");
+            setTimeout(() => sigRef.current?.clear(), 100);
+          }}
+          className="mt-10 md:mt-12 border-2 border-[#FF4500] text-[#FF4500] hover:bg-[#FF4500] hover:text-[#0a0a0a] px-6 py-3 md:px-8 md:py-4 text-lg md:text-xl font-bold transition-all duration-300"
+        >
+          DAFTARKAN YANG LAIN
+        </button>
+      </div>
+    );
+  }
 
   return (
-    <div className="min-h-screen bg-slate-50 py-12 px-4 sm:px-6 flex justify-center items-start">
-      <div className="w-full max-w-xl bg-white border border-slate-200 shadow-sm rounded-xl overflow-hidden mt-8">
-        <div className="px-6 py-5 border-b border-slate-100 bg-white">
-          <h1 className="text-xl font-bold text-slate-900">Pendaftaran Tanda Tangan</h1>
-          <p className="text-sm text-slate-500 mt-1">Lengkapi data untuk mendaftarkan tanda tangan digital Anda.</p>
+    <div className="min-h-screen bg-[#F4F4F0] text-[#0a0a0a] flex flex-col md:flex-row overflow-x-hidden font-sans selection:bg-[#FF4500] selection:text-[#F4F4F0]">
+      {/* Left Column: Typographic Brutalism & Form */}
+      <div className="w-full md:w-[45%] lg:w-[35%] flex flex-col border-b-4 md:border-b-0 md:border-r-4 border-[#0a0a0a] relative z-10 bg-[#F4F4F0] min-h-[50vh] md:min-h-screen">
+        <div className="p-6 md:p-8 pb-4 border-b-4 border-[#0a0a0a] bg-[#0a0a0a] text-[#F4F4F0]">
+          <h1 className="text-4xl md:text-5xl lg:text-7xl font-black uppercase tracking-tighter leading-none mb-2">
+            REGIS<br/>TER
+          </h1>
+          <p className="text-base md:text-lg lg:text-xl font-medium tracking-tight text-[#FF4500]">
+            DIGITAL SIGNATURE
+          </p>
         </div>
 
-        <form onSubmit={handleSaveSignature} className="p-6 space-y-6">
-          <div className="space-y-4">
-            
-            <div className="space-y-2">
-              <Label htmlFor="employee_name">Nama</Label>
-              <div className="relative">
-                <select
-                  value={selectedEmpId}
-                  onChange={(e) => {
-                    setSelectedEmpId(e.target.value);
-                    setErrorMessage("");
-                    if (sigRef.current) sigRef.current.clear();
-                  }}
-                  disabled={loadingEmployees}
-                  className="w-full flex h-10 items-center justify-between rounded-md border border-slate-200 bg-white px-3 py-2 text-sm ring-offset-white placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-slate-950 focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
-                >
-                  <option value="" disabled>
-                    {loadingEmployees ? "Memuat data..." : "Pilih Nama"}
-                  </option>
-                  {employees.map(emp => (
-                    <option key={emp.id} value={emp.id}>
-                      {emp.employee_name} {emp.has_signature ? "(Sudah ada)" : ""}
-                    </option>
-                  ))}
-                </select>
-              </div>
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="employee_number">Employee Number</Label>
-              <Input 
-                id="employee_number" 
-                value={selectedEmployee?.employee_number || ""} 
-                disabled 
-                placeholder="EMP001" 
-                className="bg-slate-50"
-              />
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="department">Department</Label>
-              <Input 
-                id="department" 
-                value={selectedEmployee?.department || ""} 
-                disabled 
-                placeholder="Finance" 
-                className="bg-slate-50"
-              />
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="phone_number">Phone Number</Label>
-              <Input 
-                id="phone_number" 
-                value={phoneNumber} 
-                onChange={e => setPhoneNumber(e.target.value)}
-                placeholder="628xxxxxxxxxx" 
-                disabled={!selectedEmpId || isSaving}
-              />
-            </div>
-
-            <div className="space-y-2 pt-2">
-              <div className="flex items-center justify-between">
-                <Label>Tanda Tangan (Opsional)</Label>
-                <Button 
-                  type="button" 
-                  variant="ghost" 
-                  size="sm" 
-                  className="h-8 text-xs text-red-500 hover:text-red-700 hover:bg-red-50"
-                  onClick={() => sigRef.current?.clear()}
-                >
-                  <Trash2 className="w-3.5 h-3.5 mr-1" />
-                  Hapus
-                </Button>
-              </div>
+        <form onSubmit={handleSaveSignature} className="flex-1 flex flex-col overflow-hidden">
+          <div className="flex-1 overflow-y-auto">
+            {/* Identity Form */}
+            <div className="p-6 md:p-8 border-b-4 border-[#0a0a0a]">
+              <label className="block text-xl md:text-2xl font-black uppercase tracking-tighter mb-4 md:mb-6">
+                01. IDENTITAS
+              </label>
               
-              <div 
-                ref={containerRef}
-                className="w-full h-56 border border-dashed border-slate-300 rounded-md relative overflow-hidden bg-white"
-              >
-                <SignatureCanvas
-                  ref={sigRef}
-                  penColor="#0f172a"
-                  canvasProps={{
-                    className: "w-full h-full cursor-crosshair touch-none",
-                  }}
-                />
-                {!selectedEmpId && (
-                  <div className="absolute inset-0 bg-slate-50/50 backdrop-blur-[1px] flex items-center justify-center pointer-events-none">
-                    <span className="text-sm text-slate-500 font-medium bg-white px-4 py-1.5 rounded-full shadow-sm border border-slate-100">
-                      Pilih karyawan terlebih dahulu
-                    </span>
+              <div className="space-y-4 md:space-y-6">
+                <div>
+                  <p className="text-xs font-bold text-gray-500 uppercase mb-1">NAMA LENGKAP *</p>
+                  <input
+                    type="text"
+                    placeholder="JOHN DOE"
+                    value={employeeName}
+                    onChange={e => setEmployeeName(e.target.value)}
+                    disabled={isSaving}
+                    className="w-full bg-transparent border-4 border-[#0a0a0a] p-3 md:p-4 text-lg md:text-xl font-bold rounded-none focus:outline-none focus:ring-4 focus:ring-[#FF4500]/50 placeholder:text-gray-400 disabled:opacity-50 transition-all uppercase"
+                  />
+                </div>
+                
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <p className="text-xs font-bold text-gray-500 uppercase mb-1">NIP *</p>
+                    <input
+                      type="text"
+                      placeholder="EMP001"
+                      value={employeeNumber}
+                      onChange={e => setEmployeeNumber(e.target.value)}
+                      disabled={isSaving}
+                      className="w-full bg-transparent border-4 border-[#0a0a0a] p-3 md:p-4 text-lg md:text-xl font-bold rounded-none focus:outline-none focus:ring-4 focus:ring-[#FF4500]/50 placeholder:text-gray-400 disabled:opacity-50 transition-all uppercase"
+                    />
                   </div>
-                )}
+                  <div>
+                    <p className="text-xs font-bold text-gray-500 uppercase mb-1">DEPT</p>
+                    <input
+                      type="text"
+                      placeholder="MARKETING"
+                      value={department}
+                      onChange={e => setDepartment(e.target.value)}
+                      disabled={isSaving}
+                      className="w-full bg-transparent border-4 border-[#0a0a0a] p-3 md:p-4 text-lg md:text-xl font-bold rounded-none focus:outline-none focus:ring-4 focus:ring-[#FF4500]/50 placeholder:text-gray-400 disabled:opacity-50 transition-all uppercase"
+                    />
+                  </div>
+                </div>
               </div>
             </div>
-          </div>
 
-          {errorMessage && (
-            <div className="p-3 bg-red-50 text-red-600 rounded-md text-sm flex items-start gap-2">
-              <AlertCircle className="w-5 h-5 flex-shrink-0 mt-0.5" />
-              <span>{errorMessage}</span>
+            {/* Phone Verification */}
+            <div className="p-6 md:p-8 border-b-4 border-[#0a0a0a] bg-[#e6e6e2]">
+              <label className="block text-xl md:text-2xl font-black uppercase tracking-tighter mb-4">
+                02. KONTAK
+              </label>
+              <div>
+                <p className="text-xs font-bold text-gray-500 uppercase mb-1">NO. WHATSAPP *</p>
+                <input
+                  type="tel"
+                  placeholder="0812..."
+                  value={phoneNumber}
+                  onChange={e => setPhoneNumber(e.target.value)}
+                  disabled={isSaving}
+                  className="w-full bg-[#F4F4F0] border-4 border-[#0a0a0a] p-3 md:p-4 text-lg md:text-xl font-bold rounded-none focus:outline-none focus:ring-4 focus:ring-[#FF4500]/50 placeholder:text-gray-400 disabled:opacity-50 transition-all"
+                />
+              </div>
             </div>
-          )}
-
-          <div className="pt-4 flex justify-end gap-2">
-            <Button 
-              type="button" 
-              variant="outline" 
-              onClick={() => {
-                setSelectedEmpId("");
-                setPhoneNumber("");
-                sigRef.current?.clear();
-              }}
-            >
-              Batal
-            </Button>
-            <Button 
-              type="submit" 
-              disabled={isSaving || !selectedEmpId || !phoneNumber.trim()}
-              className="bg-blue-600 hover:bg-blue-700 text-white min-w-[100px]"
-            >
-              {isSaving ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : null}
-              {isSaving ? "Loading..." : "Tambah"}
-            </Button>
+            
+            {/* Error Message */}
+            {errorMessage && (
+              <div className="p-4 md:p-6 bg-[#FF4500] text-[#F4F4F0] font-bold text-base md:text-lg uppercase tracking-tight">
+                {errorMessage}
+              </div>
+            )}
           </div>
+
+          {/* Submit Button */}
+          <button
+            type="submit"
+            disabled={isSaving}
+            className="w-full bg-[#FF4500] hover:bg-[#e03d00] text-[#F4F4F0] disabled:bg-gray-400 disabled:text-gray-600 disabled:cursor-not-allowed p-5 md:p-6 text-2xl md:text-3xl font-black uppercase tracking-tighter transition-colors flex items-center justify-between group mt-auto"
+          >
+            <span>{isSaving ? "MEMPROSES..." : "REKAM"}</span>
+            {!isSaving && <ArrowRight className="w-6 h-6 md:w-8 md:h-8 group-hover:translate-x-2 transition-transform" strokeWidth={3} />}
+          </button>
         </form>
       </div>
 
-      <Dialog open={successModalOpen} onOpenChange={handleCloseSuccessModal}>
-        <DialogContent className="sm:max-w-md bg-white">
-          <DialogHeader className="text-center pt-2">
-            <div className="mx-auto w-12 h-12 bg-green-100 text-green-600 rounded-full flex items-center justify-center mb-3">
-              <CheckCircle2 className="w-6 h-6" />
-            </div>
-            <DialogTitle className="text-xl">Berhasil Disimpan!</DialogTitle>
-            <DialogDescription className="pt-2 text-slate-500">
-              Tanda tangan digital Anda telah berhasil didaftarkan.
-            </DialogDescription>
-          </DialogHeader>
+      {/* Right Column: Massive Whiteboard */}
+      <div className="w-full md:w-[55%] lg:w-[65%] h-[60vh] md:h-screen flex flex-col bg-[#F4F4F0] relative overflow-hidden">
+        <div className="p-4 md:p-6 lg:p-8 flex items-center justify-between absolute top-0 left-0 right-0 z-10 pointer-events-none">
+          <label className="text-xl md:text-3xl lg:text-4xl font-black uppercase tracking-tighter text-[#0a0a0a]/20 whitespace-nowrap overflow-hidden text-ellipsis">
+            03. KANVAS TANDA TANGAN
+          </label>
           
-          {savedSignaturePreview && (
-            <div className="flex justify-center p-4 bg-slate-50 rounded-lg border border-slate-100 my-2">
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={savedSignaturePreview} alt="Signature" className="max-h-24 object-contain mix-blend-multiply" />
-            </div>
-          )}
+          <button 
+            type="button"
+            onClick={() => sigRef.current?.clear()}
+            className="pointer-events-auto bg-[#0a0a0a] text-[#F4F4F0] px-3 py-2 md:px-4 md:py-2 font-bold uppercase text-xs md:text-sm hover:bg-[#FF4500] transition-colors shrink-0 ml-2"
+          >
+            HAPUS
+          </button>
+        </div>
 
-          <DialogFooter className="sm:justify-center">
-            <Button onClick={handleCloseSuccessModal} className="w-full sm:w-auto bg-blue-600 hover:bg-blue-700">
-              Selesai
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+        <div 
+          ref={containerRef}
+          className="flex-1 w-full h-full relative cursor-crosshair mt-14 md:mt-0"
+          style={{
+            backgroundImage: "radial-gradient(#0a0a0a 1px, transparent 1px)",
+            backgroundSize: "40px 40px",
+            backgroundPosition: "center",
+          }}
+        >
+          <SignatureCanvas
+            ref={sigRef}
+            penColor="#0a0a0a"
+            minWidth={2}
+            maxWidth={5}
+            canvasProps={{
+              className: "w-full h-full touch-none",
+            }}
+          />
+        </div>
+      </div>
     </div>
   );
 }
