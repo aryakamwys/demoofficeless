@@ -110,7 +110,7 @@ export default function SignaturesPublicPage() {
             }}
             className="w-full bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg font-medium transition-colors"
           >
-            Daftarkan Karyawan Lain
+            Selesai
           </button>
         </div>
       </div>
