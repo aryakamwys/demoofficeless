@@ -25,57 +25,53 @@ export async function POST(request: NextRequest) {
 
     const { employee_name, department, phone_number, signature } = result.data;
 
-    // 1. Cek apakah employee sudah ada berdasarkan Nomor Telepon
+    // 1. Cek apakah employee sudah ada berdasarkan Nomor Telepon atau Nama
     let employeeId: string;
     
     const { data: existingEmp, error: checkError } = await supabase
       .from("employees")
+      .select("id, phone_number, employee_name")
+      .or(`phone_number.eq.${phone_number},employee_name.eq.${employee_name}`);
+
+    if (existingEmp && existingEmp.length > 0) {
+      // Cek field mana yang duplikat untuk pesan error yang lebih spesifik
+      const match = existingEmp[0];
+      if (match.phone_number === phone_number) {
+        return NextResponse.json(
+          { success: false, error: "Nomor WhatsApp ini sudah pernah didaftarkan." },
+          { status: 400 }
+        );
+      } else {
+        return NextResponse.json(
+          { success: false, error: "Nama ini sudah pernah didaftarkan." },
+          { status: 400 }
+        );
+      }
+    }
+
+    // Jika belum ada, buat employee baru
+    const generatedEmpNumber = `EMP-${Math.floor(Date.now() / 1000)}`; // Generate random NIP
+    
+    const { data: newEmp, error: insertError } = await supabase
+      .from("employees")
+      .insert({
+        employee_number: generatedEmpNumber,
+        employee_name,
+        department,
+        phone_number,
+        role: "EMPLOYEE",
+        is_active: true
+      })
       .select("id")
-      .eq("phone_number", phone_number)
       .single();
 
-    if (existingEmp && !checkError) {
-      // Jika ada, gunakan ID-nya dan update datanya
-      employeeId = existingEmp.id;
-      const { error: updateError } = await supabase
-        .from("employees")
-        .update({
-          employee_name,
-          department,
-        })
-        .eq("id", employeeId);
-        
-      if (updateError) {
-        return NextResponse.json(
-          { success: false, error: "Gagal memperbarui data karyawan: " + updateError.message },
-          { status: 500 }
-        );
-      }
-    } else {
-      // Jika belum ada, buat employee baru
-      const generatedEmpNumber = `EMP-${Math.floor(Date.now() / 1000)}`; // Generate random NIP
-      
-      const { data: newEmp, error: insertError } = await supabase
-        .from("employees")
-        .insert({
-          employee_number: generatedEmpNumber,
-          employee_name,
-          department,
-          phone_number,
-          role: "EMPLOYEE",
-          is_active: true
-        })
-        .select("id")
-        .single();
-
-      if (insertError || !newEmp) {
-        return NextResponse.json(
-          { success: false, error: "Gagal mendaftarkan karyawan baru: " + (insertError?.message || "") },
-          { status: 500 }
-        );
-      }
-      employeeId = newEmp.id;
+    if (insertError || !newEmp) {
+      return NextResponse.json(
+        { success: false, error: "Gagal mendaftarkan karyawan baru: " + (insertError?.message || "") },
+        { status: 500 }
+      );
     }
+    employeeId = newEmp.id;
 
     // 2. Upsert signature
     const { error: sigError } = await supabase.from("signatures").upsert(
