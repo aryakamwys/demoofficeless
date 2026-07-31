@@ -93,8 +93,8 @@ export default function SignaturesPublicPage() {
     return (
       <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-6 text-center">
         <div className="bg-white p-8 md:p-12 rounded-2xl shadow-sm border border-slate-200 max-w-md w-full">
-          <div className="mx-auto w-16 h-16 bg-blue-50 text-blue-600 rounded-full flex items-center justify-center mb-6">
-            <CheckCircle2 className="w-8 h-8" />
+          <div className="mx-auto text-blue-600 flex items-center justify-center mb-6">
+            <CheckCircle2 className="w-16 h-16" />
           </div>
           <h1 className="text-2xl font-bold text-slate-900 mb-2">Berhasil Terdaftar!</h1>
           <p className="text-slate-500 mb-8 leading-relaxed">
