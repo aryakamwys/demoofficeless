@@ -131,10 +131,10 @@ export default function ServicesPage() {
       return [
         item.id || "",
         `"${(item.title || "").replace(/"/g, '""')}"`,
-        item.category_id || "",
-        item.assigned_group_id || "",
-        item.assigned_id || "",
-        "", // Last name (We only have Agent ID for now)
+        item.category_details?.name || item.category_id || "",
+        item.assigned_group_details?.name || item.assigned_group_id || "",
+        `"${(item.assigned_user?.first_name || "").replace(/"/g, '""')}"`,
+        `"${(item.assigned_user?.last_name || "").replace(/"/g, '""')}"`,
         `"${dateStr}"`
       ];
     });
@@ -281,10 +281,10 @@ export default function ServicesPage() {
                           {item.assigned_group_details?.name || (item.assigned_group_id ? `Helpdesk Level ${item.assigned_group_id}` : "—")}
                         </td>
                         <td className="px-2 py-2 align-middle text-slate-700 border border-slate-200">
-                          {item.assigned_user?.name || "—"}
+                          {item.assigned_user?.first_name || "—"}
                         </td>
                         <td className="px-2 py-2 align-middle text-slate-700 border border-slate-200">
-                          {item.assigned_user?.lastname || ""}
+                          {item.assigned_user?.last_name || ""}
                         </td>
                         <td className="px-2 py-2 align-middle text-slate-700 border border-slate-200 w-[140px]">
                           {dateStr}

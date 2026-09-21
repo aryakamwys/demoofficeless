@@ -54,10 +54,16 @@ export default function UploadClaimPage() {
       const formData = new FormData();
       formData.append("ticket_id", String(ticketData.id));
       formData.append("ticket_title", ticketData.title || "");
-      // Kita coba ambil customer_name dari title atau field lain yang relevan di InvGate
-      // InvGate tidak selalu punya 'customer_name' di root object, kadang ada di custom fields
-      formData.append("customer_name", ticketData.customer_name || ""); 
-      formData.append("location", ticketData.location || ""); 
+      // customer_name dari requester/agent tiket (dipetakan di /api/services/[id]),
+      // location dari nama lokasi incident — bukan object mentahnya
+      formData.append(
+        "customer_name",
+        ticketData.requester_user?.name || ticketData.assigned_user?.name || ""
+      );
+      formData.append(
+        "location",
+        ticketData.location?.name || ticketData.custom_fields?.location || ""
+      );
       formData.append("amount", amount);
       formData.append("file", file);
 
