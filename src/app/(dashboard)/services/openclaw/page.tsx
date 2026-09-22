@@ -55,7 +55,7 @@ export default function OpenclawTicketPage() {
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <div>
-              <h2 className="text-sm font-semibold text-slate-800">OpenClaw × Outlook Perkom</h2>
+              <h2 className="text-sm font-semibold text-slate-800">Outlook Perkom</h2>
               <p className="text-xs text-slate-500">Sedang memantau inbox Outlook Perkom — email masuk diproses jadi ticket otomatis.</p>
             </div>
             <span className="flex items-center gap-1.5 rounded-full bg-emerald-50 px-2.5 py-1 text-[10px] font-semibold text-emerald-700">
@@ -100,9 +100,8 @@ export default function OpenclawTicketPage() {
       <div className="rounded-xl border border-slate-200 bg-white p-5">
         <div className="mb-4 flex items-center justify-between">
           <h2 className="flex items-center gap-2 text-sm font-semibold text-slate-800">
-            <Ticket className="h-4 w-4 text-blue-600" /> Recent Tickets
+            <Ticket className="h-4 w-4 text-blue-600" /> Ticket
           </h2>
-          <span className="text-xs text-slate-400">Data contoh — belum tersambung ke API OpenClaw</span>
         </div>
         <div className="overflow-x-auto border border-slate-300">
           <table className="w-full min-w-[900px] border-collapse bg-white text-[11px]">
