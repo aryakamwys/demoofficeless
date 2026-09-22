@@ -204,19 +204,13 @@ export function Header({ collapsed, onToggle }: HeaderProps) {
 
       {/* Navbar right */}
       <div className="ml-auto flex items-center gap-2">
-        <span className="hidden items-center gap-1.5 rounded-full bg-emerald-50 px-2.5 py-1 text-[11px] font-medium text-emerald-700 md:flex">
-          <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
-          System Health
-        </span>
         <Button
           variant="ghost"
           size="icon"
-          className="relative text-slate-500 hover:text-slate-700"
+          className="text-slate-500 hover:text-slate-700"
           onClick={() => toast.info("Notifikasi — segera hadir")}
         >
-          <Bell className="h-4 w-4" />
-          {/* ponytail: badge statis, wire ke notifikasi nyata kalau ada */}
-          <span className="absolute right-1.5 top-1.5 flex h-3.5 w-3.5 items-center justify-center rounded-full bg-red-500 text-[8px] font-bold text-white">4</span>
+          <Bell className="h-5 w-5" />
         </Button>
         <UserChip />
       </div>

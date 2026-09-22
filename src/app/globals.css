@@ -128,3 +128,22 @@
     @apply font-sans;
   }
 }
+
+/* OpenClaw monitoring animations */
+@keyframes bob {
+  0%, 100% { transform: translateY(0) rotate(-2deg); }
+  50% { transform: translateY(-6px) rotate(2deg); }
+}
+.animate-bob { animation: bob 3s ease-in-out infinite; }
+
+@keyframes shimmer {
+  0% { transform: translateX(-120%); }
+  100% { transform: translateX(420%); }
+}
+.animate-shimmer { animation: shimmer 1.8s ease-in-out infinite; }
+
+@keyframes pulse-dot {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.4; transform: scale(0.75); }
+}
+.animate-pulse-dot { animation: pulse-dot 1.6s ease-in-out infinite; }
