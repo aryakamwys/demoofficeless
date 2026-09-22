@@ -36,6 +36,7 @@ const pageTitles: Record<string, string> = {
   "/employees": "Employee Master",
   "/upload": "Upload Statement",
   "/claims": "Claims",
+  "/services/openclaw": "Openclaw Ticket",
 };
 
 function getPageTitle(pathname: string): string {
@@ -151,7 +152,7 @@ export function Header({ collapsed, onToggle }: HeaderProps) {
             {/* Manage Service */}
             <div className="pt-2 mt-2 border-t border-slate-100">
               <Link
-                href="/services"
+                href="/services/openclaw"
                 className={cn(
                   "flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors",
                   pathname.startsWith("/services")
