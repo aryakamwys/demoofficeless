@@ -1,15 +1,10 @@
-import { Check, Ticket } from "lucide-react";
-import Image from "next/image";
+"use client";
 
-// ponytail: placeholder — ticket hardcoded, sumber contoh Outlook Perkom.
-// Sambungkan ke OpenClaw/Microsoft Graph saat endpoint tersedia.
-const tickets = [
-  { id: "#OCW-1042", subject: "Tidak bisa login Outlook di laptop baru", from: "andi.pratama@perkom.co.id", status: "In Progress", priority: "High", updated: "Just now" },
-  { id: "#OCW-1041", subject: "Permintaan reset password VPN", from: "sari.wulandari@perkom.co.id", status: "Created", priority: "Medium", updated: "8m ago" },
-  { id: "#OCW-1040", subject: "Printer lantai 2 tidak merespon", from: "budi.santoso@perkom.co.id", status: "Pending", priority: "Medium", updated: "25m ago" },
-  { id: "#OCW-1039", subject: "Butuh akses folder share Marketing", from: "dewi.lestari@perkom.co.id", status: "Created", priority: "Low", updated: "1h ago" },
-  { id: "#OCW-1038", subject: "Laptop lambat setelah update Windows", from: "rudi.hartono@perkom.co.id", status: "Resolved", priority: "Low", updated: "3h ago" },
-];
+import { useEffect, useState } from "react";
+import { Check, Loader2, RefreshCw, Ticket } from "lucide-react";
+import Image from "next/image";
+import { toast } from "sonner";
+import { Button } from "@/components/ui/button";
 
 const steps = [
   { name: "Memantau inbox Outlook", state: "done" },
@@ -17,24 +12,61 @@ const steps = [
   { name: "Pembuatan ticket", state: "pending" },
 ] as const;
 
-const STATUS_STYLES: Record<string, string> = {
-  Created: "bg-blue-50 text-blue-700",
-  "In Progress": "bg-blue-50 text-blue-700",
-  Pending: "bg-amber-50 text-amber-700",
-  Resolved: "bg-emerald-50 text-emerald-700",
-};
+// ponytail: waktu proses email → ticket dihardcode 3 menit,
+// hitung dari timestamp email vs created_at saat datanya tersedia.
+const WAKTU_JADI = "3 menit";
 
-const PRIORITY_STYLES: Record<string, string> = {
-  High: "bg-red-50 text-red-700",
-  Medium: "bg-amber-50 text-amber-700",
-  Low: "bg-emerald-50 text-emerald-700",
-};
+interface ServiceTicket {
+  id: number;
+  title?: string;
+  created_at?: string | number;
+  requester_user?: { name?: string } | null;
+  category_details?: { name?: string } | null;
+}
 
-function Pill({ label, styles }: { label: string; styles: string }) {
-  return <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${styles}`}>{label}</span>;
+function parseDate(dateVal: string | number | undefined) {
+  if (!dateVal) return null;
+  let val: string | number = dateVal;
+  if (/^\d+$/.test(String(val))) {
+    const num = parseInt(String(val), 10);
+    val = num > 9999999999 ? num : num * 1000;
+  }
+  const d = new Date(val);
+  return isNaN(d.getTime()) ? null : d;
 }
 
 export default function OpenclawTicketPage() {
+  const [tickets, setTickets] = useState<ServiceTicket[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  const fetchTickets = async () => {
+    try {
+      const to = new Date();
+      const from = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+      const res = await fetch(
+        `/api/services?from=${from.toISOString().split("T")[0]}&to=${to.toISOString().split("T")[0]}`
+      );
+      const result = await res.json();
+      if (!result.success) throw new Error(result.error || "Gagal mengambil tiket");
+      setTickets(Array.isArray(result.data) ? (result.data as ServiceTicket[]) : []);
+    } catch (error: unknown) {
+      toast.error(error instanceof Error ? error.message : "Gagal mengambil tiket.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    // setState hanya terjadi setelah await — rule nggak bisa melintasi async boundary.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    void fetchTickets();
+  }, []);
+
+  const handleRefresh = () => {
+    setLoading(true);
+    void fetchTickets();
+  };
+
   return (
     <div className="space-y-6">
       {/* Monitoring banner — OpenClaw memantau Outlook Perkom */}
@@ -96,18 +128,22 @@ export default function OpenclawTicketPage() {
         </div>
       </div>
 
-      {/* Recent Tickets */}
+      {/* Ticket — live dari service desk (InvGate) */}
       <div className="rounded-xl border border-slate-200 bg-white p-5">
         <div className="mb-4 flex items-center justify-between">
           <h2 className="flex items-center gap-2 text-sm font-semibold text-slate-800">
             <Ticket className="h-4 w-4 text-blue-600" /> Ticket
           </h2>
+          <Button variant="outline" size="sm" className="h-8 border-slate-300" onClick={handleRefresh} disabled={loading}>
+            <RefreshCw className={`mr-2 h-3.5 w-3.5 ${loading ? "animate-spin" : ""}`} />
+            Refresh
+          </Button>
         </div>
         <div className="overflow-x-auto border border-slate-300">
-          <table className="w-full min-w-[900px] border-collapse bg-white text-[11px]">
+          <table className="w-full min-w-[960px] border-collapse bg-white text-[11px]">
             <thead>
               <tr>
-                {["Ticket", "Subject", "From", "Status", "Priority", "Last Updated"].map((h) => (
+                {["Ticket", "Subject", "From", "Category", "Waktu Jadi", "Last Updated"].map((h) => (
                   <th key={h} className="whitespace-nowrap border border-slate-300 bg-slate-100 px-3 py-3 text-left font-semibold text-slate-700">
                     {h}
                   </th>
@@ -115,16 +151,37 @@ export default function OpenclawTicketPage() {
               </tr>
             </thead>
             <tbody>
-              {tickets.map((t) => (
-                <tr key={t.id} className="transition-colors hover:bg-blue-50/30">
-                  <td className="border border-slate-200 px-2 py-2 font-medium text-blue-600">{t.id}</td>
-                  <td className="border border-slate-200 px-2 py-2 font-medium text-blue-500">{t.subject}</td>
-                  <td className="whitespace-nowrap border border-slate-200 px-2 py-2 text-slate-700">{t.from}</td>
-                  <td className="border border-slate-200 px-2 py-2"><Pill label={t.status} styles={STATUS_STYLES[t.status]} /></td>
-                  <td className="border border-slate-200 px-2 py-2"><Pill label={t.priority} styles={PRIORITY_STYLES[t.priority]} /></td>
-                  <td className="whitespace-nowrap border border-slate-200 px-2 py-2 text-slate-700">{t.updated}</td>
+              {loading ? (
+                <tr>
+                  <td colSpan={6} className="border border-slate-200 py-12 text-center text-slate-500">
+                    <Loader2 className="mx-auto mb-2 h-8 w-8 animate-spin text-blue-500" />
+                    Loading...
+                  </td>
                 </tr>
-              ))}
+              ) : tickets.length === 0 ? (
+                <tr>
+                  <td colSpan={6} className="border border-slate-200 py-8 text-center text-slate-500">
+                    No data available in table
+                  </td>
+                </tr>
+              ) : (
+                tickets.map((t) => {
+                  const d = parseDate(t.created_at);
+                  const dateStr = d
+                    ? d.toLocaleString("en-US", { month: "2-digit", day: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit", hour12: true }).replace(",", "")
+                    : "—";
+                  return (
+                    <tr key={t.id} className="transition-colors hover:bg-blue-50/30">
+                      <td className="whitespace-nowrap border border-slate-200 px-2 py-2 font-medium text-blue-600">#PIM-{t.id}</td>
+                      <td className="border border-slate-200 px-2 py-2 font-medium text-blue-500">{t.title || "—"}</td>
+                      <td className="whitespace-nowrap border border-slate-200 px-2 py-2 text-slate-700">{t.requester_user?.name || "—"}</td>
+                      <td className="border border-slate-200 px-2 py-2 text-slate-700">{t.category_details?.name || "—"}</td>
+                      <td className="whitespace-nowrap border border-slate-200 px-2 py-2 font-medium text-emerald-700">{WAKTU_JADI}</td>
+                      <td className="whitespace-nowrap border border-slate-200 px-2 py-2 text-slate-700">{dateStr}</td>
+                    </tr>
+                  );
+                })
+              )}
             </tbody>
           </table>
         </div>
