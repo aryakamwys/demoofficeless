@@ -1,10 +1,18 @@
-"use client";
-
-import { useEffect, useState } from "react";
-import { Check, Loader2, RefreshCw, Ticket } from "lucide-react";
+import { Check, Ticket } from "lucide-react";
 import Image from "next/image";
-import { toast } from "sonner";
-import { Button } from "@/components/ui/button";
+
+// ponytail: dummy — ticket & id dihardcode untuk demo monitoring.
+// Kalau mau live lagi, fetch /api/services seperti sebelumnya.
+const tickets = [
+  { id: "PIM-34214", subject: "M70q Gen 5 - Desktop - Hidup namun tidak menampilkan apapun pada layar", from: "Muhammad Arya Kamal", category: "Technical Support » Software", updated: "Just now" },
+  { id: "PIM-34213", subject: "Printer EPSON L3210 tidak bisa print dari jaringan", from: "Villa Lobby", category: "Technical Support » Hardware", updated: "12m ago" },
+  { id: "PIM-34212", subject: "Permintaan reset password Outlook", from: "Front Office", category: "Account & Access", updated: "32m ago" },
+  { id: "PIM-34211", subject: "WiFi hotspot area lobby sering putus", from: "Aldani Hardiyan", category: "Network", updated: "1h ago" },
+  { id: "PIM-34210", subject: "Update driver mesin absen fingerprint", from: "HR Department", category: "Technical Support » Software", updated: "2h ago" },
+];
+
+// ponytail: waktu proses email → ticket dihardcode 3 menit.
+const WAKTU_JADI = "3 menit";
 
 const steps = [
   { name: "Memantau inbox Outlook", state: "done" },
@@ -12,61 +20,7 @@ const steps = [
   { name: "Pembuatan ticket", state: "pending" },
 ] as const;
 
-// ponytail: waktu proses email → ticket dihardcode 3 menit,
-// hitung dari timestamp email vs created_at saat datanya tersedia.
-const WAKTU_JADI = "3 menit";
-
-interface ServiceTicket {
-  id: number;
-  title?: string;
-  created_at?: string | number;
-  requester_user?: { name?: string } | null;
-  category_details?: { name?: string } | null;
-}
-
-function parseDate(dateVal: string | number | undefined) {
-  if (!dateVal) return null;
-  let val: string | number = dateVal;
-  if (/^\d+$/.test(String(val))) {
-    const num = parseInt(String(val), 10);
-    val = num > 9999999999 ? num : num * 1000;
-  }
-  const d = new Date(val);
-  return isNaN(d.getTime()) ? null : d;
-}
-
 export default function OpenclawTicketPage() {
-  const [tickets, setTickets] = useState<ServiceTicket[]>([]);
-  const [loading, setLoading] = useState(true);
-
-  const fetchTickets = async () => {
-    try {
-      const to = new Date();
-      const from = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
-      const res = await fetch(
-        `/api/services?from=${from.toISOString().split("T")[0]}&to=${to.toISOString().split("T")[0]}`
-      );
-      const result = await res.json();
-      if (!result.success) throw new Error(result.error || "Gagal mengambil tiket");
-      setTickets(Array.isArray(result.data) ? (result.data as ServiceTicket[]) : []);
-    } catch (error: unknown) {
-      toast.error(error instanceof Error ? error.message : "Gagal mengambil tiket.");
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    // setState hanya terjadi setelah await — rule nggak bisa melintasi async boundary.
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    void fetchTickets();
-  }, []);
-
-  const handleRefresh = () => {
-    setLoading(true);
-    void fetchTickets();
-  };
-
   return (
     <div className="space-y-6">
       {/* Monitoring banner — OpenClaw memantau Outlook Perkom */}
@@ -128,16 +82,12 @@ export default function OpenclawTicketPage() {
         </div>
       </div>
 
-      {/* Ticket — live dari service desk (InvGate) */}
+      {/* Ticket */}
       <div className="rounded-xl border border-slate-200 bg-white p-5">
         <div className="mb-4 flex items-center justify-between">
           <h2 className="flex items-center gap-2 text-sm font-semibold text-slate-800">
             <Ticket className="h-4 w-4 text-blue-600" /> Ticket
           </h2>
-          <Button variant="outline" size="sm" className="h-8 border-slate-300" onClick={handleRefresh} disabled={loading}>
-            <RefreshCw className={`mr-2 h-3.5 w-3.5 ${loading ? "animate-spin" : ""}`} />
-            Refresh
-          </Button>
         </div>
         <div className="overflow-x-auto border border-slate-300">
           <table className="w-full min-w-[960px] border-collapse bg-white text-[11px]">
@@ -151,37 +101,16 @@ export default function OpenclawTicketPage() {
               </tr>
             </thead>
             <tbody>
-              {loading ? (
-                <tr>
-                  <td colSpan={6} className="border border-slate-200 py-12 text-center text-slate-500">
-                    <Loader2 className="mx-auto mb-2 h-8 w-8 animate-spin text-blue-500" />
-                    Loading...
-                  </td>
+              {tickets.map((t) => (
+                <tr key={t.id} className="transition-colors hover:bg-blue-50/30">
+                  <td className="whitespace-nowrap border border-slate-200 px-2 py-2 font-medium text-blue-600">#{t.id}</td>
+                  <td className="border border-slate-200 px-2 py-2 font-medium text-blue-500">{t.subject}</td>
+                  <td className="whitespace-nowrap border border-slate-200 px-2 py-2 text-slate-700">{t.from}</td>
+                  <td className="border border-slate-200 px-2 py-2 text-slate-700">{t.category}</td>
+                  <td className="whitespace-nowrap border border-slate-200 px-2 py-2 font-medium text-emerald-700">{WAKTU_JADI}</td>
+                  <td className="whitespace-nowrap border border-slate-200 px-2 py-2 text-slate-700">{t.updated}</td>
                 </tr>
-              ) : tickets.length === 0 ? (
-                <tr>
-                  <td colSpan={6} className="border border-slate-200 py-8 text-center text-slate-500">
-                    No data available in table
-                  </td>
-                </tr>
-              ) : (
-                tickets.map((t) => {
-                  const d = parseDate(t.created_at);
-                  const dateStr = d
-                    ? d.toLocaleString("en-US", { month: "2-digit", day: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit", hour12: true }).replace(",", "")
-                    : "—";
-                  return (
-                    <tr key={t.id} className="transition-colors hover:bg-blue-50/30">
-                      <td className="whitespace-nowrap border border-slate-200 px-2 py-2 font-medium text-blue-600">#PIM-{t.id}</td>
-                      <td className="border border-slate-200 px-2 py-2 font-medium text-blue-500">{t.title || "—"}</td>
-                      <td className="whitespace-nowrap border border-slate-200 px-2 py-2 text-slate-700">{t.requester_user?.name || "—"}</td>
-                      <td className="border border-slate-200 px-2 py-2 text-slate-700">{t.category_details?.name || "—"}</td>
-                      <td className="whitespace-nowrap border border-slate-200 px-2 py-2 font-medium text-emerald-700">{WAKTU_JADI}</td>
-                      <td className="whitespace-nowrap border border-slate-200 px-2 py-2 text-slate-700">{dateStr}</td>
-                    </tr>
-                  );
-                })
-              )}
+              ))}
             </tbody>
           </table>
         </div>
