@@ -8,6 +8,7 @@ import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { UserChip } from "@/components/layout/user-chip";
 import {
   LayoutDashboard,
   Users,
@@ -20,6 +21,7 @@ import {
   Car,
   Settings,
   Ticket,
+  Wrench,
 } from "lucide-react";
 import { useState } from "react";
 
@@ -195,7 +197,7 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
                   <Tooltip>
                     <TooltipTrigger asChild>
                       <div className={cn("flex items-center justify-center rounded-lg p-2 cursor-default", pathname.startsWith("/services") ? "text-sidebar-primary" : "text-sidebar-foreground/50")}>
-                        <Settings className="h-4 w-4" />
+                        <Wrench className="h-4 w-4" />
                       </div>
                     </TooltipTrigger>
                     <TooltipContent side="right">Manage Service</TooltipContent>
@@ -212,7 +214,7 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
                     )}
                   >
                     {pathname.startsWith("/services") && <div className="absolute left-[-8px] top-0 bottom-0 w-1 bg-blue-600 rounded-r-md" />}
-                    <Settings className="h-5 w-5 shrink-0" />
+                    <Wrench className="h-5 w-5 shrink-0" />
                     <span className="flex-1 text-left">Manage Service</span>
                     <ChevronDown className={cn("h-4 w-4 transition-transform duration-200", servicesOpen && "rotate-180")} />
                   </button>
@@ -229,37 +231,16 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
           </nav>
         </ScrollArea>
 
-        {/* Bottom Actions */}
-        <div className="p-2 border-t border-slate-100 flex flex-col gap-1">
-          {collapsed ? (
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="w-full text-slate-500 hover:bg-slate-50 hover:text-slate-700"
-                  onClick={onToggle}
-                >
-                  <ChevronRight className="h-4 w-4" />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent side="right">Expand menu</TooltipContent>
-            </Tooltip>
-          ) : (
-            <Button
-              variant="ghost"
-              className="w-full justify-start gap-3 text-slate-500 hover:bg-slate-50 hover:text-slate-700 font-medium"
-              onClick={onToggle}
-            >
-              <ChevronLeft className="h-4 w-4" />
-              Collapse menu
-            </Button>
+        {/* Bottom: Settings + Account */}
+        <div className="border-t border-slate-100 p-2 flex flex-col gap-1">
+          {!collapsed && (
+            <p className="px-3 pb-1 pt-1 text-[10px] font-semibold uppercase tracking-wider text-slate-400">Settings</p>
           )}
 
           {collapsed ? (
             <Tooltip>
               <TooltipTrigger asChild>
-                <Button variant="ghost" size="icon" className="w-full text-slate-500 hover:bg-slate-50 hover:text-slate-700" asChild>
+                <Button variant="ghost" size="icon" className={cn("w-full", pathname === "/settings" ? "bg-blue-50 text-blue-700" : "text-slate-500 hover:bg-slate-50 hover:text-slate-700")} asChild>
                   <Link href="/settings">
                     <Settings className="h-4 w-4" />
                   </Link>
@@ -268,12 +249,20 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
               <TooltipContent side="right">Settings</TooltipContent>
             </Tooltip>
           ) : (
-            <Button variant="ghost" className="w-full justify-start gap-3 text-slate-500 hover:bg-slate-50 hover:text-slate-700 font-medium" asChild>
+            <Button variant="ghost" className={cn("w-full justify-start gap-3 font-medium", pathname === "/settings" ? "bg-blue-50/50 text-blue-700" : "text-slate-500 hover:bg-slate-50 hover:text-slate-700")} asChild>
               <Link href="/settings">
                 <Settings className="h-4 w-4" />
                 Settings
               </Link>
             </Button>
+          )}
+
+          <div className="my-1.5 border-t border-slate-100" />
+
+          {!collapsed && (
+            <div className="px-3 py-1.5">
+              <UserChip />
+            </div>
           )}
 
           {collapsed ? (
@@ -298,6 +287,32 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
             >
               <LogOut className="h-4 w-4" />
               Logout
+            </Button>
+          )}
+
+          {collapsed ? (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="w-full text-slate-400 hover:bg-slate-50 hover:text-slate-600"
+                  onClick={onToggle}
+                >
+                  <ChevronRight className="h-4 w-4" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="right">Expand menu</TooltipContent>
+            </Tooltip>
+          ) : (
+            <Button
+              variant="ghost"
+              size="sm"
+              className="w-full justify-start gap-3 text-xs text-slate-400 hover:bg-slate-50 hover:text-slate-600"
+              onClick={onToggle}
+            >
+              <ChevronLeft className="h-3.5 w-3.5" />
+              Collapse menu
             </Button>
           )}
         </div>
