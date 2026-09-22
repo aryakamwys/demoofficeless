@@ -72,12 +72,12 @@ export async function sendTextMessage(
       console.warn(`[WA] Send attempt ${attempt}/${maxRetries} error for ${receiver}: ${lastError}`);
     }
 
-    // Backoff sebelum retry. WA_RATE_LIMITED itu transient — butuh jeda
-    // lebih panjang (4s, 8s) daripada error lain (1s, 2s).
+    // Backoff sebelum retry. WA_RATE_LIMITED butuh jeda panjang (throttle
+    // device bisa bertahan menit) — 15s lalu 30s, total masih < maxDuration 60.
     if (attempt < maxRetries) {
       const isRateLimited = lastError?.toUpperCase().includes("RATE_LIMIT");
       const backoffMs = isRateLimited
-        ? 4000 * attempt
+        ? 15000 * attempt
         : 1000 * Math.pow(2, attempt - 1);
       await new Promise((resolve) => setTimeout(resolve, backoffMs));
     }
