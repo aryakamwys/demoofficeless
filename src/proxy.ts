@@ -42,6 +42,7 @@ export async function proxy(request: NextRequest) {
     "/services",
     "/settings",
     "/api/services",
+    "/api/inventory",
     "/api/upload",
     "/api/claims",
     "/api/employees"

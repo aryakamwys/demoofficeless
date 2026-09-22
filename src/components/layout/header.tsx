@@ -41,6 +41,7 @@ const pageTitles: Record<string, string> = {
   "/upload": "Upload Statement",
   "/claims": "Claims",
   "/services/openclaw": "Openclaw Ticket",
+  "/services/inventory": "Inventory",
   "/settings": "Settings",
 };
 
