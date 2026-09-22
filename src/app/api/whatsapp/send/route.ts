@@ -2,6 +2,9 @@ import { NextRequest, NextResponse } from "next/server";
 import { createServerClient } from "@/lib/supabase-server";
 import { sendTextMessage, buildClaimMessage, buildManagerApprovalMessage, buildHrApprovalMessage } from "@/lib/whatsapp";
 
+// Retry rate-limit bisa total ~17 detik — kasih ruang di serverless.
+export const maxDuration = 60;
+
 export async function POST(request: NextRequest) {
   try {
     const supabase = await createServerClient();

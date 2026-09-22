@@ -34,7 +34,7 @@ export async function sendTextMessage(
   options?: { delayMs?: number; maxRetries?: number }
 ): Promise<SendTextResponse> {
   const config = getConfig();
-  const maxRetries = options?.maxRetries ?? 1;
+  const maxRetries = options?.maxRetries ?? 3;
 
   // Jeda sebelum pesan dikirim (default 2 detik, anti-bot detection)
   const delayMs = options?.delayMs ?? 2000;
@@ -72,9 +72,14 @@ export async function sendTextMessage(
       console.warn(`[WA] Send attempt ${attempt}/${maxRetries} error for ${receiver}: ${lastError}`);
     }
 
-    // Exponential backoff before retry (1s, 2s, 4s)
+    // Backoff sebelum retry. WA_RATE_LIMITED itu transient — butuh jeda
+    // lebih panjang (4s, 8s) daripada error lain (1s, 2s).
     if (attempt < maxRetries) {
-      await new Promise((resolve) => setTimeout(resolve, 1000 * Math.pow(2, attempt - 1)));
+      const isRateLimited = lastError?.toUpperCase().includes("RATE_LIMIT");
+      const backoffMs = isRateLimited
+        ? 4000 * attempt
+        : 1000 * Math.pow(2, attempt - 1);
+      await new Promise((resolve) => setTimeout(resolve, backoffMs));
     }
   }
 
