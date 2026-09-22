@@ -20,6 +20,9 @@ tokens:
     active_item: bg-blue-50/50 text-blue-700 + absolute left bar w-1 bg-blue-600
     table_header: bg-slate-100 border-slate-300 font-semibold text-slate-700
     badge: tinted pill (bg-*-50 text-*-700)
+    card: rounded-xl border border-slate-200 bg-white p-5
+    icon_tile: rounded-xl p-2.5 tinted (bg-*-50 text-*-600); ungu hanya aksen OpenClaw (referensi user)
+    progress_bar: h-1.5 rounded-full bg-slate-100, fill bg-<accent> (blue/emerald/amber/purple)
 ---
 
 # DESIGN.md — Perkom Dashboard

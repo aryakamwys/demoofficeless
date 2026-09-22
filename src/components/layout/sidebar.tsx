@@ -259,6 +259,26 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
           {collapsed ? (
             <Tooltip>
               <TooltipTrigger asChild>
+                <Button variant="ghost" size="icon" className="w-full text-slate-500 hover:bg-slate-50 hover:text-slate-700" asChild>
+                  <Link href="/settings">
+                    <Settings className="h-4 w-4" />
+                  </Link>
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="right">Settings</TooltipContent>
+            </Tooltip>
+          ) : (
+            <Button variant="ghost" className="w-full justify-start gap-3 text-slate-500 hover:bg-slate-50 hover:text-slate-700 font-medium" asChild>
+              <Link href="/settings">
+                <Settings className="h-4 w-4" />
+                Settings
+              </Link>
+            </Button>
+          )}
+
+          {collapsed ? (
+            <Tooltip>
+              <TooltipTrigger asChild>
                 <Button
                   variant="ghost"
                   size="icon"

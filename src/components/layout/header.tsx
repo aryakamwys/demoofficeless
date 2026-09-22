@@ -37,6 +37,7 @@ const pageTitles: Record<string, string> = {
   "/upload": "Upload Statement",
   "/claims": "Claims",
   "/services/openclaw": "Openclaw Ticket",
+  "/settings": "Settings",
 };
 
 function getPageTitle(pathname: string): string {
@@ -162,6 +163,22 @@ export function Header({ collapsed, onToggle }: HeaderProps) {
               >
                 <Settings className="h-4 w-4 shrink-0" />
                 Manage Service
+              </Link>
+            </div>
+
+            {/* Settings */}
+            <div className="pt-2 mt-2 border-t border-slate-100">
+              <Link
+                href="/settings"
+                className={cn(
+                  "flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors",
+                  pathname === "/settings"
+                    ? "bg-accent text-primary"
+                    : "text-muted-foreground hover:bg-accent hover:text-foreground"
+                )}
+              >
+                <Settings className="h-4 w-4 shrink-0" />
+                Settings
               </Link>
             </div>
           </nav>
