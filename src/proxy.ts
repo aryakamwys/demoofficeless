@@ -41,6 +41,8 @@ export async function proxy(request: NextRequest) {
     "/claims",
     "/services",
     "/settings",
+    "/inventory",
+    "/docs",
     "/api/services",
     "/api/inventory",
     "/api/upload",

@@ -22,7 +22,7 @@ import {
   Settings,
   Ticket,
   Wrench,
-  ScanBarcode,
+  Boxes,
 } from "lucide-react";
 import { useState } from "react";
 
@@ -204,7 +204,6 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
                     <TooltipContent side="right">Manage Service</TooltipContent>
                   </Tooltip>
                   <SidebarLink href="/services/openclaw" icon={Ticket} label="Openclaw Ticket" isActive={pathname === "/services/openclaw"} collapsed={collapsed} />
-                  <SidebarLink href="/services/inventory" icon={ScanBarcode} label="Inventory" isActive={pathname === "/services/inventory"} collapsed={collapsed} />
                 </>
               ) : (
                 <div>
@@ -225,13 +224,21 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
                       <Link href="/services/openclaw" className={cn("flex items-center gap-3 py-2 px-3 text-sm font-medium transition-colors rounded-lg", pathname === "/services/openclaw" ? "bg-blue-50/50 text-blue-700" : "text-slate-500 hover:bg-slate-50 hover:text-slate-800")}>
                         <Ticket className="h-4 w-4 shrink-0" /> Openclaw Ticket
                       </Link>
-                      <Link href="/services/inventory" className={cn("flex items-center gap-3 py-2 px-3 text-sm font-medium transition-colors rounded-lg", pathname === "/services/inventory" ? "bg-blue-50/50 text-blue-700" : "text-slate-500 hover:bg-slate-50 hover:text-slate-800")}>
-                        <ScanBarcode className="h-4 w-4 shrink-0" /> Inventory
-                      </Link>
                     </div>
                   </div>
                 </div>
               )}
+            </div>
+
+            {/* Inventory */}
+            <div className="pt-2 mt-2 border-t border-slate-100">
+              <SidebarLink
+                href="/inventory"
+                icon={Boxes}
+                label="Inventory"
+                isActive={pathname === "/inventory"}
+                collapsed={collapsed}
+              />
             </div>
           </nav>
         </ScrollArea>

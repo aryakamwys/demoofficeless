@@ -24,6 +24,7 @@ import {
   Settings,
   Bell,
   Wrench,
+  Boxes,
 } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
@@ -42,6 +43,7 @@ const pageTitles: Record<string, string> = {
   "/claims": "Claims",
   "/services/openclaw": "Openclaw Ticket",
   "/services/inventory": "Inventory",
+  "/inventory": "Inventory",
   "/settings": "Settings",
 };
 
@@ -168,6 +170,22 @@ export function Header({ collapsed, onToggle }: HeaderProps) {
               >
                 <Wrench className="h-4 w-4 shrink-0" />
                 Manage Service
+              </Link>
+            </div>
+
+            {/* Inventory */}
+            <div className="pt-2 mt-2 border-t border-slate-100">
+              <Link
+                href="/inventory"
+                className={cn(
+                  "flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors",
+                  pathname === "/inventory"
+                    ? "bg-accent text-primary"
+                    : "text-muted-foreground hover:bg-accent hover:text-foreground"
+                )}
+              >
+                <Boxes className="h-4 w-4 shrink-0" />
+                Inventory
               </Link>
             </div>
 
