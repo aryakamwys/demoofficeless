@@ -75,40 +75,43 @@ export async function POST(request: NextRequest) {
     // Group trips by employee
     const grouped = groupTripsByEmployee(trips);
 
-    let claimsCreated = 0;
-
-    for (const group of grouped) {
-      // Try to match employee by name (case-insensitive)
+    // Batch: satu insert untuk semua claim + satu insert untuk semua trip.
+    // (Sebelumnya 2 round-trip per employee berurutan — sumber lambatnya proses upload.)
+    const claimRows = grouped.map((group) => {
       const matchedEmployee = employees?.find(
         (emp) =>
           emp.employee_name.toLowerCase() ===
           group.employee_name.toLowerCase()
       );
+      return {
+        employee_id: matchedEmployee?.id || null,
+        upload_id: upload.id,
+        period: upload.period,
+        trip_count: group.trip_count,
+        total_amount: group.total_amount,
+        status: matchedEmployee ? "PENDING" : "UNMATCHED",
+        manager_id: matchedEmployee?.manager_id || null,
+        hr_id: matchedEmployee?.hr_id || null,
+      };
+    });
 
-      // Create claim
-      const { data: claim, error: claimError } = await supabase
-        .from("claims")
-        .insert({
-          employee_id: matchedEmployee?.id || null,
-          upload_id: upload.id,
-          period: upload.period,
-          trip_count: group.trip_count,
-          total_amount: group.total_amount,
-          status: matchedEmployee ? "PENDING" : "UNMATCHED",
-          manager_id: matchedEmployee?.manager_id || null,
-          hr_id: matchedEmployee?.hr_id || null,
-        })
-        .select()
-        .single();
+    const { data: claims, error: claimsError } = await supabase
+      .from("claims")
+      .insert(claimRows)
+      .select("id");
 
-      if (claimError || !claim) {
-        console.error("Failed to insert claim:", claimError);
-        continue;
-      }
+    if (claimsError || !claims) {
+      return NextResponse.json(
+        { success: false, error: "Gagal membuat claim: " + claimsError?.message },
+        { status: 500 }
+      );
+    }
 
-      // Create trips
-      const tripRecords = group.trips.map((t) => ({
-        claim_id: claim.id,
+    // ponytail: cocokkan trip ke claim via urutan hasil insert (perilaku
+    // Postgres multi-VALUES) — employee_id bisa null/duplikat, tak bisa jadi kunci.
+    const tripRecords = grouped.flatMap((group, i) =>
+      group.trips.map((t) => ({
+        claim_id: claims[i].id,
         trip_date: t.trip_date
           ? new Date(t.trip_date).toISOString()
           : new Date().toISOString(),
@@ -120,14 +123,14 @@ export async function POST(request: NextRequest) {
         pickup: t.pickup,
         dropoff: t.dropoff,
         fare: t.fare,
-      }));
+      }))
+    );
 
+    if (tripRecords.length > 0) {
       const { error: tripsError } = await supabase.from("trips").insert(tripRecords);
       if (tripsError) {
         console.error("Failed to insert trips:", tripsError);
       }
-      
-      claimsCreated++;
     }
 
     // Update upload status
@@ -138,7 +141,7 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({
       success: true,
-      data: { claims_created: claimsCreated },
+      data: { claims_created: claims.length },
     });
   } catch (error) {
     const message =

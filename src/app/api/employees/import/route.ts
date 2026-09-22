@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServerClient } from "@/lib/supabase-server";
 import Papa from "papaparse";
+import { bump, EMPLOYEES_VER } from "@/lib/cache";
 
 export async function POST(request: NextRequest) {
   const supabase = await createServerClient();
@@ -66,6 +67,8 @@ export async function POST(request: NextRequest) {
       { status: 500 }
     );
   }
+
+  await bump(EMPLOYEES_VER);
 
   return NextResponse.json({
     success: true,

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServiceClient } from "@/lib/supabase-server";
 import { employeeSchema } from "@/lib/validations/employee";
+import { bump, EMPLOYEES_VER } from "@/lib/cache";
 
 export async function PUT(
   request: NextRequest,
@@ -59,6 +60,8 @@ export async function PUT(
     );
   }
 
+  await bump(EMPLOYEES_VER);
+
   return NextResponse.json({ success: true, data });
 }
 
@@ -80,6 +83,8 @@ export async function DELETE(
       { status: 500 }
     );
   }
+
+  await bump(EMPLOYEES_VER);
 
   return NextResponse.json({ success: true });
 }

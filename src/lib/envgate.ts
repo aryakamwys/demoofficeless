@@ -1,4 +1,4 @@
-import { Redis } from "@upstash/redis";
+import { cached } from "@/lib/cache";
 
 /**
  * Semua akses ke InvGate Service Desk (EnvGate) + cache Upstash Redis.
@@ -7,42 +7,10 @@ import { Redis } from "@upstash/redis";
  *  - entity map (helpdesks/levels): 24 jam  — hampir tidak pernah berubah
  *  - users: 24 jam                    — nama jarang berubah
  *  - tiket tunggal: 5 menit
- *  - daftar tiket terbaru: 60 detik
- *
- * Kalau UPSTASH_REDIS_REST_URL/TOKEN tidak diset, semua pass-through tanpa
- * cache (dev lokal tetap jalan).
+ *  - daftar tiket terbaru: 5 menit
  */
 
 const BASE = "https://servicedesk.perkom.co.id/api/v1";
-
-const redis =
-  process.env.UPSTASH_REDIS_REST_URL && process.env.UPSTASH_REDIS_REST_TOKEN
-    ? new Redis({
-        url: process.env.UPSTASH_REDIS_REST_URL,
-        token: process.env.UPSTASH_REDIS_REST_TOKEN,
-      })
-    : null;
-
-export async function cached<T>(
-  key: string,
-  ttlSeconds: number,
-  fn: () => Promise<T>
-): Promise<T> {
-  if (!redis) return fn();
-  try {
-    const hit = await redis.get(key);
-    if (hit !== null) return hit as T;
-  } catch (e) {
-    console.error("Redis get gagal, lanjut tanpa cache:", e);
-  }
-  const value = await fn();
-  try {
-    await redis.set(key, value, { ex: ttlSeconds });
-  } catch (e) {
-    console.error("Redis set gagal, lanjut tanpa cache:", e);
-  }
-  return value;
-}
 
 async function api<T = any>(path: string): Promise<T> {
   const username = process.env.SERVICEDESK_USERNAME;
@@ -211,7 +179,7 @@ export async function getRecentTickets(
   toDateStr: string | null
 ): Promise<any[]> {
   const key = `envgate:recent:${fromDateStr || ""}:${toDateStr || ""}`;
-  return cached(key, 60, async () => {
+  return cached(key, 300, async () => {
     const statusQuery = [1, 2, 3, 4, 5, 6]
       .map((id) => `status_ids[]=${id}`)
       .join("&");

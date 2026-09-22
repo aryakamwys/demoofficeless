@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { Employee } from "@/types";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -14,29 +14,45 @@ import { Plus, FileUp, Search } from "lucide-react";
 export default function EmployeesPage() {
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [search, setSearch] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
   const [formOpen, setFormOpen] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
   const [editEmployee, setEditEmployee] = useState<Employee | null>(null);
   const [loading, setLoading] = useState(true);
+  const abortRef = useRef<AbortController | null>(null);
+
+  // Debounce 300ms supaya tidak fetch tiap ketikan
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedSearch(search), 300);
+    return () => clearTimeout(t);
+  }, [search]);
 
   const fetchEmployees = useCallback(async () => {
-    setLoading(true);
+    // Batalkan request lama supaya respons stale tidak menimpa hasil baru
+    abortRef.current?.abort();
+    const ctrl = new AbortController();
+    abortRef.current = ctrl;
     try {
-      const params = new URLSearchParams();
-      if (search) params.set("search", search);
-
-      const res = await fetch(`/api/employees?${params}`);
+      const params = debouncedSearch
+        ? `?search=${encodeURIComponent(debouncedSearch)}`
+        : "";
+      const res = await fetch(`/api/employees${params}`, { signal: ctrl.signal });
+      if (!res.ok) return;
       const result = await res.json();
       if (result.success) {
         setEmployees(result.data);
       }
+    } catch {
+      // AbortError diabaikan — request terbaru sudah berjalan
     } finally {
       setLoading(false);
     }
-  }, [search]);
+  }, [debouncedSearch]);
 
   useEffect(() => {
-    fetchEmployees();
+    // setState hanya terjadi setelah await — rule tidak bisa melintasi async boundary.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    void fetchEmployees();
   }, [fetchEmployees]);
 
   const handleEdit = (employee: Employee) => {
@@ -77,10 +93,10 @@ export default function EmployeesPage() {
         </div>
       </div>
 
-      {/* Table */}
+      {/* Table — skeleton hanya di load pertama, search tidak bikin tabel kedip */}
       <Card>
         <CardContent className="p-0">
-          {loading ? (
+          {loading && employees.length === 0 ? (
             <div className="p-0">
               <div className="border-b px-4 py-3 flex gap-6">
                 {[60, 140, 100, 120, 80, 60].map((w, i) => (

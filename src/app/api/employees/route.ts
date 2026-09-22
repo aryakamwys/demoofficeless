@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServiceClient } from "@/lib/supabase-server";
 import { employeeSchema } from "@/lib/validations/employee";
+import { cached, version, bump, EMPLOYEES_VER } from "@/lib/cache";
 
 export async function GET(request: NextRequest) {
   const supabase = createServiceClient();
@@ -8,51 +9,67 @@ export async function GET(request: NextRequest) {
   const search = searchParams.get("search") || "";
   const role = searchParams.get("role") || "";
 
-  let query = supabase
-    .from("employees")
-    .select("*")
-    .eq("is_active", true)
-    .order("employee_name", { ascending: true });
+  // Cache 60 detik per (versi, search, role) — tabel signatures (base64)
+  // ikut tercache, jadi repeat load jauh lebih cepat.
+  const ver = await version(EMPLOYEES_VER);
+  try {
+    const mappedData = await cached(
+      `employees:${ver}:${search}:${role}`,
+      60,
+      async () => {
+        let query = supabase
+          .from("employees")
+          .select("*")
+          .eq("is_active", true)
+          .order("employee_name", { ascending: true });
 
-  if (search) {
-    query = query.or(
-      `employee_name.ilike.%${search}%,employee_number.ilike.%${search}%`
+        if (search) {
+          query = query.or(
+            `employee_name.ilike.%${search}%,employee_number.ilike.%${search}%`
+          );
+        }
+
+        if (role) {
+          query = query.eq("role", role);
+        }
+
+        const { data, error } = await query;
+        if (error) throw new Error(error.message);
+
+        let signaturesMap: Record<string, string> = {};
+
+        // Try fetching signatures safely, so it doesn't break if the table doesn't exist yet
+        try {
+          const { data: sigData, error: sigError } = await supabase.from("signatures").select("employee_id, signature");
+          if (!sigError && sigData) {
+            sigData.forEach((s: any) => {
+              signaturesMap[s.employee_id] = s.signature;
+            });
+          }
+        } catch (e) {
+          // Ignore error if table doesn't exist
+        }
+
+        return (data || []).map((emp: any) => ({
+          ...emp,
+          signature: signaturesMap[emp.id] || null,
+        }));
+      }
     );
-  }
 
-  if (role) {
-    query = query.eq("role", role);
-  }
-
-  const { data, error } = await query;
-
-  if (error) {
+    return NextResponse.json({ success: true, data: mappedData });
+  } catch (error: unknown) {
     return NextResponse.json(
-      { success: false, error: error.message },
+      {
+        success: false,
+        error:
+          error instanceof Error
+            ? error.message
+            : "Gagal mengambil data karyawan",
+      },
       { status: 500 }
     );
   }
-
-  let signaturesMap: Record<string, string> = {};
-  
-  // Try fetching signatures safely, so it doesn't break if the table doesn't exist yet
-  try {
-    const { data: sigData, error: sigError } = await supabase.from("signatures").select("employee_id, signature");
-    if (!sigError && sigData) {
-      sigData.forEach((s: any) => {
-        signaturesMap[s.employee_id] = s.signature;
-      });
-    }
-  } catch (e) {
-    // Ignore error if table doesn't exist
-  }
-
-  const mappedData = data?.map((emp: any) => ({
-    ...emp,
-    signature: signaturesMap[emp.id] || null,
-  }));
-
-  return NextResponse.json({ success: true, data: mappedData });
 }
 
 export async function POST(request: NextRequest) {
@@ -108,6 +125,8 @@ export async function POST(request: NextRequest) {
       { status: 500 }
     );
   }
+
+  await bump(EMPLOYEES_VER);
 
   return NextResponse.json({ success: true, data });
 }

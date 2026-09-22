@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServiceClient } from "@/lib/supabase-server";
 import { z } from "zod";
+import { bump, EMPLOYEES_VER } from "@/lib/cache";
 
 const publicRegistrationSchema = z.object({
   employee_name: z.string().min(1, "Nama wajib diisi"),
@@ -96,6 +97,8 @@ export async function POST(request: NextRequest) {
         { status: 500 }
       );
     }
+
+    await bump(EMPLOYEES_VER);
 
     return NextResponse.json({
       success: true,
