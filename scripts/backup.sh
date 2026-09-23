@@ -5,7 +5,6 @@ set -euo pipefail
 
 BACKUP_DIR=/opt/backups
 STAMP=$(date +%Y%m%d-%H%M%S)
-WEEKDAY=$(date +%u)   # 7 = Minggu
 
 mkdir -p "$BACKUP_DIR"
 

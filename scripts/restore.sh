@@ -9,5 +9,5 @@ FILE=$1
 read -rp "Ini akan MENIMPA database sekarang. Lanjut? [ketik YA] " ans
 [ "$ans" = "YA" ] || exit 1
 
-gunzip -c "$FILE" | docker compose exec -T db psql -U postgres -d postgres
+gunzip -c "$FILE" | docker compose exec -T db psql -v ON_ERROR_STOP=1 -U postgres -d postgres
 echo "Restore selesai."
