@@ -628,7 +628,7 @@ export async function cached<T>(
   if (!client) return fn();
   try {
     const hit = await client.get(key);
-    if (hit !== null) return JSON.parse(hit as string) as T;
+    if (hit !== null) return (typeof hit === "string" ? JSON.parse(hit) : hit) as T;
   } catch (e) {
     console.error("Redis get gagal, lanjut tanpa cache:", e);
   }
