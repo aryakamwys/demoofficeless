@@ -31,7 +31,7 @@ Internet ──> FortiGate (hanya forward 443/80 → VPS)
               v
             VPS Debian (Docker)
             ┌────────────────────────────────────────────────┐
-            │ Caddy (80/443, TLS Let's Encrypt otomatis)      │
+            │ nginx + certbot (80/443, TLS Let's Encrypt)     │
             │   ├─ app.perkom.co.id    → app:3000             │
             │   └─ supabase.perkom.co.id → kong:8000          │
             │                                    │            │
@@ -44,14 +44,15 @@ Internet ──> FortiGate (hanya forward 443/80 → VPS)
 Admin/SSH ──> FortiVPN ──> VPS:22 (key-only)
 ```
 
-Prinsip: hanya Caddy yang mendengar di 0.0.0.0 (80/443). Postgres, kong,
+Prinsip: hanya nginx yang mendengar di 0.0.0.0 (80/443). Postgres, kong,
 redis, auth, storage **tidak publish port** — hanya jaringan internal Docker.
 
 ## 3. Komponen
 
 ### 3.1 Compose stack (1 repo, 1 `docker-compose.yml` + override)
 - `app` — image existing (multi-stage, node:22-alpine, non-root, standalone).
-- `caddy` — reverse proxy + TLS otomatis (ganti nginx+certbot manual).
+- `nginx` — reverse proxy (site conf di-duplicate dari `deploy/nginx/` di repo),
+      TLS via certbot `--nginx` (renew otomatis oleh systemd timer certbot).
 - `db` — `supabase/postgres` (versi mayor ≥ versi DB cloud saat dump).
 - `auth` (gotrue), `rest` (postgrest), `storage-api`, `kong` — subset
   self-host Supabase resmi. Yang TIDAK dipasang (tidak dipakai app):
