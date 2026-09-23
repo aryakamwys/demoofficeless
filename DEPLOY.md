@@ -12,10 +12,16 @@ Stack: satu VPS menjalankan `docker compose` dengan service `app` (Next.js),
 
 ## 0. Prasyarat
 
-- VPS Debian, akses SSH **hanya lewat FortiVPN**.
+- VPS Debian 12+, akses SSH **hanya lewat FortiVPN**.
 - FortiGate mem-forward **hanya port 80 dan 443** ke IP VPS — selain itu tidak ada.
-- DNS: dua A record mengarah ke IP publik kantor — `APP_DOMAIN` dan `SB_DOMAIN`.
-  Caddy mengurus TLS otomatis begitu DNS resolve dan 80/443 terjangkau dari
+- DNS: dua A record ke IP publik kantor, dengan pembagian yang disengaja:
+  - `SB_DOMAIN` → IP publik kantor **sejak hari pertama** (sejak provisioning,
+    sebelum migrasi selesai). Ini disengaja: project Supabase cloud saat ini
+    tidak melayani custom domain tersebut, jadi mengarahkannya lebih awal
+    membuat `TARGET_URL` di 2.6 dan verifikasi di 2.7 langsung mengenai VPS.
+  - `APP_DOMAIN` → tetap ke Vercel dulu; switch final hanya dilakukan saat
+    cutover (bagian 6).
+- Caddy mengurus TLS otomatis begitu DNS resolve dan 80/443 terjangkau dari
   internet; tidak ada langkah sertifikat manual.
 - Kredensial Supabase cloud untuk migrasi: connection string DB, service role
   key, dan URL project (untuk copy storage).
@@ -28,7 +34,10 @@ Jalankan sebagai root (atau user dengan sudo) via SSH dari FortiVPN.
 
 ```bash
 apt update && apt upgrade -y
-apt install -y docker.io docker-compose-plugin ufw git curl nodejs
+# Docker CE + docker-compose-plugin dari repo Docker — Debian stock hanya
+# menyediakan docker-compose v1 yang tidak dipakai di sini
+curl -fsSL https://get.docker.com | sh
+apt install -y ufw git curl nodejs
 
 ufw allow 22
 ufw allow 80
@@ -36,7 +45,8 @@ ufw allow 443
 ufw enable
 ```
 
-`nodejs` dipakai oleh skrip migrasi (`scripts/migrate/*.mjs`).
+`nodejs` dipakai oleh skrip migrasi (`scripts/migrate/*.mjs`); Debian 12
+menyediakan Node 18 — cukup untuk `fetch` global yang dibutuhkan skrip itu.
 
 ### 1.2 Hardening SSH
 
@@ -88,8 +98,10 @@ docker compose up -d
 docker compose ps
 ```
 
-Semua service harus Up/Healthy. TLS terbit otomatis setelah DNS mengarah ke
-VPS (pantau `docker compose logs --tail=50 caddy`).
+Semua service harus Up/Healthy, dan **hanya `caddy`** yang mem-binding port —
+pastikan tidak ada binding `0.0.0.0:` lain di output `docker compose ps`. TLS
+terbit otomatis setelah DNS mengarah ke VPS (pantau
+`docker compose logs --tail=50 caddy`).
 
 ## 2. Migrasi data dari Supabase cloud
 
@@ -104,9 +116,12 @@ docker run --rm postgres:17-alpine pg_dump "$CLOUD_DB" --clean --if-exists > dum
 gzip dump.sql
 ```
 
-Ganti `PASSWORD` dan `PROJECT-REF` dengan project Supabase cloud Anda. Dump
-berisi schema + data saja — roles internal Supabase sudah dibuat oleh init
-scripts image `db` self-host, jadi tidak ikut dimigrasikan.
+Ganti `PASSWORD` dan `PROJECT-REF` dengan project Supabase cloud Anda.
+Catatan: koneksi direct `db.PROJECT-REF.supabase.co:5432` hanya IPv6 tanpa
+add-on IPv4 — bila dump menggantung, ganti `CLOUD_DB` dengan connection
+string **session pooler** (Supabase dashboard → Connect). Dump berisi schema
++ data saja — roles internal Supabase sudah dibuat oleh init scripts image
+`db` self-host, jadi tidak ikut dimigrasikan.
 
 ### 2.2 Restore ke db self-host
 
@@ -156,6 +171,8 @@ node scripts/migrate/copy-storage.mjs
 
 Skrip mengunduh semua objek bucket `dataperkom` dari cloud lalu mengunggah ke
 self-host dengan header `x-upsert` (menimpa bila objek sudah ada).
+`TARGET_URL="https://$SB_DOMAIN"` terbukti mengenai VPS — A record
+`SB_DOMAIN` sudah mengarah ke IP publik kantor sejak hari pertama (bagian 0).
 
 ### 2.7 Verifikasi
 
@@ -164,9 +181,13 @@ set -a; . ./.env; set +a
 curl -I "https://$SB_DOMAIN/rest/v1/"
 ```
 
-Status harus bukan 5xx (401 tanpa apikey itu normal). Lalu dari browser: login
-dengan akun lama, dan buka salah satu PDF claim lama untuk memastikan storage
-ikut pindah.
+Status harus bukan 5xx (401 tanpa apikey itu normal). Pastikan respons
+benar-benar datang dari self-host, bukan cloud: `docker compose logs rest
+--tail=5` harus memunculkan request HEAD tadi (dan `docker compose logs
+storage --tail=5` saat PDF dibuka) — ini bekerja karena `SB_DOMAIN` sudah
+resolve ke VPS sejak hari pertama (bagian 0). Lalu dari browser: login dengan
+akun lama, dan buka salah satu PDF claim lama untuk memastikan storage ikut
+pindah.
 
 ## 3. Runner CI/CD (GitHub Actions self-hosted)
 
@@ -279,10 +300,12 @@ sudo su - runner -c 'cd /opt/demoofficeless && git pull && docker compose up -d 
 
 ### 5.3 Rollback manual
 
-Rollback standar (rebuild, butuh beberapa menit):
+Rollback standar — wajib `--build`: tanpa itu compose memakai image `latest`
+yang sudah ada, sehingga rollback diam-diam tidak mengubah apa pun (rebuild,
+butuh beberapa menit):
 
 ```bash
-sudo su - runner -c 'cd /opt/demoofficeless && git checkout SHA && docker compose up -d --wait app'
+sudo su - runner -c 'cd /opt/demoofficeless && git checkout SHA && docker compose up -d --build --wait app'
 ```
 
 Fallback cepat: deploy menyimpan image per commit — daftar lalu tag balik ke
@@ -297,38 +320,42 @@ sudo su - runner -c 'cd /opt/demoofficeless && docker tag demoofficeless-app:git
 
 ### 6.1 Dry-run via /etc/hosts (tanpa menyentuh DNS)
 
-Dari komputer admin, arahkan kedua domain ke IP publik kantor dulu:
+`SB_DOMAIN` sudah resolve ke VPS sejak hari pertama, jadi cukup bypass
+`APP_DOMAIN` saja di komputer admin:
 
 ```bash
-sudo sh -c 'echo "IP-PUBLIK-KANTOR APP-DOMAIN SB-DOMAIN" >> /etc/hosts'
+sudo sh -c 'echo "IP-PUBLIK-KANTOR APP-DOMAIN" >> /etc/hosts'
 ```
 
-Ganti `IP-PUBLIK-KANTOR`, `APP-DOMAIN`, dan `SB-DOMAIN` dengan nilai sebenarnya
-(satu baris, dipisah spasi). Uji login dan buka PDF claim lama. Setelah yakin,
-hapus baris tersebut dari `/etc/hosts`.
+Ganti `IP-PUBLIK-KANTOR` dan `APP-DOMAIN` dengan nilai sebenarnya. Uji login
+dan buka PDF claim lama. Setelah yakin, hapus baris tersebut dari `/etc/hosts`.
 
 ### 6.2 Persiapan DNS
 
-H-1: turunkan TTL kedua A record (mis. ke 300 detik) agar perpindahan cepat
-terpropagasi.
+H-1: turunkan TTL A record `APP_DOMAIN` (mis. ke 300 detik) agar switch saat
+cutover cepat terpropagasi. (`SB_DOMAIN` tidak di-switch — sudah mengarah ke
+VPS sejak hari pertama.)
 
 ### 6.3 Cutover (jam di luar jam kerja)
 
 1. **Freeze** — hentikan penulisan data di versi cloud (pengguna berhenti
    memakai aplikasi; Vercel bisa dipause sementara).
 2. **Final dump + restore** — ulangi 2.1 dan 2.2 dengan dump terbaru.
-3. **Final storage sync** — ulangi 2.6 untuk objek yang berubah sejak copy
-   pertama (`x-upsert` membuat aman dijalankan ulang).
-4. **Switch DNS** — ubah kedua A record (`APP_DOMAIN` dan `SB_DOMAIN`) ke IP
-   publik kantor.
+3. **Switch DNS — hanya `APP_DOMAIN`** — ubah A record-nya ke IP publik
+   kantor. `SB_DOMAIN` tidak disentuh: sudah mengarah ke VPS sejak hari
+   pertama.
+4. **Final storage sync** — ulangi 2.6 untuk objek yang berubah sejak copy
+   pertama (`x-upsert` membuat aman dijalankan ulang). Aman dijalankan setelah
+   switch karena `TARGET_URL` mengenai VPS lewat `SB_DOMAIN`.
 5. **Pantau** — login, buat claim baru, cek `docker compose logs --tail=50 app`
    dan `caddy` selama beberapa jam pertama.
 
 ### 6.4 Masa rollback 7 hari
 
-Selama 7 hari setelah cutover, rollback = kembalikan kedua A record ke Vercel
-/ Supabase cloud. Catatan: data yang ditulis ke VPS setelah cutover tidak
-ikut kembali ke cloud — sinkronkan manual bila terpaksa rollback.
+Selama 7 hari setelah cutover, rollback = kembalikan A record `APP_DOMAIN` ke
+Vercel (deployment Vercel akan memakai Supabase cloud yang datanya beku sejak
+cutover). Catatan: data yang ditulis ke VPS setelah cutover tidak ada di
+cloud — sinkronkan manual bila terpaksa rollback.
 
 ### 6.5 Arsip akhir + decommission
 
@@ -366,6 +393,10 @@ docker compose logs --tail=50 app
 docker compose exec caddy caddy validate --config /etc/caddy/Caddyfile
 docker compose restart caddy
 ```
+
+Edit `deploy/Caddyfile` selalu di repo dan terapkan lewat git (push → deploy
+CI, atau `git pull` manual) — edit langsung di VPS akan hilang ditimpa
+`git reset --hard` dari deploy.sh pada deploy berikutnya.
 
 **Restore dari backup:**
 
