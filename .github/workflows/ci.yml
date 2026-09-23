@@ -25,6 +25,9 @@ jobs:
 
   deploy:
     needs: quality
+    concurrency:
+      group: deploy
+      cancel-in-progress: true
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: [self-hosted, vps]
     steps:

@@ -6,6 +6,11 @@ set -euo pipefail
 APP_DIR=/opt/demoofficeless
 cd "$APP_DIR"
 
+# .env milik compose; source agar skrip ini juga punya APP_DOMAIN dkk
+set -a
+. ./.env
+set +a
+
 SHA=${1:?Pakai: deploy.sh <git-sha>}
 TAG=git-${SHA:0:12}
 PREV_TAG=$(cat .deploy-current 2>/dev/null || echo "")
@@ -29,7 +34,7 @@ docker compose up -d --wait app
 
 # 5. Verify HTTP
 sleep 3
-if ! curl -fsS "$HEALTH_URL" > /dev/null; then
+if ! curl -fsS --max-time 15 "$HEALTH_URL" > /dev/null; then
   echo "!! Healthcheck gagal — rollback ke ${PREV_TAG:-tidak ada}"
   if [ -n "$PREV_TAG" ]; then
     git reset --hard "$(echo "$PREV_TAG" | sed 's/^git-//')"

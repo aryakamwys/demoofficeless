@@ -395,11 +395,14 @@ jobs:
 
   deploy:
     needs: quality
+    concurrency:
+      group: deploy
+      cancel-in-progress: true
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: [self-hosted, vps]
     steps:
       - name: Deploy ke VPS
-        run: /opt/demoofficeless/scripts/deploy.sh "$GITHUB_SHA"
+        run: bash /opt/demoofficeless/scripts/deploy.sh "$GITHUB_SHA"
 ```
 
 - [ ] **Step 2: Tulis `scripts/deploy.sh`**
@@ -413,6 +416,11 @@ set -euo pipefail
 APP_DIR=/opt/demoofficeless
 cd "$APP_DIR"
 
+# .env milik compose; source agar skrip ini juga punya APP_DOMAIN dkk
+set -a
+. ./.env
+set +a
+
 SHA=${1:?Pakai: deploy.sh <git-sha>}
 TAG=git-${SHA:0:12}
 PREV_TAG=$(cat .deploy-current 2>/dev/null || echo "")
@@ -425,7 +433,7 @@ git fetch --quiet origin
 git reset --hard "$SHA"
 
 # 2. Build image baru (tag = sha)
-docker compose build --build-arg BUILD_SHA="$TAG" app
+docker compose build app
 docker tag demoofficeless-app:latest "demoofficeless-app:$TAG"
 
 # 3. Pre-deploy backup (best-effort, tidak blok deploy bila gagal)
@@ -436,7 +444,7 @@ docker compose up -d --wait app
 
 # 5. Verify HTTP
 sleep 3
-if ! curl -fsS "$HEALTH_URL" > /dev/null; then
+if ! curl -fsS --max-time 15 "$HEALTH_URL" > /dev/null; then
   echo "!! Healthcheck gagal — rollback ke ${PREV_TAG:-tidak ada}"
   if [ -n "$PREV_TAG" ]; then
     git reset --hard "$(echo "$PREV_TAG" | sed 's/^git-//')"
