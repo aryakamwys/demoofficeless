@@ -272,7 +272,7 @@ git commit -m "feat(compose): self-host supabase stack (db/auth/rest/storage/red
 - [ ] **Step 2: Verifikasi sintaks lokal**
 
 Run: `docker run --rm -v "$(pwd)/deploy/Caddyfile:/etc/caddy/Caddyfile:ro" caddy:2-alpine caddy validate --config /etc/caddy/Caddyfile 2>&1 | tail -3`
-Expected: `Valid configuration` (env belum diset bisa memunculkan warning kosong `{$APP_DOMAIN}` — tetap valid).
+Expected: `Valid configuration`. Jalankan dengan env diset (mirror runtime compose): `docker run --rm -e APP_DOMAIN=d.example.com -e SB_DOMAIN=s.example.com -v "$(pwd)/deploy/Caddyfile:/etc/caddy/Caddyfile:ro" caddy:2-alpine caddy validate --config /etc/caddy/Caddyfile` — tanpa env, Caddy hard-error ("keyless server block"), bukan warning.
 
 - [ ] **Step 3: Commit**
 
