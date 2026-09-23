@@ -1,0 +1,30 @@
+# Reverse proxy utama — TLS Let's Encrypt otomatis, tidak perlu certbot.
+# Domain dibaca dari env APP_DOMAIN / SB_DOMAIN (lihat compose service caddy).
+
+{
+	email admin@perkom.co.id	# email akun ACME — ganti sesuai kantor
+}
+
+{$APP_DOMAIN} {
+	encode gzip
+	request_body {
+		max_size 25MB		# upload PDF klaim
+	}
+	reverse_proxy app:3000
+}
+
+{$SB_DOMAIN} {
+	request_body {
+		max_size 25MB
+	}
+	# handle_path meng-strip prefix yang cocok — service menerima path tanpa /xxx/v1
+	handle_path /auth/v1/* {
+		reverse_proxy auth:9999
+	}
+	handle_path /rest/v1/* {
+		reverse_proxy rest:3000
+	}
+	handle_path /storage/v1/* {
+		reverse_proxy storage:5000
+	}
+}
