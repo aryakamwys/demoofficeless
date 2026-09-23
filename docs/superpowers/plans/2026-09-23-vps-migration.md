@@ -13,7 +13,7 @@
 ## Global Constraints
 
 - Domain: `APP_DOMAIN` (mis. `app.perkom.co.id`) dan `SB_DOMAIN` (mis. `supabase.perkom.co.id`) — dipakai konsisten di semua file via env/placeholder.
-- Port yang di-publish ke host: HANYA bind `127.0.0.1` — app `3000`, auth `9999`, rest `5433`, storage `5434`. Postgres & Redis tidak di-publish.
+- Hanya container `caddy` yang publish port (80/443 ke 0.0.0.0). App, auth, rest, storage, Postgres, Redis: **tanpa port** — internal Docker saja, Caddy memanggil via nama service.
 - Tidak ada secret di repo; template env di `.env.vps.example`.
 - NEXT_PUBLIC_* di-bake saat build (sudah benar di Dockerfile — build args).
 - Deploy job HANYA pada `push` ke `main`; PR hanya menjalankan quality.
@@ -21,22 +21,20 @@
 
 ---
 
-### Task 1: Docker Compose stack lengkap (app + supabase self-host + redis)
+### Task 1: Docker Compose stack lengkap (app + supabase self-host + redis + caddy)
 
 **Files:**
 - Modify: `docker-compose.yml` (replace isi, service `app` dipertahankan)
 - Create: `.env.vps.example`
+- Create: `deploy/Caddyfile` (isi di Task 2 — mount sudah disiapkan di sini)
 
 **Interfaces:**
-- Produces: services `app`(:3000), `db`(internal), `auth`(:9999), `rest`(:5433), `storage`(:5434), `redis`(internal); volumes `db-data`, `storage-data`; network default. Env vars persis seperti `.env.vps.example`.
+- Produces: services `app`, `db`, `auth`, `rest`, `storage`, `redis`, `caddy` (satu-satunya yang publish 80/443); volumes `db-data`, `storage-data`, `caddy_data`. Env vars persis seperti `.env.vps.example`.
 
 - [ ] **Step 1: Tulis `docker-compose.yml` baru**
 
 ```yaml
 name: demoofficeless
-
-x-supabase-env: &supabase-env
-  POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
 
 services:
   app:
@@ -47,8 +45,6 @@ services:
         NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: ${ANON_KEY}
     image: demoofficeless-app:latest
     env_file: .env
-    ports:
-      - "127.0.0.1:3000:3000"
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/login').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
@@ -98,8 +94,6 @@ services:
       GOTRUE_JWT_EXP: 3600
       GOTRUE_MAILER_AUTOCONFIRM: "true"
       GOTRUE_DISABLE_SIGNUP: "false"
-    ports:
-      - "127.0.0.1:9999:9999"
     restart: unless-stopped
 
   rest:
@@ -115,8 +109,6 @@ services:
       PGRST_JWT_SECRET: ${JWT_SECRET}
       PGRST_DB_MAX_ROWS: "1000"
       PGRST_SERVER_PORT: "3000"
-    ports:
-      - "127.0.0.1:5433:3000"
     restart: unless-stopped
 
   storage:
@@ -141,8 +133,6 @@ services:
       IMGPROXY_URL: ""
     volumes:
       - storage-data:/var/lib/storage
-    ports:
-      - "127.0.0.1:5434:5000"
     restart: unless-stopped
 
   redis:
@@ -154,9 +144,30 @@ services:
       timeout: 5s
       retries: 3
 
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      APP_DOMAIN: ${APP_DOMAIN}
+      SB_DOMAIN: ${SB_DOMAIN}
+    volumes:
+      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - app
+      - auth
+      - rest
+      - storage
+
 volumes:
   db-data:
   storage-data:
+  caddy_data:
+  caddy_config:
 ```
 
 - [ ] **Step 2: Tulis `.env.vps.example`** (template lengkap server)
@@ -214,76 +225,60 @@ git commit -m "feat(compose): self-host supabase stack (db/auth/rest/storage/red
 
 ---
 
-### Task 2: Konfigurasi nginx untuk dua domain
+### Task 2: Caddyfile — reverse proxy dua domain + TLS otomatis
 
 **Files:**
-- Create: `deploy/nginx/app.conf`
-- Create: `deploy/nginx/supabase.conf`
+- Create: `deploy/Caddyfile`
 
 **Interfaces:**
-- Consumes: port host 3000 (app), 9999 (auth), 5433 (rest), 5434 (storage) dari Task 1.
-- Produces: routing `APP_DOMAIN` → app, `SB_DOMAIN/{auth,rest,storage}/v1/*` → service masing-masing.
+- Consumes: service `caddy` + env `APP_DOMAIN`/`SB_DOMAIN` dari Task 1; service internal `app:3000`, `auth:9999`, `rest:3000`, `storage:5000`.
+- Produces: `APP_DOMAIN` → app; `SB_DOMAIN/{auth,rest,storage}/v1/*` → service (prefix di-strip via `handle_path`); TLS Let's Encrypt otomatis.
 
-- [ ] **Step 1: Tulis `deploy/nginx/app.conf`**
+- [ ] **Step 1: Tulis `deploy/Caddyfile`**
 
-```nginx
-server {
-    listen 80;
-    server_name app.perkom.co.id;  # ganti sesuai APP_DOMAIN
+```caddyfile
+# Reverse proxy utama — TLS Let's Encrypt otomatis, tidak perlu certbot.
+# Domain dibaca dari env APP_DOMAIN / SB_DOMAIN (lihat compose service caddy).
 
-    client_max_body_size 25m;      # upload PDF klaim
+{
+	email admin@perkom.co.id	# email akun ACME — ganti sesuai kantor
+}
 
-    location / {
-        proxy_pass http://127.0.0.1:3000;
-        proxy_http_version 1.1;
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
-        proxy_set_header Upgrade $http_upgrade;
-        proxy_set_header Connection "upgrade";
-    }
+{$APP_DOMAIN} {
+	encode gzip
+	request_body {
+		max_size 25MB		# upload PDF klaim
+	}
+	reverse_proxy app:3000
+}
+
+{$SB_DOMAIN} {
+	request_body {
+		max_size 25MB
+	}
+	# handle_path meng-strip prefix yang cocok — service menerima path tanpa /xxx/v1
+	handle_path /auth/v1/* {
+		reverse_proxy auth:9999
+	}
+	handle_path /rest/v1/* {
+		reverse_proxy rest:3000
+	}
+	handle_path /storage/v1/* {
+		reverse_proxy storage:5000
+	}
 }
 ```
 
-- [ ] **Step 2: Tulis `deploy/nginx/supabase.conf`**
+- [ ] **Step 2: Verifikasi sintaks lokal**
 
-```nginx
-server {
-    listen 80;
-    server_name supabase.perkom.co.id;  # ganti sesuai SB_DOMAIN
+Run: `docker run --rm -v "$(pwd)/deploy/Caddyfile:/etc/caddy/Caddyfile:ro" caddy:2-alpine caddy validate --config /etc/caddy/Caddyfile 2>&1 | tail -3`
+Expected: `Valid configuration` (env belum diset bisa memunculkan warning kosong `{$APP_DOMAIN}` — tetap valid).
 
-    client_max_body_size 25m;
-
-    # gotrue — /auth/v1/* → /  (strip prefix)
-    location /auth/v1/ {
-        proxy_pass http://127.0.0.1:9999/;
-        proxy_set_header Host $host;
-        proxy_set_header X-Forwarded-Proto $scheme;
-    }
-    # postgrest — /rest/v1/* → /
-    location /rest/v1/ {
-        proxy_pass http://127.0.0.1:5433/;
-        proxy_set_header Host $host;
-        proxy_set_header X-Forwarded-Proto $scheme;
-    }
-    # storage-api — /storage/v1/* → /
-    location /storage/v1/ {
-        proxy_pass http://127.0.0.1:5434/;
-        proxy_set_header Host $host;
-        proxy_set_header X-Forwarded-Proto $scheme;
-        proxy_buffering off;          # upload/download file
-    }
-}
-```
-
-- [ ] **Step 3: Verifikasi** — tidak ada nginx di mesin dev; validasi dilakukan saat provisioning VPS (Task 7 Step `nginx -t`). Simpan.
-
-- [ ] **Step 4: Commit**
+- [ ] **Step 3: Commit**
 
 ```bash
-git add deploy/nginx/
-git commit -m "feat(nginx): site configs for app + supabase api subdomains"
+git add deploy/Caddyfile
+git commit -m "feat(caddy): reverse proxy + auto-TLS for app and supabase subdomains"
 ```
 
 ---
@@ -422,7 +417,7 @@ cd "$APP_DIR"
 SHA=${1:?Pakai: deploy.sh <git-sha>}
 TAG=git-${SHA:0:12}
 PREV_TAG=$(cat .deploy-current 2>/dev/null || echo "")
-HEALTH_URL=http://127.0.0.1:3000/login
+HEALTH_URL="https://${APP_DOMAIN:?APP_DOMAIN belum diset di .env}/login"
 
 echo "== Deploy $TAG (sebelumnya: ${PREV_TAG:-none}) =="
 
@@ -701,13 +696,11 @@ git commit -m "feat(migrate): key generator + storage copier; cache supports int
 - FortiGate: forward 80+443 → IP VPS. SELAIN ITU TIDAK ADA.
 
 ## 1. Provisioning (sekali)
-(perintah: apt update; apt install -y docker.io docker-compose-plugin nginx certbot python3-certbot-nginx ufw;
+(perintah: apt update; apt install -y docker.io docker-compose-plugin ufw;
  ufw allow 22,80,443; ufw enable;
  sed SSH: PasswordAuthentication no, PermitRootLogin no;
  deploy user + /opt/demoofficeless clone; cp .env.vps.example → .env, isi nilai, chmod 600;
- cp deploy/nginx/*.conf → /etc/nginx/sites-available/ + symlink; nginx -t;
- certbot --nginx -d app... -d supabase...;
- docker compose up -d)
+ docker compose up -d — Caddy otomatis urus TLS saat DNS sudah mengarah)
 
 ## 2. Migrasi data dari Supabase cloud
 (dump via docker run postgres:17-alpine pg_dump "connection-string-cloud" > dump.sql;
@@ -752,8 +745,8 @@ git commit -m "docs(ops): full VPS runbook — provisioning, migration, runner, 
 **Files:** tidak ada perubahan repo. Eksekusi DEPLOY.md §0–§3 di VPS.
 
 - [ ] Step 1: Install paket + UFW + SSH hardening (DEPLOY.md §1) — verify: `ufw status` hanya 22/80/443; `ssh -o PreferredAuthentications=password` ditolak.
-- [ ] Step 2: Clone repo ke `/opt/demoofficeless`, buat `.env`, `docker compose up -d` — verify: `docker compose ps` semua healthy.
-- [ ] Step 3: Pasang nginx conf + certbot TLS — verify: `nginx -t` OK; `curl -I https://APP_DOMAIN/login` → 200; `curl -I https://SB_DOMAIN/rest/v1/` → bukan 5xx nginx.
+- [ ] Step 2: Clone repo ke `/opt/demoofficeless`, buat `.env`, `docker compose up -d` — verify: `docker compose ps` semua healthy; log caddy menunjukkan sertifikat terbit.
+- [ ] Step 3: Verifikasi TLS & routing — verify: `curl -I https://APP_DOMAIN/login` → 200; `curl -I https://SB_DOMAIN/rest/v1/` → bukan 5xx (401 dari PostgREST = normal tanpa apikey).
 - [ ] Step 4: Install self-hosted runner label `vps` + grup docker — verify: runner "Idle" di GitHub Settings; test push commit kecil → job deploy muncul.
 
 ### Task 8: Migrasi data & verifikasi (di VPS)
