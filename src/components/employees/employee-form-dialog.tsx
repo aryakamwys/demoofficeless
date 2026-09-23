@@ -131,6 +131,10 @@ export function EmployeeFormDialog({
     }
   };
 
+  // RHF watch() memang tidak bisa dimemo — React Compiler skip memo komponen ini.
+  // eslint-disable-next-line react-hooks/incompatible-library
+  const roleValue = form.watch("role");
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-md max-h-[90vh] overflow-y-auto">
@@ -191,9 +195,9 @@ export function EmployeeFormDialog({
 
             <div className="space-y-2">
               <Label htmlFor="role">Role</Label>
-              <Select 
-                value={form.watch("role")} 
-                onValueChange={(val: any) => form.setValue("role", val)}
+              <Select
+                value={roleValue}
+                onValueChange={(val: string) => form.setValue("role", val as "EMPLOYEE" | "MANAGER" | "HR")}
               >
                 <SelectTrigger>
                   <SelectValue placeholder="Pilih role" />
@@ -266,6 +270,8 @@ export function EmployeeFormDialog({
             <div className="flex flex-col gap-2">
               {form.watch("signature") ? (
                 <div className="relative border rounded-md p-2 bg-slate-50 flex items-center justify-center">
+                  {/* Data URL base64 — next/image tidak mengoptimalkan data URL. */}
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img src={form.watch("signature") || ""} alt="Signature" className="h-20 object-contain mix-blend-multiply" />
                   <Button 
                     type="button"

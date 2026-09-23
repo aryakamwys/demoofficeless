@@ -12,7 +12,50 @@ import { cached } from "@/lib/cache";
 
 const BASE = "https://servicedesk.perkom.co.id/api/v1";
 
-async function api<T = any>(path: string): Promise<T> {
+/** Bentuk data InvGate yang dipakai — field tidak wajib ada semua. */
+interface InvEntity {
+  id?: string | number;
+  name?: string;
+  parent_id?: string | number;
+}
+
+interface InvUser {
+  id?: string | number;
+  first_name?: string;
+  last_name?: string;
+  lastname?: string;
+  name?: string;
+  email?: string;
+}
+
+interface MappedUser {
+  id?: string | number;
+  first_name: string;
+  last_name: string;
+  name: string;
+  email: string;
+}
+
+export interface InvTicket {
+  id: number;
+  category_id?: number;
+  assigned_group_id?: number;
+  assigned_id?: number;
+  requester_id?: number;
+  created_at?: string | number;
+  category_details?: { id: number; name: string };
+  assigned_group_details?: { id: number; name: string };
+  assigned_user?: MappedUser | null;
+  requester_user?: MappedUser | null;
+}
+
+interface StatusPage {
+  total?: number;
+  requestIds?: number[];
+  response?: { requestIds?: number[] };
+}
+
+async function api<T = unknown>(path: string): Promise<T> {
   const username = process.env.SERVICEDESK_USERNAME;
   const password = process.env.SERVICEDESK_PASSWORD;
   if (!username || !password) {
@@ -46,8 +89,9 @@ async function api<T = any>(path: string): Promise<T> {
 }
 
 /** Ambil payload list dari berbagai bentuk respons InvGate. */
-function unwrap(r: any): any[] {
-  const raw = r?.response ?? r?.data ?? r;
+function unwrap(r: unknown): unknown[] {
+  const w = r as { response?: unknown; data?: unknown } | null | undefined;
+  const raw = w?.response ?? w?.data ?? r;
   if (Array.isArray(raw)) return raw;
   if (raw && typeof raw === "object") return Object.values(raw);
   return [];
@@ -58,11 +102,11 @@ function unwrap(r: any): any[] {
 // sama; category_id maupun assigned_group_id pada incident bisa menunjuk salah
 // satunya. Disatukan jadi satu map, lalu nama level ditelusuri ke parent-nya.
 
-async function fetchEntityMap(): Promise<Record<string, any>> {
-  const map: Record<string, any> = {};
+async function fetchEntityMap(): Promise<Record<string | number, InvEntity>> {
+  const map: Record<string | number, InvEntity> = {};
   for (const path of ["/helpdesks", "/levels"]) {
     try {
-      const list = unwrap(await api(path));
+      const list = unwrap(await api(path)) as InvEntity[];
       for (const e of list) {
         if (e?.id != null && !map[e.id]) map[e.id] = e;
       }
@@ -78,10 +122,10 @@ export const getEntityMap = () =>
 
 /** Pure: nama entity dari map gabungan, level tanpa nama naik ke parent. */
 export function resolveEntityName(
-  map: Record<string, any>,
+  map: Record<string | number, InvEntity | undefined>,
   id: number | string
 ): string {
-  const item = map[id as any];
+  const item = map[id];
   if (!item) return "";
   if (item.name) return item.name;
   const parent = item.parent_id != null ? map[Number(item.parent_id)] : null;
@@ -91,10 +135,10 @@ export function resolveEntityName(
 // ---------------------------------------------------------------------------
 // Users
 
-async function fetchUsers(ids: number[]): Promise<Record<string, any>> {
+async function fetchUsers(ids: number[]): Promise<Record<string | number, InvUser>> {
   const query = ids.map((i) => `ids[]=${i}`).join("&");
-  const list = unwrap(await api(`/users?${query}`));
-  const out: Record<string, any> = {};
+  const list = unwrap(await api(`/users?${query}`)) as InvUser[];
+  const out: Record<string | number, InvUser> = {};
   for (const u of list) {
     if (u?.id != null) out[u.id] = u;
   }
@@ -109,7 +153,7 @@ export async function getUsers(ids: Array<number | string | null | undefined>) {
 }
 
 /** Pure: normalisasi field nama user InvGate (name/first_name/lastname variasi). */
-export function mapUser(u: any): Record<string, any> | null {
+export function mapUser(u: InvUser | null | undefined): MappedUser | null {
   if (!u) return null;
   const first_name = u.first_name ?? u.name ?? "";
   const last_name = u.last_name ?? u.lastname ?? "";
@@ -126,9 +170,13 @@ export function mapUser(u: any): Record<string, any> | null {
 // Decorate: tempel category_details, assigned_group_details, dan nama user
 // tanpa memutasi objek asli (hasil bisa jadi milik cache).
 
-function decorate(items: any[], entityMap: Record<string, any>, users: Record<string, any>) {
+function decorate(
+  items: InvTicket[],
+  entityMap: Record<string | number, InvEntity>,
+  users: Record<string | number, InvUser>
+) {
   return items.map((item) => {
-    const out: any = { ...item };
+    const out: InvTicket = { ...item };
     if (out.category_id != null) {
       const name = resolveEntityName(entityMap, out.category_id);
       if (name) out.category_details = { id: out.category_id, name };
@@ -147,22 +195,22 @@ function decorate(items: any[], entityMap: Record<string, any>, users: Record<st
   });
 }
 
-function userIdsOf(items: any[]): number[] {
+function userIdsOf(items: InvTicket[]): Array<number | undefined> {
   return items.flatMap((i) => [i.assigned_id, i.requester_id]);
 }
 
 // ---------------------------------------------------------------------------
 // Public: tiket tunggal & daftar tiket terbaru
 
-export async function getTicket(id: string): Promise<any | null> {
+export async function getTicket(id: string): Promise<InvTicket | null> {
   return cached(`envgate:ticket:${id}`, 300, async () => {
-    const result = await api(`/incidents?ids[]=${encodeURIComponent(id)}`);
-    const raw = result?.response ?? result?.data ?? result;
-    let inc: any = null;
+    const raw = await api(`/incidents?ids[]=${encodeURIComponent(id)}`);
+    let inc: InvTicket | null = null;
     if (Array.isArray(raw) && raw.length > 0) {
-      inc = raw[0];
+      inc = raw[0] as InvTicket;
     } else if (raw && typeof raw === "object") {
-      inc = raw[id] ?? Object.values(raw)[0] ?? null;
+      const obj = raw as Record<string, unknown>;
+      inc = (obj[id] ?? Object.values(obj)[0] ?? null) as InvTicket | null;
     }
     if (!inc) return null;
 
@@ -177,7 +225,7 @@ export async function getTicket(id: string): Promise<any | null> {
 export async function getRecentTickets(
   fromDateStr: string | null,
   toDateStr: string | null
-): Promise<any[]> {
+): Promise<InvTicket[]> {
   const key = `envgate:recent:${fromDateStr || ""}:${toDateStr || ""}`;
   return cached(key, 300, async () => {
     const statusQuery = [1, 2, 3, 4, 5, 6]
@@ -185,12 +233,12 @@ export async function getRecentTickets(
       .join("&");
 
     // Ambil total dulu supaya bisa offset ke item terbaru
-    const first = await api(`/incidents.by.status?${statusQuery}&limit=1`);
+    const first = await api<StatusPage>(`/incidents.by.status?${statusQuery}&limit=1`);
     const total = first.total || 0;
     const limit = fromDateStr || toDateStr ? 200 : 50;
     const offset = total > limit ? total - limit : 0;
 
-    const page = await api(
+    const page = await api<StatusPage>(
       `/incidents.by.status?${statusQuery}&limit=${limit}&offset=${offset}`
     );
     const ids = page.requestIds ?? page.response?.requestIds ?? [];
@@ -199,7 +247,7 @@ export async function getRecentTickets(
     const details = await api(
       `/incidents?${ids.map((i: number) => `ids[]=${i}`).join("&")}`
     );
-    let items = unwrap(details).sort((a: any, b: any) => b.id - a.id);
+    let items = (unwrap(details) as InvTicket[]).sort((a, b) => b.id - a.id);
 
     // Filter tanggal (created_at bisa unix detik/detik-ms/string tanggal)
     if (fromDateStr || toDateStr) {
@@ -207,7 +255,7 @@ export async function getRecentTickets(
         if (!item.created_at) return true;
         let d = new Date(item.created_at);
         if (/^\d+$/.test(String(item.created_at))) {
-          const num = parseInt(item.created_at, 10);
+          const num = parseInt(String(item.created_at), 10);
           d = new Date(num > 9999999999 ? num : num * 1000);
         }
         if (isNaN(d.getTime())) return true;

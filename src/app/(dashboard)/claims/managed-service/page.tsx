@@ -6,13 +6,14 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Loader2, Download, FileText } from "lucide-react";
 import { toast } from "sonner";
 import dayjs from "dayjs";
+import type { ManagedServiceClaim } from "@/types";
 
 export default function ManagedServiceClaimsHRPage() {
-  const [data, setData] = useState<any[]>([]);
+  const [data, setData] = useState<ManagedServiceClaim[]>([]);
+  // loading sudah true dari awal; refetch biarkan tabel lama tampil (tanpa spinner)
   const [loading, setLoading] = useState(true);
 
   const fetchClaims = async () => {
-    setLoading(true);
     try {
       const response = await fetch("/api/claims/managed-service");
       const result = await response.json();
@@ -21,7 +22,7 @@ export default function ManagedServiceClaimsHRPage() {
       } else {
         toast.error(result.error || "Gagal memuat data klaim");
       }
-    } catch (error) {
+    } catch {
       toast.error("Terjadi kesalahan saat memuat data");
     } finally {
       setLoading(false);
@@ -29,6 +30,8 @@ export default function ManagedServiceClaimsHRPage() {
   };
 
   useEffect(() => {
+    // Fetch-on-mount memang butuh setState di dalam effect (arsitektur client-side fetching).
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     fetchClaims();
   }, []);
 
@@ -46,7 +49,7 @@ export default function ManagedServiceClaimsHRPage() {
       } else {
         toast.error(result.error || "Gagal menggabungkan klaim");
       }
-    } catch (e) {
+    } catch {
       toast.error("Terjadi kesalahan saat menghubungi server");
     }
   };
@@ -142,7 +145,7 @@ export default function ManagedServiceClaimsHRPage() {
                               variant="outline" 
                               size="sm" 
                               className="h-7 text-xs bg-white hover:bg-slate-50 border-slate-300"
-                              onClick={() => handleMerge(item.id, item.grab_match.id)}
+                              onClick={() => item.grab_match && handleMerge(item.id, item.grab_match.id)}
                             >
                               Merge
                             </Button>

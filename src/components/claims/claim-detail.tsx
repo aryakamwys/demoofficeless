@@ -38,7 +38,14 @@ export function ClaimDetailView({ claim }: ClaimDetailViewProps) {
     setApproving(true);
     const roleToUse = overrideRole || sigRole;
     try {
-      const payload: any = {
+      const payload: {
+        status: string;
+        approved_at: string;
+        manager_status?: string;
+        manager_signature?: string;
+        hr_status?: string;
+        hr_signature?: string;
+      } = {
         status: "APPROVED",
         approved_at: new Date().toISOString()
       };
@@ -91,7 +98,7 @@ export function ClaimDetailView({ claim }: ClaimDetailViewProps) {
       } else {
         toast.error(result.error || `Gagal resend ke ${target}`);
       }
-    } catch (e) {
+    } catch {
       toast.error("Terjadi kesalahan sistem.");
     } finally {
       setSendingWA(false);
@@ -256,11 +263,11 @@ export function ClaimDetailView({ claim }: ClaimDetailViewProps) {
           <CardContent className="space-y-3 pt-4 print:pt-2 print:space-y-1">
             <div className="flex items-center justify-between py-1 print:py-0">
               <span className="text-sm text-slate-500 print:text-xs">Manager</span>
-              <StatusBadge status={claim.manager_status as any} />
+              <StatusBadge status={claim.manager_status as string} />
             </div>
             <div className="flex items-center justify-between py-1 print:py-0">
               <span className="text-sm text-slate-500 print:text-xs">HR</span>
-              <StatusBadge status={claim.hr_status as any} />
+              <StatusBadge status={claim.hr_status as string} />
             </div>
             {claim.manager_status === 'APPROVED' && (
               <InfoRow label="Manager Apprv Date" value={dayjs(claim.updated_at).format("DD MMM YYYY")} />
@@ -500,6 +507,8 @@ export function ClaimDetailView({ claim }: ClaimDetailViewProps) {
             <p className="font-semibold text-sm">Disetujui Oleh (Karyawan),</p>
             <div className="h-16 flex items-end justify-center">
               {claim.employee_signature && claim.approved_at ? (
+                // Data URL base64 — next/image tidak mengoptimalkan data URL.
+                // eslint-disable-next-line @next/next/no-img-element
                 <img src={claim.employee_signature} alt="Employee Signature" className="max-h-16 object-contain mix-blend-multiply" />
               ) : (
                 <div className="h-16" />
@@ -517,6 +526,7 @@ export function ClaimDetailView({ claim }: ClaimDetailViewProps) {
             <p className="font-semibold text-sm">Disetujui Oleh (Manager),</p>
             <div className="h-16 flex items-end justify-center">
               {claim.manager_signature && claim.manager_status === 'APPROVED' ? (
+                // eslint-disable-next-line @next/next/no-img-element
                 <img src={claim.manager_signature} alt="Manager Signature" className="max-h-16 object-contain mix-blend-multiply" />
               ) : (
                 <div className="h-16" />
@@ -534,6 +544,7 @@ export function ClaimDetailView({ claim }: ClaimDetailViewProps) {
             <p className="font-semibold text-sm">Disetujui Oleh (HR),</p>
             <div className="h-16 flex items-end justify-center">
               {claim.hr_signature && claim.hr_status === 'APPROVED' ? (
+                // eslint-disable-next-line @next/next/no-img-element
                 <img src={claim.hr_signature} alt="HR Signature" className="max-h-16 object-contain mix-blend-multiply" />
               ) : (
                 <div className="h-16" />

@@ -36,21 +36,21 @@ export async function GET(request: NextRequest) {
         const { data, error } = await query;
         if (error) throw new Error(error.message);
 
-        let signaturesMap: Record<string, string> = {};
+        const signaturesMap: Record<string, string> = {};
 
         // Try fetching signatures safely, so it doesn't break if the table doesn't exist yet
         try {
           const { data: sigData, error: sigError } = await supabase.from("signatures").select("employee_id, signature");
           if (!sigError && sigData) {
-            sigData.forEach((s: any) => {
+            sigData.forEach((s: { employee_id: string; signature: string }) => {
               signaturesMap[s.employee_id] = s.signature;
             });
           }
-        } catch (e) {
+        } catch {
           // Ignore error if table doesn't exist
         }
 
-        return (data || []).map((emp: any) => ({
+        return (data || []).map((emp: { id: string }) => ({
           ...emp,
           signature: signaturesMap[emp.id] || null,
         }));

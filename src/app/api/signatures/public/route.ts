@@ -57,7 +57,6 @@ export async function POST(request: NextRequest) {
     }
 
     // Jika belum ada, buat employee baru
-    let employeeId: string;
     const generatedEmpNumber = `EMP-${Math.floor(Date.now() / 1000)}`; // Generate random NIP
     
     const { data: newEmp, error: insertError } = await supabase
@@ -79,7 +78,7 @@ export async function POST(request: NextRequest) {
         { status: 500 }
       );
     }
-    employeeId = newEmp.id;
+    const employeeId = newEmp.id;
 
     // 2. Upsert signature
     const { error: sigError } = await supabase.from("signatures").upsert(

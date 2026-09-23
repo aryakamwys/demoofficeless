@@ -59,6 +59,8 @@ export function SendWADialog({
 
   useEffect(() => {
     if (open && claim) {
+      // Reset pilihan setiap dialog dibuka — setState di effect memang disengaja.
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setSelectedManagerId(claim.employee?.manager_id || "none");
       setSelectedHrId(claim.employee?.hr_id || "none");
     }
@@ -95,7 +97,7 @@ export function SendWADialog({
       } else {
         toast.error(result.error || "Gagal mengirim WhatsApp");
       }
-    } catch (e) {
+    } catch {
       toast.error("Terjadi kesalahan sistem.");
     } finally {
       setLoading(false);

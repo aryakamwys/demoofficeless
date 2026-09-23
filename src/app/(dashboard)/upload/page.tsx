@@ -46,6 +46,8 @@ export default function UploadPage() {
   }, []);
 
   useEffect(() => {
+    // Fetch-on-mount memang butuh setState di dalam effect (arsitektur client-side fetching).
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     fetchUploads();
   }, [fetchUploads]);
 

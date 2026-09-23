@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServerClient } from "@/lib/supabase-server";
+import { errorMessage } from "@/lib/utils";
 
 export async function POST(request: NextRequest) {
   try {
@@ -61,10 +62,10 @@ export async function POST(request: NextRequest) {
     }
 
     return NextResponse.json({ success: true, message: "Successfully merged claims" });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error("Merge error:", error);
     return NextResponse.json(
-      { success: false, error: error.message || "Internal server error" },
+      { success: false, error: errorMessage(error, "Internal server error") },
       { status: 500 }
     );
   }

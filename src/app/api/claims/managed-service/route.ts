@@ -17,7 +17,7 @@ export async function GET() {
   }
 
   // Fetch pending Grab claims
-  const { data: grabClaims, error: grabError } = await supabase
+  const { data: grabClaims } = await supabase
     .from("claims")
     .select(`
       id,
@@ -34,7 +34,9 @@ export async function GET() {
     if (grabClaims && mClaim.customer_name) {
       const match = grabClaims.find(
         (gc) => {
-          const empName = Array.isArray(gc.employee) ? gc.employee[0]?.name : (gc.employee as any)?.name;
+          // Join Supabase bisa balikin object atau array — terima keduanya.
+          const emp = gc.employee as { name?: string } | { name?: string }[] | null;
+          const empName = Array.isArray(emp) ? emp[0]?.name : emp?.name;
           return empName && empName.toLowerCase() === mClaim.customer_name?.toLowerCase();
         }
       );
@@ -53,7 +55,7 @@ export async function GET() {
 
 export async function POST(request: NextRequest) {
   const supabase = await createServerClient();
-  const { data: { user }, error: authError } = await supabase.auth.getUser();
+  await supabase.auth.getUser();
 
   // If no user is found, we can still allow for now or return 401 if strict
   // if (authError || !user) {

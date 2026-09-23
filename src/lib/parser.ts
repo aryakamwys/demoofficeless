@@ -72,7 +72,7 @@ export function parseGrabCSV(csvText: string): ParsedTrip[] {
  * Since the PDF may be image-based, this uses pdf-parse for text-based PDFs.
  * For image-based PDFs, the admin should convert to CSV first.
  */
-export async function parseGrabPDF(buffer: Buffer, employees: any[] = []): Promise<ParsedTrip[]> {
+export async function parseGrabPDF(buffer: Buffer, employees: Array<{ employee_name: string }> = []): Promise<ParsedTrip[]> {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const pdfParseModule = await import("pdf-parse-new") as any;
   const pdfParse = pdfParseModule.default || pdfParseModule;
@@ -126,7 +126,7 @@ export async function parseGrabPDF(buffer: Buffer, employees: any[] = []): Promi
 
     // Find fare (forwards) up to the next booking ID or end
     const nextIndex = i + 1 < matches.length ? matches[i + 1].index : normalizedText.length;
-    let textAfter = normalizedText.substring(match.index + match[0].length, nextIndex);
+    const textAfter = normalizedText.substring(match.index + match[0].length, nextIndex);
 
     // Cut off at the next date to avoid matching next trip's dates as fares
     const trailingDateMatch = textAfter.match(/\d{2}\s+[A-Za-z]+\s+\d{4}/);
@@ -171,7 +171,7 @@ export async function parseGrabPDF(buffer: Buffer, employees: any[] = []): Promi
       
       if (pickupStartMatch) {
          cost_code = cleanedAfter.substring(0, pickupStartMatch.index).trim();
-         let addresses = cleanedAfter.substring(pickupStartMatch.index).trim();
+         const addresses = cleanedAfter.substring(pickupStartMatch.index).trim();
          
          const secondJl = addresses.substring(10).match(/(Jl\.|Jalan|Cluster|Kawasan|Ruko|Perumahan|Mid Plaza|Jatiluhur|CBD|Podomoro|Stasiun|Soekarno-Hatta|Terminal|Alfamidi|South Quarter|De Lovina|Jasmine Garden)/i);
          if (secondJl) {

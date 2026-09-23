@@ -82,8 +82,8 @@ export default function SignaturesPublicPage() {
       }
 
       setSuccess(true);
-    } catch (err: any) {
-      setErrorMessage(err.message || "Terjadi kesalahan sistem.");
+    } catch (err: unknown) {
+      setErrorMessage(err instanceof Error ? err.message : "Terjadi kesalahan sistem.");
     } finally {
       setIsSaving(false);
     }

@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { getTicket } from "@/lib/envgate";
+import { errorMessage } from "@/lib/utils";
 
 export async function GET(
   request: Request,
@@ -17,10 +18,10 @@ export async function GET(
     }
 
     return NextResponse.json({ success: true, data });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error("Service Desk API Error:", error);
     return NextResponse.json(
-      { success: false, error: error.message || "Failed to fetch data from API" },
+      { success: false, error: errorMessage(error, "Failed to fetch data from API") },
       { status: 502 }
     );
   }

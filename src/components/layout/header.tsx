@@ -52,12 +52,7 @@ function getPageTitle(pathname: string): string {
   return pageTitles[pathname] || "Perkom";
 }
 
-interface HeaderProps {
-  collapsed: boolean;
-  onToggle: () => void;
-}
-
-export function Header({ collapsed, onToggle }: HeaderProps) {
+export function Header() {
   const pathname = usePathname();
   const title = getPageTitle(pathname);
   const [tripsOpen, setTripsOpen] = useState(true);

@@ -101,10 +101,27 @@ export interface ClaimWithEmployee extends Claim {
   employee: Employee | null;
 }
 
+// ------- External Data -------
+
+/** Baris tabel managed_service_claims (tiket Service Desk yang diklaim). */
+export interface ManagedServiceClaim {
+  id: string;
+  ticket_id: string;
+  ticket_title?: string;
+  customer_name?: string;
+  location?: string;
+  amount: number | string;
+  file_url: string;
+  status: string;
+  created_at: string;
+  /** Ditempel API managed-service: klaim Grab yang cocok dengan customer_name. */
+  grab_match?: { id: string; total_amount: number | string } | null;
+}
+
 export interface ClaimDetail extends ClaimWithEmployee {
   trips: Trip[];
   comments: Comment[];
-  ticket?: any;
+  ticket?: ManagedServiceClaim | null;
   manager_signature?: string | null;
   hr_signature?: string | null;
   employee_signature?: string | null;

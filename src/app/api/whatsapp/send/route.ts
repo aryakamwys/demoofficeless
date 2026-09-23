@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServerClient } from "@/lib/supabase-server";
 import { sendTextMessage, buildClaimMessage, buildManagerApprovalMessage, buildHrApprovalMessage } from "@/lib/whatsapp";
+import { errorMessage } from "@/lib/utils";
 
 // Retry rate-limit bisa total ~17 detik — kasih ruang di serverless.
 export const maxDuration = 60;
@@ -120,10 +121,10 @@ export async function POST(request: NextRequest) {
   }
 
     return NextResponse.json({ success: true });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error("Unhandled error in /api/whatsapp/send:", error);
     return NextResponse.json(
-      { success: false, error: error.message || "Internal Server Error" },
+      { success: false, error: errorMessage(error, "Internal Server Error") },
       { status: 500 }
     );
   }

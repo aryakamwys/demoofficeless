@@ -19,12 +19,10 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { StatusBadge } from "@/components/claims/status-badge";
 import {
   Search,
-  Eye,
   Send,
   Download,
   Loader2,
 } from "lucide-react";
-import { toast } from "sonner";
 
 export default function ClaimsPage() {
   const [claims, setClaims] = useState<ClaimWithEmployee[]>([]);
@@ -65,10 +63,13 @@ export default function ClaimsPage() {
   }, []);
 
   useEffect(() => {
+    // Fetch-on-mount memang butuh setState di dalam effect (arsitektur client-side fetching).
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     fetchClaims();
   }, [fetchClaims]);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     fetchPeriods();
   }, [fetchPeriods]);
 
@@ -202,10 +203,10 @@ export default function ClaimsPage() {
                         IDR {claim.total_amount.toLocaleString("id-ID")}
                       </td>
                       <td className="px-4 py-4 align-middle">
-                        <StatusBadge status={claim.manager_status as any} />
+                        <StatusBadge status={claim.manager_status as string} />
                       </td>
                       <td className="px-4 py-4 align-middle">
-                        <StatusBadge status={claim.hr_status as any} />
+                        <StatusBadge status={claim.hr_status as string} />
                       </td>
                       <td className="px-4 py-4 align-middle">
                         <StatusBadge status={claim.status} />

@@ -113,7 +113,12 @@ export async function PATCH(
       .single();
 
     if (claimInfo) {
-      const employee = claimInfo.employee as any;
+      // Join Supabase bisa balikin object atau array — terima keduanya.
+      const emp = claimInfo.employee as
+        | { manager_id?: string | null; hr_id?: string | null }
+        | { manager_id?: string | null; hr_id?: string | null }[]
+        | null;
+      const employee = Array.isArray(emp) ? emp[0] : emp;
       const managerIdToUse = claimInfo.manager_id || employee?.manager_id;
       const hrIdToUse = claimInfo.hr_id || employee?.hr_id;
 
