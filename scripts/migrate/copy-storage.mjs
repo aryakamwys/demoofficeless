@@ -12,13 +12,21 @@ const cloud = { base: env("CLOUD_URL"), key: env("CLOUD_SERVICE_KEY") };
 const target = { base: env("TARGET_URL"), key: env("TARGET_SERVICE_KEY") };
 
 async function listPrefix(prefix = "") {
-  const res = await fetch(`${cloud.base}/storage/v1/object/list/${BUCKET}`, {
-    method: "POST",
-    headers: { apikey: cloud.key, Authorization: `Bearer ${cloud.key}`, "Content-Type": "application/json" },
-    body: JSON.stringify({ prefix, limit: 100, offset: 0, sortBy: { column: "name", order: "asc" } }),
-  });
-  if (!res.ok) throw new Error(`list gagal (${res.status}): ${await res.text()}`);
-  return res.json();
+  const items = [];
+  let offset = 0;
+  for (;;) {
+    const res = await fetch(`${cloud.base}/storage/v1/object/list/${BUCKET}`, {
+      method: "POST",
+      headers: { apikey: cloud.key, Authorization: `Bearer ${cloud.key}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ prefix, limit: 100, offset, sortBy: { column: "name", order: "asc" } }),
+    });
+    if (!res.ok) throw new Error(`list gagal (${res.status}): ${await res.text()}`);
+    const batch = await res.json();
+    items.push(...batch);
+    if (batch.length < 100) break;
+    offset += 100;
+  }
+  return items;
 }
 
 async function walk(prefix, files) {
