@@ -2,11 +2,11 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Pindahkan seluruh stack (app + Supabase self-host + Redis + CI/CD + backup harian) ke VPS Debian kantor, dengan nginx sebagai reverse proxy domain, tanpa mengubah kode aplikasi.
+**Goal:** Pindahkan seluruh stack (app + Supabase self-host + Redis + CI/CD + backup harian) ke VPS Debian kantor, dengan Caddy sebagai reverse proxy domain, tanpa mengubah kode aplikasi.
 
-**Architecture:** App Next.js standalone + Supabase self-host (db/auth/rest/storage, TANPA gateway envoy/kong — nginx host routing langsung) + Redis + self-hosted GitHub Actions runner, semuanya Docker. FortiGate hanya forward 80/443; SSH via FortiVPN saja.
+**Architecture:** App Next.js standalone + Supabase self-host (db/auth/rest/storage, TANPA gateway envoy/kong — Caddy routing langsung ke service) + Redis + self-hosted GitHub Actions runner, semuanya Docker. FortiGate hanya forward 80/443; SSH via FortiVPN saja.
 
-**Tech Stack:** Docker Compose, supabase/postgres:17.6.1.136, supabase/gotrue:v2.196.0, postgrest/postgrest:v14.17, supabase/storage-api:v1.74.0, nginx + certbot (host), GitHub Actions.
+**Tech Stack:** Docker Compose, supabase/postgres:17.6.1.136, supabase/gotrue:v2.196.0, postgrest/postgrest:v14.17, supabase/storage-api:v1.74.0, caddy:2 (TLS otomatis), GitHub Actions.
 
 **Spec:** `docs/superpowers/specs/2026-09-23-vps-migration-design.md`
 
@@ -684,7 +684,7 @@ git commit -m "feat(migrate): key generator + storage copier; cache supports int
 
 **Interfaces:**
 - Consumes: semua artefak Task 1–5.
-- Produces: instruksi operasional satu halaman: provisioning → DNS → nginx+TLS → runner → restore data → cutover → rollback → operasional harian.
+- Produces: instruksi operasional satu halaman: provisioning → DNS → Caddy+TLS → runner → restore data → cutover → rollback → operasional harian.
 
 - [ ] **Step 1: Tulis `DEPLOY.md` baru** — kerangka isi WAJIB (lengkapi dengan teks utuh saat implementasi, jangan placeholder):
 
@@ -726,7 +726,7 @@ git commit -m "feat(migrate): key generator + storage copier; cache supports int
  setelah ekspor arsip final)
 
 ## 7. Troubleshooting cepat
-(docker compose ps / logs --tail=50 svc; restore.sh; certbot renew --dry-run)
+(docker compose ps / logs --tail=50 svc; restore.sh; docker compose exec caddy caddy validate --config /etc/caddy/Caddyfile)
 ```
 
 Tulis semua bagian dengan perintah lengkap siap salin — tanpa `(命令...)` ringkas di atas (itu kerangka untuk penulis plan, bukan isi akhir).
