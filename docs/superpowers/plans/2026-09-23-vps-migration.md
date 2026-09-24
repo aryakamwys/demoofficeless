@@ -46,6 +46,9 @@ services:
     image: demoofficeless-app:latest
     env_file: .env
     restart: unless-stopped
+    # loopback saja — untuk healthcheck deploy.sh & ssh tunnel; publik tetap lewat caddy
+    ports:
+      - "127.0.0.1:3000:3000"
     healthcheck:
       test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/login').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
       interval: 30s
@@ -424,7 +427,7 @@ set +a
 SHA=${1:?Pakai: deploy.sh <git-sha>}
 TAG=git-${SHA:0:12}
 PREV_TAG=$(cat .deploy-current 2>/dev/null || echo "")
-HEALTH_URL="https://${APP_DOMAIN:?APP_DOMAIN belum diset di .env}/login"
+HEALTH_URL="http://127.0.0.1:3000/login"
 
 echo "== Deploy $TAG (sebelumnya: ${PREV_TAG:-none}) =="
 

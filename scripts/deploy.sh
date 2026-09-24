@@ -18,7 +18,7 @@ set +a
 SHA=${1:?Pakai: deploy.sh <git-sha>}
 TAG=git-${SHA:0:12}
 PREV_TAG=$(cat .deploy-current 2>/dev/null || echo "")
-HEALTH_URL="https://${APP_DOMAIN:?APP_DOMAIN belum diset di .env}/login"
+HEALTH_URL="http://127.0.0.1:3000/login"
 
 echo "== Deploy $TAG (sebelumnya: ${PREV_TAG:-none}) =="
 
@@ -42,12 +42,11 @@ if ! docker compose up -d --wait app; then
   echo "!! Container app tidak healthy"
 fi
 
-# 5. Verify HTTP. --resolve memaksa koneksi ke Caddy lokal walau DNS
-#    APP_DOMAIN masih mengarah ke Vercel (pra-cutover) — SNI tetap benar,
-#    jadi cek valid sebelum maupun sesudah cutover.
+# 5. Verify HTTP — loopback publish (127.0.0.1:3000, compose): tanpa
+#    dependensi DNS/sertifikat, jadi valid pra- maupun pasca-cutover.
 if $deploy_ok; then
   sleep 3
-  curl -fsS --max-time 15 --resolve "$APP_DOMAIN:443:127.0.0.1" "$HEALTH_URL" > /dev/null || deploy_ok=false
+  curl -fsS --max-time 15 "$HEALTH_URL" > /dev/null || deploy_ok=false
 fi
 
 if ! $deploy_ok; then

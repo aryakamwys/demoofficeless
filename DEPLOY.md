@@ -296,8 +296,8 @@ Setiap push ke `main` memicu job deploy di runner `vps`, yang menjalankan
 2. `docker compose build app`, lalu tag image menjadi `demoofficeless-app:git-<sha12>`
 3. Backup best-effort (`./scripts/backup.sh`)
 4. `docker compose up -d --wait app`, lalu healthcheck
-   `curl -fsS --max-time 15 --resolve "$APP_DOMAIN:443:127.0.0.1" https://$APP_DOMAIN/login`
-   (`--resolve` memaksa ke Caddy lokal — valid walau DNS masih ke Vercel)
+   `curl -fsS --max-time 15 http://127.0.0.1:3000/login`
+   (loopback publish milik service `app` — tanpa dependensi DNS/sertifikat)
 5. Bila container/healthcheck gagal → rollback otomatis: image
    `git-<sha12>` sebelumnya di-tag balik ke `latest` lalu di-force-recreate
    (tanpa rebuild)
@@ -357,7 +357,8 @@ ssh -L 3000:127.0.0.1:3000 user@vps
 ```
 
 Lalu buka `http://localhost:3000/login` di komputer admin — bekerja karena
-`app` mendengar di port 3000 secara internal. Batasi ekspektasi: tanpa domain
+compose mem-publish `app` ke `127.0.0.1:3000` di host (loopback saja, tidak
+terjangkau dari luar). Batasi ekspektasi: tanpa domain
 asli, cookie/login bisa terganggu — perlakukan ini sebagai smoke check
 (halaman login merespons), bukan uji penuh. PDF claim lama sudah bisa diuji
 penuh via `SB_DOMAIN` sejak provisioning (bagian 2.7).
