@@ -14,7 +14,7 @@ Stack: satu VPS menjalankan `docker compose` dengan service `app` (Next.js),
 
 - VPS Debian 12+, akses SSH **hanya lewat FortiVPN**.
 - FortiGate mem-forward **hanya port 80 dan 443** ke IP VPS — selain itu tidak ada.
-- DNS: dua A record ke IP publik kantor, dengan pembagian yang disengaja:
+- DNS: dua A record, dengan pembagian yang disengaja:
   - `SB_DOMAIN` → IP publik kantor **sejak hari pertama** (sejak provisioning,
     sebelum migrasi selesai). Ini disengaja: project Supabase cloud saat ini
     tidak melayani custom domain tersebut, jadi mengarahkannya lebih awal
@@ -132,7 +132,10 @@ string **session pooler** (Supabase dashboard → Connect). Dump berisi schema
 Ketik `YA` saat konfirmasi. Skrip menjalankan
 `gunzip -c "$FILE" | docker compose exec -T db psql -v ON_ERROR_STOP=1 -U postgres -d postgres`,
 sehingga error pertama langsung menghentikan restore — tidak ada objek yang
-terlewat diam-diam.
+terlewat diam-diam. Bila restore berhenti dengan error role tidak ada (mis.
+`supabase_read_only_user`), buat role-nya dulu —
+`CREATE ROLE "<nama>";` di psql — lalu jalankan ulang restore (aman karena
+dump memakai `--clean --if-exists`).
 
 ### 2.3 Generate ANON_KEY & SERVICE_ROLE_KEY
 
@@ -239,6 +242,22 @@ sudo ./svc.sh install && sudo ./svc.sh start
 
 Cek status runner berlabel `vps` muncul Idle di halaman Runners GitHub.
 
+### 3.3 Proteksi runner (wajib — repo ini publik)
+
+Guard `if: push main` hidup di file workflow yang sama yang bisa dimodifikasi
+oleh PR dari fork — tanpa proteksi tambahan, PR jahat bisa menjadwalkan shell
+arbitrary di runner VPS. Job deploy memakai `environment: production`; sekali
+saja, aktifkan proteksinya di GitHub:
+
+1. **Settings → Environments → New environment** → nama `production` →
+   aktifkan **Required reviewers** dan tambahkan owner/admin repo.
+2. **Settings → Actions → General** → aktifkan
+   **Require approval for all external contributors**.
+
+Dengan environment protection, **setiap** deploy menunggu persetujuan satu
+klik di GitHub dulu — disengaja untuk repo ini: runner berjalan di jaringan
+kantor, jadi setiap eksekusi di sana harus melewati reviewer.
+
 ## 4. Backup harian (cron)
 
 `scripts/backup.sh` (dijalankan dari repo root) membuat:
@@ -277,9 +296,16 @@ Setiap push ke `main` memicu job deploy di runner `vps`, yang menjalankan
 2. `docker compose build app`, lalu tag image menjadi `demoofficeless-app:git-<sha12>`
 3. Backup best-effort (`./scripts/backup.sh`)
 4. `docker compose up -d --wait app`, lalu healthcheck
-   `curl -fsS --max-time 15 https://$APP_DOMAIN/login`
-5. Bila healthcheck gagal → rollback otomatis ke image sebelumnya
+   `curl -fsS --max-time 15 --resolve "$APP_DOMAIN:443:127.0.0.1" https://$APP_DOMAIN/login`
+   (`--resolve` memaksa ke Caddy lokal — valid walau DNS masih ke Vercel)
+5. Bila container/healthcheck gagal → rollback otomatis: image
+   `git-<sha12>` sebelumnya di-tag balik ke `latest` lalu di-force-recreate
+   (tanpa rebuild)
 6. Menulis versi ke `.deploy-current` dan memangkas image lama (sisakan 5)
+
+Catatan: deploy.sh hanya menaikkan service `app` — perubahan pada
+`deploy/Caddyfile` tambahan memerlukan `docker compose restart caddy` manual
+di VPS setelah deploy (lihat bagian 7).
 
 Cek versi yang berjalan:
 
@@ -318,17 +344,23 @@ sudo su - runner -c 'cd /opt/demoofficeless && docker tag demoofficeless-app:git
 
 ## 6. Cutover dari Vercel / Supabase cloud
 
-### 6.1 Dry-run via /etc/hosts (tanpa menyentuh DNS)
+### 6.1 Dry-run via SSH tunnel (tanpa menyentuh DNS)
 
-`SB_DOMAIN` sudah resolve ke VPS sejak hari pertama, jadi cukup bypass
-`APP_DOMAIN` saja di komputer admin:
+Bypass `/etc/hosts` untuk `APP_DOMAIN` **tidak bisa dipakai pra-cutover**:
+selama DNS domain itu masih mengarah ke Vercel, challenge ACME untuknya
+mendarat di Vercel, jadi VPS tidak pernah punya sertifikat domain tersebut dan
+browser menolak koneksi HTTPS ke IP kantor. Gunakan SSH tunnel ke port
+internal aplikasi:
 
 ```bash
-sudo sh -c 'echo "IP-PUBLIK-KANTOR APP-DOMAIN" >> /etc/hosts'
+ssh -L 3000:127.0.0.1:3000 user@vps
 ```
 
-Ganti `IP-PUBLIK-KANTOR` dan `APP-DOMAIN` dengan nilai sebenarnya. Uji login
-dan buka PDF claim lama. Setelah yakin, hapus baris tersebut dari `/etc/hosts`.
+Lalu buka `http://localhost:3000/login` di komputer admin — bekerja karena
+`app` mendengar di port 3000 secara internal. Batasi ekspektasi: tanpa domain
+asli, cookie/login bisa terganggu — perlakukan ini sebagai smoke check
+(halaman login merespons), bukan uji penuh. PDF claim lama sudah bisa diuji
+penuh via `SB_DOMAIN` sejak provisioning (bagian 2.7).
 
 ### 6.2 Persiapan DNS
 
@@ -342,8 +374,11 @@ VPS sejak hari pertama.)
    memakai aplikasi; Vercel bisa dipause sementara).
 2. **Final dump + restore** — ulangi 2.1 dan 2.2 dengan dump terbaru.
 3. **Switch DNS — hanya `APP_DOMAIN`** — ubah A record-nya ke IP publik
-   kantor. `SB_DOMAIN` tidak disentuh: sudah mengarah ke VPS sejak hari
-   pertama.
+   kantor, lalu di VPS jalankan `docker compose restart caddy`: caddy sudah
+   mencoba ACME untuk domain ini sejak awal dan sedang dalam backoff retry —
+   restart me-reset backoff sehingga sertifikat terbit segera, bukan
+   berjam-jam kemudian. `SB_DOMAIN` tidak disentuh: sudah mengarah ke VPS
+   sejak hari pertama.
 4. **Final storage sync** — ulangi 2.6 untuk objek yang berubah sejak copy
    pertama (`x-upsert` membuat aman dijalankan ulang). Aman dijalankan setelah
    switch karena `TARGET_URL` mengenai VPS lewat `SB_DOMAIN`.
@@ -405,8 +440,9 @@ ls -t /opt/backups/db-*.sql.gz | head -3
 ./scripts/restore.sh "$(ls -t /opt/backups/db-*.sql.gz | head -1)"
 ```
 
-**TLS tidak terbit** — pastikan DNS kedua domain sudah mengarah ke IP publik
-kantor dan FortiGate meneruskan 80+443; lalu baca log ACME:
+**TLS tidak terbit** — pastikan DNS `SB_DOMAIN` (dan `APP_DOMAIN` setelah
+cutover) mengarah ke IP publik kantor dan FortiGate meneruskan 80+443; lalu
+baca log ACME:
 
 ```bash
 docker compose logs --tail=50 caddy

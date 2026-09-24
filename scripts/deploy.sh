@@ -1,6 +1,10 @@
 #!/usr/bin/env bash
 # Deploy di VPS oleh self-hosted runner.
-# Pakai: deploy.sh <git-sha>   (rollback otomatis bila healthcheck gagal)
+# Pakai: deploy.sh <git-sha>
+# Rollback otomatis bila container/healthcheck gagal: image per-commit
+# (demoofficeless-app:git-<sha12>) yang tersimpan di-tag balik ke `latest`
+# lalu container di-force-recreate — tanpa rebuild, jadi benar-benar kembali
+# ke image yang berjalan sebelumnya (bukan rebuild ulang kode lama).
 set -euo pipefail
 
 APP_DIR=/opt/demoofficeless
@@ -29,16 +33,31 @@ docker tag demoofficeless-app:latest "demoofficeless-app:$TAG"
 # 3. Pre-deploy backup (best-effort, tidak blok deploy bila gagal)
 ./scripts/backup.sh || echo "WARN: pre-deploy backup gagal — lanjut"
 
-# 4. Up + tunggu healthcheck (compose healthcheck, max ~60s)
-docker compose up -d --wait app
+# 4. Up + tunggu healthcheck (compose healthcheck, max ~60s).
+#    Dibungkus if!: tanpa ini `set -e` menghentikan skrip saat container
+#    tidak pernah healthy, sehingga blok rollback tidak pernah jalan.
+deploy_ok=true
+if ! docker compose up -d --wait app; then
+  deploy_ok=false
+  echo "!! Container app tidak healthy"
+fi
 
-# 5. Verify HTTP
-sleep 3
-if ! curl -fsS --max-time 15 "$HEALTH_URL" > /dev/null; then
-  echo "!! Healthcheck gagal — rollback ke ${PREV_TAG:-tidak ada}"
+# 5. Verify HTTP. --resolve memaksa koneksi ke Caddy lokal walau DNS
+#    APP_DOMAIN masih mengarah ke Vercel (pra-cutover) — SNI tetap benar,
+#    jadi cek valid sebelum maupun sesudah cutover.
+if $deploy_ok; then
+  sleep 3
+  curl -fsS --max-time 15 --resolve "$APP_DOMAIN:443:127.0.0.1" "$HEALTH_URL" > /dev/null || deploy_ok=false
+fi
+
+if ! $deploy_ok; then
+  echo "!! Deploy gagal — rollback ke ${PREV_TAG:-tidak ada}"
   if [ -n "$PREV_TAG" ]; then
-    git reset --hard "$(echo "$PREV_TAG" | sed 's/^git-//')"
-    docker compose up -d --wait app
+    git reset --hard "${PREV_TAG#git-}"
+    docker tag "demoofficeless-app:$PREV_TAG" demoofficeless-app:latest
+    docker compose up -d --wait --force-recreate app
+  else
+    echo "!! Deploy pertama (tidak ada image sebelumnya) — tidak ada rollback"
   fi
   exit 1
 fi

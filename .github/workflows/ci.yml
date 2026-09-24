@@ -27,9 +27,12 @@ jobs:
     needs: quality
     concurrency:
       group: deploy
-      cancel-in-progress: true
+      cancel-in-progress: false
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: [self-hosted, vps]
+    # repo publik: environment protection mencegah PR fork menyalakan runner
+    # VPS tanpa persetujuan manual (setup di DEPLOY.md §3.3)
+    environment: production
     steps:
       - name: Deploy ke VPS
         run: bash /opt/demoofficeless/scripts/deploy.sh "$GITHUB_SHA"

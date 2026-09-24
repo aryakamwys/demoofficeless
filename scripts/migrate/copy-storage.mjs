@@ -33,7 +33,7 @@ async function walk(prefix, files) {
   for (const item of await listPrefix(prefix)) {
     const path = prefix ? `${prefix}/${item.name}` : item.name;
     if (item.id === null) await walk(path, files); // folder
-    else files.push(path);
+    else files.push({ path, mimetype: item.metadata?.mimetype });
   }
 }
 
@@ -42,7 +42,7 @@ async function main() {
   await walk("", files);
   console.log(`Ditemukan ${files.length} objek`);
   let ok = 0, fail = 0;
-  for (const path of files) {
+  for (const { path, mimetype } of files) {
     const dl = await fetch(`${cloud.base}/storage/v1/object/${BUCKET}/${path}`, {
       headers: { apikey: cloud.key, Authorization: `Bearer ${cloud.key}` },
     });
@@ -52,7 +52,8 @@ async function main() {
       method: "POST",
       headers: {
         apikey: target.key, Authorization: `Bearer ${target.key}`,
-        "Content-Type": "application/octet-stream", "x-upsert": "true",
+        // pertahankan mimetype asli agar PDF terbuka inline, bukan di-download
+        "Content-Type": mimetype || "application/octet-stream", "x-upsert": "true",
       },
       body: buf,
     });
