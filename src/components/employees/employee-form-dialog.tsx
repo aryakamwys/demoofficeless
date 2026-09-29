@@ -77,6 +77,24 @@ export function EmployeeFormDialog({
     });
   }, [employee, form]);
 
+  // Lazy-load base64 signature hanya saat edit — list API sengaja tidak
+  // mengirimnya (hemat ±2.5MB per load halaman employees).
+  useEffect(() => {
+    if (!employee?.id || employee?.signature) return;
+    let alive = true;
+    fetch(`/api/employees/${employee.id}/signature`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((j) => {
+        if (alive && j?.success && j.data) {
+          form.setValue("signature", j.data);
+        }
+      })
+      .catch(() => {});
+    return () => {
+      alive = false;
+    };
+  }, [employee, form]);
+
   useEffect(() => {
     if (open) {
       // Fetch managers and HRs

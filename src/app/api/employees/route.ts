@@ -36,15 +36,18 @@ export async function GET(request: NextRequest) {
         const { data, error } = await query;
         if (error) throw new Error(error.message);
 
-        const signaturesMap: Record<string, string> = {};
-
-        // Try fetching signatures safely, so it doesn't break if the table doesn't exist yet
+        // List harus ringan: jangan kirim base64 signature (51 baris bisa
+        // >2MB — bikin load halaman employees lambat). Kirim has_signature
+        // saja; base64 diambil on-demand lewat /api/employees/[id]/signature.
+        let sigIds = new Set<string>();
         try {
-          const { data: sigData, error: sigError } = await supabase.from("signatures").select("employee_id, signature");
+          const { data: sigData, error: sigError } = await supabase
+            .from("signatures")
+            .select("employee_id");
           if (!sigError && sigData) {
-            sigData.forEach((s: { employee_id: string; signature: string }) => {
-              signaturesMap[s.employee_id] = s.signature;
-            });
+            sigIds = new Set(
+              sigData.map((s: { employee_id: string }) => s.employee_id)
+            );
           }
         } catch {
           // Ignore error if table doesn't exist
@@ -52,7 +55,8 @@ export async function GET(request: NextRequest) {
 
         return (data || []).map((emp: { id: string }) => ({
           ...emp,
-          signature: signaturesMap[emp.id] || null,
+          has_signature: sigIds.has(emp.id),
+          signature: null,
         }));
       }
     );

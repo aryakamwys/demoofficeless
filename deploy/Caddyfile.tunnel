@@ -1,0 +1,41 @@
+# Mode Cloudflare Tunnel: TLS di-terminate di Cloudflare edge,
+# origin (caddy) cukup plain HTTP.
+# File untracked — aman dari `git reset --hard` deploy.sh.
+#
+# SEMUA service di-routing di domain app (same-origin) supaya
+# browser tidak kena CORS dan tidak tergantung DNS supabase. subdomain:
+{
+	auto_https off
+}
+
+http://{$APP_DOMAIN} {
+	encode gzip
+	request_body {
+		max_size 25MB
+	}
+	handle_path /auth/v1/* {
+		reverse_proxy auth:9999
+	}
+	handle_path /rest/v1/* {
+		reverse_proxy rest:3000
+	}
+	handle_path /storage/v1/* {
+		reverse_proxy storage:5000
+	}
+	reverse_proxy app:3000
+}
+
+http://{$SB_DOMAIN} {
+	request_body {
+		max_size 25MB
+	}
+	handle_path /auth/v1/* {
+		reverse_proxy auth:9999
+	}
+	handle_path /rest/v1/* {
+		reverse_proxy rest:3000
+	}
+	handle_path /storage/v1/* {
+		reverse_proxy storage:5000
+	}
+}

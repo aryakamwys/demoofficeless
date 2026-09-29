@@ -1,0 +1,26 @@
+# Override lokal (untracked — aman dari git reset --hard deploy.sh).
+# 1. Fix crash-loop auth (GoTrue v2 wajib GOTRUE_DB_DRIVER)
+# 2. Caddy mode Cloudflare Tunnel (plain HTTP, TLS di edge) + routing same-origin
+# 3. Service cloudflared (token di .env: CF_TUNNEL_TOKEN)
+# 4. App di-rebuild dengan NEXT_PUBLIC_SUPABASE_URL same-origin (anti-CORS)
+# Jika suatu hari kembali ke direct 80/443 (FortiGate), hapus bagian
+# caddy+cloudflared+build di file ini agar compose pakai config asli lagi.
+services:
+  auth:
+    environment:
+      GOTRUE_DB_DRIVER: postgres
+
+  caddy:
+    volumes:
+      - ./deploy/Caddyfile.tunnel:/etc/caddy/Caddyfile:ro
+
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    container_name: officeless-cloudflared
+    restart: unless-stopped
+    command: tunnel --no-autoupdate run --token ${CF_TUNNEL_TOKEN}
+
+  app:
+    build:
+      args:
+        NEXT_PUBLIC_SUPABASE_URL: https://perkombusiness.com
