@@ -1,9 +1,13 @@
 import { AppShell } from "@/components/layout/app-shell";
+import { getSuperadminUser } from "@/lib/superadmin";
 
-export default function DashboardLayout({
+export default async function DashboardLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
-  return <AppShell>{children}</AppShell>;
+  // Flag superadmin server-side — env SUPERADMIN_EMAILS tidak pernah kirim ke client
+  const admin = await getSuperadminUser();
+
+  return <AppShell isSuperadmin={!!admin}>{children}</AppShell>;
 }
