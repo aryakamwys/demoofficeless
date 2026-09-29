@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createServerClient } from "@/lib/supabase-server";
+import { createServerClient, createServiceClient } from "@/lib/supabase-server";
 
 export async function GET() {
   const supabase = await createServerClient();
@@ -29,7 +29,9 @@ export async function GET() {
     .eq("status", "PENDING");
 
   // Attach grab_match if customer_name matches employee name
-  const enrichedData = data.map((mClaim) => {
+  // + signed URL file (bucket private — URL ditandatangani service role saat dibaca)
+  const storage = createServiceClient().storage.from("dataperkom");
+  const enrichedData = await Promise.all(data.map(async (mClaim) => {
     let grab_match = null;
     if (grabClaims && mClaim.customer_name) {
       const match = grabClaims.find(
@@ -44,11 +46,17 @@ export async function GET() {
         grab_match = match;
       }
     }
+    let file_url: string | null = null;
+    if (mClaim.storage_path) {
+      const { data: signed } = await storage.createSignedUrl(mClaim.storage_path, 3600);
+      file_url = signed?.signedUrl ?? null;
+    }
     return {
       ...mClaim,
+      file_url,
       grab_match,
     };
-  });
+  }));
 
   return NextResponse.json({ success: true, data: enrichedData });
 }
@@ -103,11 +111,8 @@ export async function POST(request: NextRequest) {
       { status: 500 }
     );
   }
-  
-  const { data: publicUrlData } = supabase.storage.from("dataperkom").getPublicUrl(storagePath);
-  const fileUrl = publicUrlData.publicUrl;
 
-  // Save metadata
+  // Save metadata — path saja; URL publik tidak dipakai lagi (bucket private)
   const { data, error } = await supabase
     .from("managed_service_claims")
     .insert({
@@ -116,7 +121,7 @@ export async function POST(request: NextRequest) {
       customer_name,
       location,
       amount: parseFloat(amount),
-      file_url: fileUrl,
+      storage_path: storagePath,
       status: "pending"
     })
     .select()

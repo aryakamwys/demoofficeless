@@ -155,12 +155,16 @@ export default function ManagedServiceClaimsHRPage() {
                         )}
                       </td>
                       <td className="px-4 py-3">
-                        <Button variant="ghost" size="sm" asChild>
-                          <a href={item.file_url} target="_blank" rel="noopener noreferrer">
-                            <FileText className="h-4 w-4 mr-2" />
-                            Lihat File
-                          </a>
-                        </Button>
+                        {item.file_url ? (
+                          <Button variant="ghost" size="sm" asChild>
+                            <a href={item.file_url} target="_blank" rel="noopener noreferrer">
+                              <FileText className="h-4 w-4 mr-2" />
+                              Lihat File
+                            </a>
+                          </Button>
+                        ) : (
+                          <span className="text-xs text-slate-400 italic">-</span>
+                        )}
                       </td>
                     </tr>
                   ))

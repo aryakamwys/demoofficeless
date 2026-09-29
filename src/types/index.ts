@@ -119,7 +119,9 @@ export interface ManagedServiceClaim {
   customer_name?: string;
   location?: string;
   amount: number | string;
-  file_url: string;
+  storage_path?: string | null;
+  /** Dihitung API saat dibaca: signed URL bucket private (1 jam). */
+  file_url?: string | null;
   status: string;
   created_at: string;
   /** Ditempel API managed-service: klaim Grab yang cocok dengan customer_name. */
