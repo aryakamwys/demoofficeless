@@ -59,6 +59,12 @@ export interface Claim {
   wa_sent: boolean;
   wa_sent_at: string | null;
   approved_at: string | null;
+  pending_wa_change?: {
+    trip_id: string;
+    trip_no: number;
+    old_fare: number;
+    new_fare: number;
+  } | null;
   created_at: string;
   updated_at: string;
 }
@@ -82,6 +88,8 @@ export interface Comment {
   id: string;
   claim_id: string;
   message: string;
+  author_name?: string | null;
+  author_role?: string | null;
   created_at: string;
 }
 

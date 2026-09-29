@@ -8,8 +8,14 @@ import {
   buildCorrectionPrompt,
   buildManagerApprovalMessage,
   buildHrApprovalMessage,
-  buildEmployeeStatusUpdateMessage
+  buildEmployeeStatusUpdateMessage,
+  buildRevisionRequestMessage,
+  buildRevisionTripListMessage,
+  buildChangeConfirmMessage,
+  buildChangeAppliedMessage,
+  buildResubmittedMessage
 } from "@/lib/whatsapp";
+import { parseWaCommand } from "@/lib/wa-commands";
 
 // Helper: fetch a fresh claim with all relations
 async function fetchClaimFresh(supabase: ReturnType<typeof createServiceClient>, claimId: string) {
@@ -92,6 +98,179 @@ async function proceedToHrOrFinalize(
 }
 
 // ==========================================
+// Revision flow — "2 <alasan>" dari Manager/HR
+// (bukan reject permanen: klaim kembali ke engineer untuk direvisi,
+//  bisa berulang sampai approved di stage manapun)
+// ==========================================
+type ClaimWithRelations = NonNullable<Awaited<ReturnType<typeof fetchClaimFresh>>>;
+
+async function handleRevisionRequest(
+  supabase: ReturnType<typeof createServiceClient>,
+  claim: ClaimWithRelations,
+  role: "MANAGER" | "HR",
+  reason: string,
+  approverPhone: string,
+  employeePhone: string | null
+) {
+  const actor = role === "MANAGER" ? claim.manager : claim.hr;
+  const actorName = actor?.employee_name || role;
+
+  // Status stage tidak diubah ke REJECTED — tetap PENDING menunggu revisi
+  await supabase.from("claims").update({ status: "NEED_REVIEW", pending_wa_change: null }).eq("id", claim.id);
+
+  await supabase.from("comments").insert({
+    claim_id: claim.id,
+    message: reason ? `Minta revisi: ${reason}` : "Minta revisi (alasan tidak disertakan).",
+    author_name: actorName,
+    author_role: role,
+  });
+
+  await sendAndLog(
+    supabase, claim.id, approverPhone,
+    `Permintaan revisi tercatat dan telah diteruskan ke ${claim.employee?.employee_name || "karyawan"}.`,
+    `${role}_REVISION_REQUESTED`
+  );
+
+  if (employeePhone) {
+    await sendAndLog(
+      supabase, claim.id, employeePhone,
+      buildRevisionRequestMessage({
+        employee_name: claim.employee?.employee_name || "Karyawan",
+        period: claim.period,
+        requester_name: actorName,
+        requester_role: role,
+        reason,
+      }),
+      "REVISION_REQUEST"
+    );
+  }
+}
+
+// ==========================================
+// Revision flow — command engineer via chat
+// LIST / UBAH <no> <nominal> / YA / BATAL / SELESAI / teks bebas → note
+// ==========================================
+async function handleRevisionCommands(
+  supabase: ReturnType<typeof createServiceClient>,
+  claim: ClaimWithRelations,
+  reply: string,
+  employeePhone: string | null
+) {
+  if (!employeePhone) return;
+  const empName = claim.employee?.employee_name || "Karyawan";
+  const cmd = parseWaCommand(reply);
+
+  if (cmd.type === "LIST") {
+    const { data: trips } = await supabase.from("trips").select("*").eq("claim_id", claim.id).order("trip_date", { ascending: true });
+    await sendAndLog(supabase, claim.id, employeePhone, buildRevisionTripListMessage(trips || [], claim.total_amount, claim.period), "REVISION_LIST");
+    return;
+  }
+
+  if (cmd.type === "CHANGE") {
+    const { data: trips } = await supabase.from("trips").select("*").eq("claim_id", claim.id).order("trip_date", { ascending: true });
+    const trip = (trips || [])[cmd.tripNo - 1];
+    if (!trip) {
+      await sendAndLog(supabase, claim.id, employeePhone, `Nomor trip ${cmd.tripNo} tidak ditemukan. Balas LIST untuk melihat daftar trip.`, "REVISION_INVALID");
+      return;
+    }
+    const oldFare = Number(trip.fare);
+    if (cmd.newFare === oldFare) {
+      await sendAndLog(supabase, claim.id, employeePhone, `Nominal baru sama dengan nominal lama — tidak ada perubahan.`, "REVISION_INVALID");
+      return;
+    }
+    await supabase.from("claims").update({
+      pending_wa_change: { trip_id: trip.id, trip_no: cmd.tripNo, old_fare: oldFare, new_fare: cmd.newFare },
+    }).eq("id", claim.id);
+    await sendAndLog(supabase, claim.id, employeePhone, buildChangeConfirmMessage(trip, cmd.tripNo, oldFare, cmd.newFare), "REVISION_CHANGE_PROMPT");
+    return;
+  }
+
+  if (cmd.type === "CONFIRM") {
+    const pending = claim.pending_wa_change;
+    if (!pending) {
+      await sendAndLog(supabase, claim.id, employeePhone, "Tidak ada perubahan yang menunggu konfirmasi.\n\nBalas:\nLIST - daftar trip\nUBAH <no> <nominal> - ubah nominal\nSELESAI - ajukan ulang", "REVISION_INVALID");
+      return;
+    }
+    const { error: updErr } = await supabase.from("trips").update({ fare: pending.new_fare }).eq("id", pending.trip_id);
+    if (updErr) {
+      await sendAndLog(supabase, claim.id, employeePhone, `Gagal menyimpan perubahan: ${updErr.message}`, "REVISION_CHANGE_FAILED");
+      return;
+    }
+    const { data: fares } = await supabase.from("trips").select("fare").eq("claim_id", claim.id);
+    const total = (fares || []).reduce((acc, t) => acc + Number(t.fare), 0);
+    await supabase.from("claims").update({ total_amount: total, pending_wa_change: null }).eq("id", claim.id);
+
+    await supabase.from("comments").insert({
+      claim_id: claim.id,
+      message: `Trip ${pending.trip_no} nominal diubah Rp${pending.old_fare.toLocaleString("id-ID")} -> Rp${pending.new_fare.toLocaleString("id-ID")}.`,
+      author_name: empName,
+      author_role: "EMPLOYEE",
+    });
+    await sendAndLog(supabase, claim.id, employeePhone, buildChangeAppliedMessage(pending.trip_no, pending.old_fare, pending.new_fare, total), "REVISION_CHANGE_APPLIED");
+    return;
+  }
+
+  if (cmd.type === "CANCEL") {
+    if (claim.pending_wa_change) {
+      await supabase.from("claims").update({ pending_wa_change: null }).eq("id", claim.id);
+    }
+    await sendAndLog(supabase, claim.id, employeePhone, "Perubahan dibatalkan.", "REVISION_CANCELLED");
+    return;
+  }
+
+  if (cmd.type === "DONE") {
+    // Manager sudah approved → kembali ke HR; belum → kembali ke Manager
+    const targetRole: "MANAGER" | "HR" = claim.manager_status === "APPROVED" ? "HR" : "MANAGER";
+    await supabase.from("comments").insert({
+      claim_id: claim.id,
+      message: `Revisi selesai — klaim diajukan ulang ke ${targetRole === "HR" ? "HR" : "Manager"}.`,
+      author_name: empName,
+      author_role: "EMPLOYEE",
+    });
+    await supabase.from("claims").update({ status: "SENT", pending_wa_change: null }).eq("id", claim.id);
+
+    const fresh = await fetchClaimFresh(supabase, claim.id);
+    if (fresh) {
+      if (targetRole === "MANAGER" && fresh.manager) {
+        const mgrPhone = normalizePhone(fresh.manager.phone_number);
+        if (mgrPhone) {
+          await sendAndLog(
+            supabase, claim.id, mgrPhone,
+            buildManagerApprovalMessage({
+              employee_name: fresh.employee?.employee_name || "Karyawan",
+              period: fresh.period,
+              total_amount: fresh.total_amount,
+              trips: fresh.trips || [],
+              revised: true,
+            }),
+            "MANAGER_APPROVAL_PROMPT"
+          );
+        }
+      } else {
+        // HR stage, atau klaim tanpa manager → langsung HR/finalisasi
+        await proceedToHrOrFinalize(supabase, fresh, employeePhone);
+      }
+    }
+    await sendAndLog(supabase, claim.id, employeePhone, buildResubmittedMessage(targetRole), "REVISION_RESUBMITTED");
+    return;
+  }
+
+  if (cmd.type === "BAD_CHANGE") {
+    await sendAndLog(supabase, claim.id, employeePhone, "Format salah. Contoh yang benar: UBAH 3 75000", "REVISION_INVALID");
+    return;
+  }
+
+  // NOTE / lainnya → catatan pada klaim
+  await supabase.from("comments").insert({
+    claim_id: claim.id,
+    message: cmd.type === "NOTE" ? cmd.text : reply,
+    author_name: empName,
+    author_role: "EMPLOYEE",
+  });
+  await sendAndLog(supabase, claim.id, employeePhone, "Catatan tersimpan di klaim Anda.\n\nBalas SELESAI untuk mengajukan ulang.", "REVISION_NOTE");
+}
+
+// ==========================================
 // Main processing logic (runs in background via after())
 // ==========================================
 async function processWebhookReply(
@@ -108,7 +287,10 @@ async function processWebhookReply(
     // ROLE: EMPLOYEE
     // ==========================================
     if (role === 'EMPLOYEE') {
-      if (reply === "1") {
+      // Fase revisi: klaim sudah dikonfirmasi engineer tapi diminta revisi
+      if (claim.status === 'NEED_REVIEW' && claim.approved_at) {
+        await handleRevisionCommands(supabase, claim, reply, employeePhone);
+      } else if (reply === "1") {
         const hasManager = !!claim.manager;
         await supabase.from("claims").update({
           approved_at: new Date().toISOString(),
@@ -187,18 +369,12 @@ async function processWebhookReply(
           await proceedToHrOrFinalize(supabase, freshClaim, employeePhone);
         }
 
-      } else if (reply === "2") {
-        await supabase.from("claims").update({ manager_status: "REJECTED", status: "NEED_REVIEW" }).eq("id", claim.id);
-        await sendAndLog(supabase, claim.id, phoneNumber, "Klaim telah ditolak.", "MANAGER_REJECTED");
-        if (employeePhone) {
-          await sendAndLog(
-            supabase, claim.id, employeePhone,
-            buildEmployeeStatusUpdateMessage("REJECTED", claim.manager?.employee_name || "Manager", "MANAGER"),
-            "EMPLOYEE_STATUS_UPDATE"
-          );
-        }
+      } else if (reply === "2" || reply.startsWith("2 ")) {
+        const cmd = parseWaCommand(reply);
+        const reason = cmd.type === "REVISE" ? cmd.reason : "";
+        await handleRevisionRequest(supabase, claim, "MANAGER", reason, phoneNumber, employeePhone);
       } else {
-        await sendAndLog(supabase, claim.id, phoneNumber, "Balasan tidak valid. Silakan balas 1 untuk Approve atau 2 untuk Reject.", "INVALID_REPLY");
+        await sendAndLog(supabase, claim.id, phoneNumber, "Balasan tidak valid. Silakan balas 1 untuk Approve atau 2 <alasan> untuk Minta Revisi.", "INVALID_REPLY");
       }
     }
 
@@ -216,18 +392,12 @@ async function processWebhookReply(
             "EMPLOYEE_STATUS_UPDATE"
           );
         }
-      } else if (reply === "2") {
-        await supabase.from("claims").update({ hr_status: "REJECTED", status: "NEED_REVIEW" }).eq("id", claim.id);
-        await sendAndLog(supabase, claim.id, phoneNumber, "Klaim telah ditolak.", "HR_REJECTED");
-        if (employeePhone) {
-          await sendAndLog(
-            supabase, claim.id, employeePhone,
-            buildEmployeeStatusUpdateMessage("REJECTED", claim.hr?.employee_name || "HR", "HR"),
-            "EMPLOYEE_STATUS_UPDATE"
-          );
-        }
+      } else if (reply === "2" || reply.startsWith("2 ")) {
+        const cmd = parseWaCommand(reply);
+        const reason = cmd.type === "REVISE" ? cmd.reason : "";
+        await handleRevisionRequest(supabase, claim, "HR", reason, phoneNumber, employeePhone);
       } else {
-        await sendAndLog(supabase, claim.id, phoneNumber, "Balasan tidak valid. Silakan balas 1 untuk Approve atau 2 untuk Reject.", "INVALID_REPLY");
+        await sendAndLog(supabase, claim.id, phoneNumber, "Balasan tidak valid. Silakan balas 1 untuk Approve atau 2 <alasan> untuk Minta Revisi.", "INVALID_REPLY");
       }
     }
 
@@ -250,6 +420,13 @@ async function processWebhookReply(
 // ==========================================
 export async function POST(request: NextRequest) {
   try {
+    // Verifikasi token webhook — endpoint ini bisa mengubah nominal klaim,
+    // jadi set WEBHOOK_SECRET di env produksi (URL: /api/webhook/whatsapp?token=xxx)
+    const secret = process.env.WEBHOOK_SECRET;
+    if (secret && request.nextUrl.searchParams.get("token") !== secret) {
+      return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 });
+    }
+
     const body = await request.json();
     const supabase = createServiceClient();
 
@@ -317,7 +494,7 @@ export async function POST(request: NextRequest) {
       if (mgrPhone && mgrPhone === phoneNumber && c.approved_at && c.manager_status === 'PENDING') {
         claim = c; role = 'MANAGER'; break;
       }
-      if (empPhone === phoneNumber && !c.approved_at) {
+      if (empPhone === phoneNumber && (!c.approved_at || c.status === 'NEED_REVIEW')) {
         claim = c; role = 'EMPLOYEE'; break;
       }
     }

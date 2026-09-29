@@ -570,6 +570,12 @@ export function ClaimDetailView({ claim }: ClaimDetailViewProps) {
           <CardContent className="space-y-4 pt-4">
             {claim.comments.map((comment) => (
               <div key={comment.id} className="bg-slate-50 p-3 rounded-md border border-slate-100">
+                {(comment.author_name || comment.author_role) && (
+                  <p className="text-xs font-semibold text-slate-600 mb-1">
+                    {comment.author_name}
+                    {comment.author_role ? ` (${comment.author_role})` : ""}
+                  </p>
+                )}
                 <p className="text-sm text-slate-800">{comment.message}</p>
                 <p className="text-xs text-muted-foreground mt-2 font-medium">
                   {dayjs(comment.created_at).format("DD MMM YYYY HH:mm")}
