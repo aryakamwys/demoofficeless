@@ -26,6 +26,18 @@ interface SendTextResponse {
 }
 
 /**
+ * Normalisasi nomor ke format Kirimi (6281234567890, tanpa +/spasi/@lid).
+ */
+export function normalizePhone(phone: string | undefined | null): string | null {
+  if (!phone) return null;
+  return phone
+    .replace(/[\s\-()]/g, "")
+    .replace(/^\+/, "")
+    .replace(/^0/, "62")
+    .replace(/@lid$/, "");
+}
+
+/**
  * Send a text message via Kirimi API.
  */
 export async function sendTextMessage(
@@ -35,6 +47,9 @@ export async function sendTextMessage(
 ): Promise<SendTextResponse> {
   const config = getConfig();
   const maxRetries = options?.maxRetries ?? 3;
+
+  // Kirimi requires receiver format 628xxx — normalize at the root so that all callers are safe
+  const normalized = normalizePhone(receiver) || receiver;
 
   // Jeda sebelum pesan dikirim (default 2 detik, anti-bot detection)
   const delayMs = options?.delayMs ?? 2000;
@@ -53,7 +68,7 @@ export async function sendTextMessage(
           user_code: config.user_code,
           secret: config.secret,
           device_id: config.device_id,
-          phone: receiver,
+          receiver: normalized,
           message,
         }),
       });
@@ -66,10 +81,10 @@ export async function sendTextMessage(
       }
 
       lastError = data.error || data.message || `HTTP ${res.status}`;
-      console.warn(`[WA] Send attempt ${attempt}/${maxRetries} failed for ${receiver}: ${lastError}`);
+      console.warn(`[WA] Send attempt ${attempt}/${maxRetries} failed for ${normalized}: ${lastError}`);
     } catch (error) {
       lastError = error instanceof Error ? error.message : "Unknown error";
-      console.warn(`[WA] Send attempt ${attempt}/${maxRetries} error for ${receiver}: ${lastError}`);
+      console.warn(`[WA] Send attempt ${attempt}/${maxRetries} error for ${normalized}: ${lastError}`);
     }
 
     // Backoff sebelum retry. WA_RATE_LIMITED butuh jeda panjang (throttle
@@ -83,7 +98,7 @@ export async function sendTextMessage(
     }
   }
 
-  console.error(`[WA] All ${maxRetries} attempts failed for ${receiver}: ${lastError}`);
+  console.error(`[WA] All ${maxRetries} attempts failed for ${normalized}: ${lastError}`);
   return { success: false, error: lastError };
 }
 

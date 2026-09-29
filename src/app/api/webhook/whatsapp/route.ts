@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createServiceClient } from "@/lib/supabase-server";
 import {
   sendTextMessage,
+  normalizePhone,
   buildDetailMessage,
   buildConfirmationMessage,
   buildCorrectionPrompt,
@@ -9,11 +10,6 @@ import {
   buildHrApprovalMessage,
   buildEmployeeStatusUpdateMessage
 } from "@/lib/whatsapp";
-
-function normalizePhone(phone: string | undefined | null) {
-  if (!phone) return null;
-  return phone.replace(/^\+/, "").replace(/^0/, "62").replace("@lid", "");
-}
 
 // Helper: fetch a fresh claim with all relations
 async function fetchClaimFresh(supabase: ReturnType<typeof createServiceClient>, claimId: string) {
