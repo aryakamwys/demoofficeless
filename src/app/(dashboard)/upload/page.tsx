@@ -15,7 +15,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Upload as UploadIcon, Loader2, FileText } from "lucide-react";
+import { Upload as UploadIcon, Loader2, FileText, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { Upload } from "@/types";
 import dayjs from "dayjs";
@@ -56,6 +56,25 @@ export default function UploadPage() {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     fetchUploads();
   }, [fetchUploads]);
+
+  // Hard delete: file di storage + baris upload (claims/trips ikut cascade)
+  const handleDeleteUpload = async (id: string, filename: string) => {
+    if (
+      !confirm(
+        `Hapus "${filename}"?\n\nFile di server storage dan SEMUA claim dari statement ini ikut terhapus permanen.`
+      )
+    )
+      return;
+
+    const res = await fetch(`/api/upload/${id}`, { method: "DELETE" });
+    const result = await res.json();
+    if (result.success) {
+      toast.success("Upload dihapus beserta file dan claims-nya");
+      fetchUploads();
+    } else {
+      toast.error(result.error || "Gagal menghapus upload");
+    }
+  };
 
   const handleUpload = async () => {
     if (!period || !file) {
@@ -226,6 +245,15 @@ export default function UploadPage() {
                         <FileText className="mr-2 h-4 w-4" />
                         Claims
                       </Link>
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-8 w-8 text-slate-500 hover:text-red-600"
+                      title="Hapus upload (hard delete: file + claims)"
+                      onClick={() => handleDeleteUpload(upload.id, upload.filename)}
+                    >
+                      <Trash2 className="h-4 w-4" />
                     </Button>
                   </div>
                 </div>
