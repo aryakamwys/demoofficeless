@@ -1,7 +1,6 @@
 import { createServerClient } from "@/lib/supabase-server";
 import { SummaryCards } from "@/components/dashboard/summary-cards";
-import { RecentClaimsTable } from "@/components/dashboard/recent-claims-table";
-import { DashboardSummary, ClaimWithEmployee } from "@/types";
+import { DashboardSummary } from "@/types";
 
 async function getDashboardData() {
   const supabase = await createServerClient();
@@ -36,26 +35,15 @@ async function getDashboardData() {
     need_review_claims: needReviewRes.count || 0,
   };
 
-  // Fetch recent claims with employee info
-  const { data: recentClaims } = await supabase
-    .from("claims")
-    .select("*, employee:employees!claims_employee_id_fkey(*)")
-    .order("updated_at", { ascending: false })
-    .limit(10);
-
-  return {
-    summary,
-    recentClaims: (recentClaims || []) as ClaimWithEmployee[],
-  };
+  return { summary };
 }
 
 export default async function DashboardPage() {
-  const { summary, recentClaims } = await getDashboardData();
+  const { summary } = await getDashboardData();
 
   return (
     <div className="space-y-6">
       <SummaryCards summary={summary} />
-      <RecentClaimsTable claims={recentClaims} />
     </div>
   );
 }

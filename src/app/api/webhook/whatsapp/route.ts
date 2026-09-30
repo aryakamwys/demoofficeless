@@ -18,6 +18,7 @@ import {
   buildResubmittedMessage
 } from "@/lib/whatsapp";
 import { parseWaCommand } from "@/lib/wa-commands";
+import { getTicket, ticketTitle } from "@/lib/envgate";
 
 // Helper: fetch a fresh claim with all relations
 async function fetchClaimFresh(supabase: ReturnType<typeof createServiceClient>, claimId: string) {
@@ -31,6 +32,8 @@ async function fetchClaimFresh(supabase: ReturnType<typeof createServiceClient>,
       trips(*)
     `)
     .eq("id", claimId)
+    // Urutan sama dengan LIST — nomor trip konsisten di semua pesan
+    .order("trip_date", { referencedTable: "trips", ascending: true })
     .single();
   return data;
 }
@@ -154,8 +157,89 @@ async function handleRevisionRequest(
 }
 
 // ==========================================
+// TICKET — engineer melampirkan bukti ticket EnvGate per trip via chat.
+// Dipakai di mode konfirmasi awal maupun mode revisi.
+// ==========================================
+async function handleTicketCommand(
+  supabase: ReturnType<typeof createServiceClient>,
+  claim: ClaimWithRelations,
+  tripNo: number | null,
+  ticketId: string,
+  employeePhone: string | null,
+  nextHint: string
+) {
+  if (!employeePhone) return;
+  const empName = claim.employee?.employee_name || "Karyawan";
+  const { data: trips } = await supabase
+    .from("trips")
+    .select("*")
+    .eq("claim_id", claim.id)
+    .order("trip_date", { ascending: true });
+
+  let no = tripNo;
+  if (no == null) {
+    // "#PIM-34285" telanjang: klaim 1 trip → langsung trip 1; kalau banyak, tanya nomor
+    if ((trips || []).length === 1) {
+      no = 1;
+    } else {
+      await sendAndLog(
+        supabase, claim.id, employeePhone,
+        [
+          `Klaim ini punya ${(trips || []).length} trip — ticket-nya untuk trip yang mana?`,
+          ``,
+          `Ketik: TICKET <no trip> PIM-${ticketId}`,
+          `Contoh: TICKET 3 PIM-${ticketId}`,
+          `Balas LIST untuk melihat nomor trip.`,
+        ].join("\n"),
+        "TICKET_NEED_TRIP_NO"
+      );
+      return;
+    }
+  }
+
+  const trip = (trips || [])[no - 1];
+  if (!trip) {
+    await sendAndLog(
+      supabase, claim.id, employeePhone,
+      `Nomor trip ${no} tidak ditemukan (ada ${(trips || []).length} trip). Balas LIST untuk melihat daftarnya.`,
+      "TICKET_INVALID"
+    );
+    return;
+  }
+
+  await supabase.from("trips").update({ ticket_id: ticketId }).eq("id", trip.id);
+
+  // Verifikasi live ke EnvGate — kasih judul ticket sebagai umpan balik
+  let title = "";
+  try {
+    const inv = await getTicket(ticketId);
+    title = inv ? ticketTitle(inv) : "";
+  } catch {
+    // API tidak terjangkau — tetap simpan, judul dikosongkan
+  }
+
+  await supabase.from("comments").insert({
+    claim_id: claim.id,
+    message: `Trip ${no} dilampirkan ticket EnvGate #PIM-${ticketId}${title ? ` (${title})` : ""} via WhatsApp.`,
+    author_name: empName,
+    author_role: "EMPLOYEE",
+  });
+
+  await sendAndLog(
+    supabase, claim.id, employeePhone,
+    [
+      `SUDAH TERSIMPAN. Trip no ${no} kini punya bukti ticket #PIM-${ticketId}.`,
+      title ? `Judul ticket: ${title}` : `(Detail ticket tidak bisa diverifikasi saat ini.)`,
+      ``,
+      nextHint,
+    ].join("\n"),
+    "TICKET_SAVED"
+  );
+}
+
+// ==========================================
 // Revision flow — command engineer via chat
-// LIST / UBAH <no> <nominal> / YA / BATAL / SELESAI / teks bebas → note
+// LIST / UBAH <no> <nominal> / TICKET <no> <id> / YA / BATAL / SELESAI / teks bebas → note
 // ==========================================
 async function handleRevisionCommands(
   supabase: ReturnType<typeof createServiceClient>,
@@ -267,6 +351,26 @@ async function handleRevisionCommands(
     return;
   }
 
+  if (cmd.type === "TICKET" || cmd.type === "TICKET_ID") {
+    await handleTicketCommand(
+      supabase, claim,
+      cmd.type === "TICKET" ? cmd.tripNo : null,
+      cmd.ticketId,
+      employeePhone,
+      "Balas UBAH <no> <nominal> untuk ubah nominal,\natau SELESAI untuk mengajukan ulang."
+    );
+    return;
+  }
+
+  if (cmd.type === "BAD_TICKET") {
+    await sendAndLog(
+      supabase, claim.id, employeePhone,
+      "Format ticket salah. Contoh yang benar: TICKET 3 PIM-34285",
+      "TICKET_INVALID"
+    );
+    return;
+  }
+
   // NOTE / lainnya → catatan pada klaim (dengan umpan balik jelas)
   const noteText = cmd.type === "NOTE" ? cmd.text : reply;
   await supabase.from("comments").insert({
@@ -354,13 +458,30 @@ async function processWebhookReply(
           await sendAndLog(supabase, claim.id, employeePhone, buildDetailMessage(trips, claim.total_amount), "DETAIL_MESSAGE");
         }
       } else {
-        // Teks bebas → jadi catatan. SELALU balas (test user: catatan dulu
-        // tersimpan diam-diam — pengirim tidak tahu kalau berhasil).
-        if (!employeePhone) return;
-        if (reply.replace(/\s/g, "").length < 3) {
+        // TICKET juga bisa dipakai sebelum konfirmasi (mode awal);
+        // selain itu teks bebas → jadi catatan (SELALU balas — test user:
+        // catatan dulu tersimpan diam-diam, pengirim tidak tahu kalau berhasil).
+        const cmd = parseWaCommand(reply);
+        if (cmd.type === "TICKET" || cmd.type === "TICKET_ID") {
+          await handleTicketCommand(
+            supabase, claim,
+            cmd.type === "TICKET" ? cmd.tripNo : null,
+            cmd.ticketId,
+            employeePhone,
+            "Balas 1 = SETUJU kalau semua data sudah benar."
+          );
+        } else if (cmd.type === "BAD_TICKET") {
+          if (employeePhone) {
+            await sendAndLog(
+              supabase, claim.id, employeePhone,
+              "Format ticket salah. Contoh yang benar: TICKET 3 PIM-34285",
+              "TICKET_INVALID"
+            );
+          }
+        } else if (employeePhone && reply.replace(/\s/g, "").length < 3) {
           // "eh", "?", "y" — bukan catatan, arahkan ke menu
           await sendAndLog(supabase, claim.id, employeePhone, buildEmployeeHelpMessage(), "INVALID_REPLY");
-        } else {
+        } else if (employeePhone) {
           await supabase.from("comments").insert({ claim_id: claim.id, message: reply });
           if (claim.status !== "NEED_REVIEW") {
             await supabase.from("claims").update({ status: "NEED_REVIEW" }).eq("id", claim.id);

@@ -126,7 +126,14 @@ export async function sendTextMessage(
  * (Hasil test user pertama: menu 1/2/3 tanpa penjelasan bikin bingung.)
  */
 
-type WaTripLine = { trip_date: string; pickup: string; dropoff: string; fare: number; cost_code?: string };
+type WaTripLine = {
+  trip_date: string;
+  pickup: string;
+  dropoff: string;
+  fare: number;
+  cost_code?: string;
+  ticket_id?: string | null;
+};
 
 /** Ringkas alamat supaya pesan ringkasan mudah dibaca (alamat lengkap ada di DETAIL). */
 function shortAddr(s: string, max = 32): string {
@@ -135,10 +142,17 @@ function shortAddr(s: string, max = 32): string {
   return t.slice(0, max).replace(/\s+\S*$/, "") + "...";
 }
 
+/** "PIM-34285"/"#34285"/"34285" → "#PIM-34285" untuk ditampilkan di pesan. */
+function ticketChip(ticketId?: string | null): string {
+  if (!ticketId) return "";
+  const digits = String(ticketId).replace(/^#?\s*(?:pim\s*[-:]?\s*)?/i, "");
+  return digits ? ` [#PIM-${digits}]` : "";
+}
+
 function tripLine(t: WaTripLine, full: boolean): string {
   const addr = (s: string) => (full ? (s || "").trim() : shortAddr(s));
   const costCode = t.cost_code ? ` [Code: ${t.cost_code}]` : "";
-  return `- ${formatTripDate(t.trip_date)}: ${addr(t.pickup)} -> ${addr(t.dropoff)} (${formatAmount(t.fare)})${costCode}`;
+  return `- ${formatTripDate(t.trip_date)}: ${addr(t.pickup)} -> ${addr(t.dropoff)} (${formatAmount(t.fare)})${costCode}${ticketChip(t.ticket_id)}`;
 }
 
 /** Menu karyawan — selalu dengan penjelasan + contoh. */
@@ -186,6 +200,9 @@ export function buildClaimMessage(params: {
     ``,
     `Jumlah perjalanan: ${trip_count}`,
     `Total biaya: ${formatAmount(total_amount)}`,
+    ``,
+    `Punya ticket EnvGate untuk pekerjaan di trip ini? Lampirkan dengan:`,
+    `TICKET <no trip> <id ticket> - contoh: TICKET 3 PIM-34285`,
     ``,
     ...employeeMenuLines(),
   ].join("\n");
@@ -389,7 +406,9 @@ export function buildRevisionRequestMessage(params: {
     `1. Ketik LIST - untuk melihat daftar trip bernomor`,
     `2. Ketik UBAH <nomor trip> <nominal baru> - contoh: UBAH 3 75000`,
     `   (artinya: ubah trip no 3 jadi Rp75.000)`,
-    `3. Ketik SELESAI - klaim dikirim ulang ke ${roleLabel}`,
+    `3. Ketik TICKET <nomor trip> <id ticket> - contoh: TICKET 3 PIM-34285`,
+    `   (melampirkan bukti ticket EnvGate ke trip no 3)`,
+    `4. Ketik SELESAI - klaim dikirim ulang ke ${roleLabel}`,
     ``,
     `Bisa juga tulis catatan untuk ${roleLabel} — langsung balas pesan ini.`,
   ].join("\n");
@@ -405,7 +424,7 @@ export function buildRevisionTripListMessage(
 ): string {
   const lines = trips.map((t, i) => {
     const costCode = t.cost_code ? ` [Code: ${t.cost_code}]` : "";
-    return `${i + 1}. ${formatTripDate(t.trip_date)}: ${t.pickup} -> ${t.dropoff} (${formatAmount(t.fare)})${costCode}`;
+    return `${i + 1}. ${formatTripDate(t.trip_date)}: ${t.pickup} -> ${t.dropoff} (${formatAmount(t.fare)})${costCode}${ticketChip(t.ticket_id)}`;
   });
   const refId = Math.random().toString(36).substring(2, 8).toUpperCase();
   return [
@@ -417,6 +436,7 @@ export function buildRevisionTripListMessage(
     ``,
     `Balas:`,
     `UBAH <no> <nominal> - ubah nominal, contoh: UBAH 3 75000`,
+    `TICKET <no> <id> - lampirkan bukti ticket, contoh: TICKET 3 PIM-34285`,
     `SELESAI - sudah selesai, kirim ulang ke approver`,
   ].join("\n");
 }

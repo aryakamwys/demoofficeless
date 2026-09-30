@@ -13,6 +13,9 @@ export type WaCommand =
   | { type: "CONFIRM" }
   | { type: "CANCEL" }
   | { type: "DONE" }
+  | { type: "TICKET"; tripNo: number; ticketId: string }
+  | { type: "TICKET_ID"; ticketId: string }
+  | { type: "BAD_TICKET" }
   | { type: "NOTE"; text: string };
 
 // Batas wajar nominal trip (Rp100 juta) — penjaga typo di jalur uang
@@ -24,6 +27,12 @@ function parseFare(raw: string): number | null {
   if (!/^\d+$/.test(cleaned)) return null;
   const n = Number(cleaned);
   return n > 0 && n <= MAX_FARE ? n : null;
+}
+
+/** "34285", "PIM-34285", "#PIM-34285", "# 34285" → "34285" */
+function parseTicketRef(raw: string): string | null {
+  const m = raw.trim().match(/^#?\s*(?:pim\s*[-:]?\s*)?(\d{2,10})$/i);
+  return m ? m[1] : null;
 }
 
 export function parseWaCommand(raw: string): WaCommand {
@@ -54,6 +63,23 @@ export function parseWaCommand(raw: string): WaCommand {
       return { type: "CHANGE", tripNo, newFare: fare };
     }
     return { type: "BAD_CHANGE" };
+  }
+
+  // "TICKET 3 PIM-34285" — pasang bukti ticket EnvGate pada trip no 3
+  if (/^TICKET(\s|$)/.test(upper)) {
+    const parts = input.split(/\s+/);
+    const tripNo = Number(parts[1]);
+    const ticketId = parts[2] ? parseTicketRef(parts.slice(2).join(" ")) : null;
+    if (Number.isInteger(tripNo) && tripNo > 0 && ticketId) {
+      return { type: "TICKET", tripNo, ticketId };
+    }
+    return { type: "BAD_TICKET" };
+  }
+
+  // "#PIM-34285" tanpa nomor trip — hanya kalau ada penanda #/PIM
+  // (angka biasa seperti "21" tetap NOTE, bukan ticket)
+  if (/^(?:#?\s*pim\s*[-:]?\s*\d{2,10}|#\s*\d{2,10})$/i.test(input)) {
+    return { type: "TICKET_ID", ticketId: parseTicketRef(input)! };
   }
 
   return { type: "NOTE", text: input };

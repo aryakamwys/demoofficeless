@@ -64,3 +64,44 @@ test("teks bebas jadi note", () => {
   // "21" bukan REVISE — harus jatuh ke NOTE
   assert.deepEqual(parseWaCommand("21"), { type: "NOTE", text: "21" });
 });
+
+test("ticket: variasi format id diterima", () => {
+  assert.deepEqual(parseWaCommand("TICKET 3 34285"), {
+    type: "TICKET",
+    tripNo: 3,
+    ticketId: "34285",
+  });
+  assert.deepEqual(parseWaCommand("ticket 3 PIM-34285"), {
+    type: "TICKET",
+    tripNo: 3,
+    ticketId: "34285",
+  });
+  assert.deepEqual(parseWaCommand("TICKET 3 #PIM-34285"), {
+    type: "TICKET",
+    tripNo: 3,
+    ticketId: "34285",
+  });
+});
+
+test("ticket: format salah jadi BAD_TICKET, bukan note", () => {
+  assert.equal(parseWaCommand("TICKET 3").type, "BAD_TICKET");
+  assert.equal(parseWaCommand("TICKET abc 34285").type, "BAD_TICKET");
+  assert.equal(parseWaCommand("TICKET 3 abc").type, "BAD_TICKET");
+});
+
+test("ticket: id telanjang dengan penanda #/PIM dikenali, angka biasa tetap note", () => {
+  assert.deepEqual(parseWaCommand("#PIM-34285"), {
+    type: "TICKET_ID",
+    ticketId: "34285",
+  });
+  assert.deepEqual(parseWaCommand("PIM-34285"), {
+    type: "TICKET_ID",
+    ticketId: "34285",
+  });
+  assert.deepEqual(parseWaCommand("#34285"), {
+    type: "TICKET_ID",
+    ticketId: "34285",
+  });
+  // angka tanpa penanda tetap note
+  assert.equal(parseWaCommand("34285").type, "NOTE");
+});

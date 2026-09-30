@@ -151,7 +151,7 @@ const CONTENT: Record<string, ReactNode> = {
 
       <H2>Struktur Menu</H2>
       <ul className="my-3 list-disc space-y-1 pl-5 text-sm text-slate-600">
-        <li><b>Dashboard</b> — ringkasan klaim terbaru.</li>
+        <li><b>Dashboard</b> — ringkasan klaim (kartu statistik).</li>
         <li><b>Claims Grab</b> — Employees (master karyawan), Upload (statement Grab), Claims (klaim & persetujuan).</li>
         <li><b>Manage Service</b> — Openclaw Ticket (monitoring Outlook Perkom).</li>
         <li><b>Inventory</b> — pendaftaran aset Perkom dengan scan barcode.</li>
@@ -373,6 +373,7 @@ const CONTENT: Record<string, ReactNode> = {
       <ul className="my-3 list-disc space-y-1 pl-5 text-sm text-slate-600">
         <li><Cmd>LIST</Cmd> — lihat daftar trip bernomor.</li>
         <li><Cmd>UBAH 3 75000</Cmd> — ubah trip no 3 jadi Rp75.000 (contoh).</li>
+        <li><Cmd>TICKET 3 PIM-34285</Cmd> — lampirkan bukti ticket EnvGate ke trip no 3.</li>
         <li><Cmd>SELESAI</Cmd> — sudah selesai, kirim ulang ke approver.</li>
       </ul>
       <Chat
@@ -380,7 +381,7 @@ const CONTENT: Record<string, ReactNode> = {
         messages={[
           {
             from: "bot",
-            text: "[Ref: K3M8ZR]\nHalo Mario,\n\nKlaim periode Agustus 2026 DIMINTA REVISI oleh Manager (Rini).\nAlasan: nominal trip 3 masih kurang tepat\n\nCARA REVISI LEWAT WHATSAPP INI (langkah demi langkah):\n1. Ketik LIST - untuk melihat daftar trip bernomor\n2. Ketik UBAH <nomor trip> <nominal baru> - contoh: UBAH 3 75000\n3. Ketik SELESAI - klaim dikirim ulang ke Manager",
+            text: "[Ref: K3M8ZR]\nHalo Mario,\n\nKlaim periode Agustus 2026 DIMINTA REVISI oleh Manager (Rini).\nAlasan: nominal trip 3 masih kurang tepat\n\nCARA REVISI LEWAT WHATSAPP INI (langkah demi langkah):\n1. Ketik LIST - untuk melihat daftar trip bernomor\n2. Ketik UBAH <nomor trip> <nominal baru> - contoh: UBAH 3 75000\n3. Ketik TICKET <nomor trip> <id ticket> - contoh: TICKET 3 PIM-34285\n4. Ketik SELESAI - klaim dikirim ulang ke Manager",
           },
           { from: "user", text: "list" },
           {
@@ -404,6 +405,28 @@ const CONTENT: Record<string, ReactNode> = {
           },
         ]}
       />
+
+      <H2>5. Melampirkan Ticket EnvGate (Bukti Kerja)</H2>
+      <P>
+        Setiap trip bisa dilengkapi nomor ticket EnvGate sebagai bukti pekerjaan — cukup diketik di
+        chat, kapan saja (saat konfirmasi awal maupun saat revisi). Tiket yang sudah terpasang
+        tampil sebagai <b>[#PIM-34285]</b> di samping baris trip, dan otomatis muncul lengkap di
+        Report PDF.
+      </P>
+      <Chat
+        title="Contoh percakapan — melampirkan ticket"
+        messages={[
+          { from: "user", text: "TICKET 3 PIM-34285" },
+          {
+            from: "bot",
+            text: "[Ref: R6T1WQ]\nSUDAH TERSIMPAN. Trip no 3 kini punya bukti ticket #PIM-34285.\nJudul ticket: Keyboard T14 (Cocacola - Cust. Perkom)\n\nBalas 1 = SETUJU kalau semua data sudah benar.",
+          },
+        ]}
+      />
+      <P>
+        Kalau klaim hanya punya satu trip, cukup kirim nomor ticket-nya saja: <Cmd>#PIM-34285</Cmd>.
+        Kalau trip-nya banyak, bot akan menanyakan trip yang mana.
+      </P>
 
       <H2>Hal yang Perlu Diketahui</H2>
       <ul className="my-3 list-disc space-y-1 pl-5 text-sm text-slate-600">
@@ -503,11 +526,14 @@ const CONTENT: Record<string, ReactNode> = {
       <H1>Ticket EnvGate per Trip</H1>
       <P>
         Setiap perjalanan (trip) pada klaim bisa dilengkapi <b>nomor ticket EnvGate</b> sebagai
-        bukti pekerjaan engineer. Ticket ini muncul di Report PDF dan hanya bisa diisi oleh{" "}
-        <b>HR</b> lewat halaman detail klaim.
+        bukti pekerjaan engineer. Ada dua cara mengisinya:
       </P>
+      <ul className="my-3 list-disc space-y-1 pl-5 text-sm text-slate-600">
+        <li><b>Oleh engineer sendiri lewat WhatsApp</b> — ketik <Cmd>TICKET 3 PIM-34285</Cmd> (lihat <b>Panduan Karyawan</b>). Bisa saat konfirmasi awal maupun saat revisi.</li>
+        <li><b>Oleh HR lewat web</b> — lewat tombol edit (pensil) pada baris trip, seperti di bawah.</li>
+      </ul>
 
-      <H2>Cara Mengisi Ticket</H2>
+      <H2>Cara Mengisi Ticket (HR, via Web)</H2>
       <Steps
         items={[
           <>Buka <b>Claims Grab → Claims</b>, lalu klik klaim yang mau diedit.</>,
