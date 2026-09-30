@@ -43,10 +43,25 @@ console.log(">> Login terdeteksi, mulai screenshot...");
 await page.waitForTimeout(2000);
 
 for (const [name, path] of targets) {
-  await page.goto(`${BASE}${path}`, { waitUntil: "networkidle", timeout: 60000 }).catch(() => {});
-  await page.waitForTimeout(2500);
-  await page.screenshot({ path: `public/docs/${name}.png`, fullPage: true });
-  console.log("ok:", name);
+  let ok = false;
+  for (let attempt = 1; attempt <= 3 && !ok; attempt++) {
+    const res = await page
+      .goto(`${BASE}${path}`, { waitUntil: "networkidle", timeout: 60000 })
+      .catch(() => null);
+    await page.waitForTimeout(2500);
+    // Cloudflare pernah menyajikan halaman 502 yang di-cache — cek status + isi halaman
+    const badGateway =
+      !res || res.status() >= 400 || /bad gateway|error code 5\d\d/i.test(await page.title().catch(() => "") + " " + (await page.locator("body").innerText().catch(() => "")));
+    if (badGateway) {
+      console.log(`retry ${attempt}/3 (${name}): status ${res ? res.status() : "ERR"}`);
+      await page.waitForTimeout(5000);
+      continue;
+    }
+    await page.screenshot({ path: `public/docs/${name}.png`, fullPage: true });
+    console.log("ok:", name);
+    ok = true;
+  }
+  if (!ok) console.log(`GAGAL: ${name} tetap error setelah 3x percobaan`);
 }
 
 await browser.close();

@@ -45,7 +45,10 @@ export async function cached<T>(
   }
   const value = await fn();
   try {
-    await client.set(key, JSON.stringify(value), ttlOpt(ttlSeconds));
+    // null = sinyal "gagal fetch" dari pemanggil — jangan cache kegagalan
+    if (value !== null) {
+      await client.set(key, JSON.stringify(value), ttlOpt(ttlSeconds));
+    }
   } catch (e) {
     console.error("Redis set gagal:", e);
   }

@@ -52,7 +52,10 @@ export interface InvTicket {
   /** Docs baru menyebut customer sebagai user_id (requester_id = nama lama) */
   user_id?: number;
   created_at?: string | number;
+  pretty_id?: string;
   category_details?: { id: number; name: string };
+  /** Jalur kategori lengkap: "Technical Support > Managed Service > Others" */
+  category_breadcrumb?: string;
   assigned_group_details?: { id: number; name: string };
   assigned_user?: MappedUser | null;
   requester_user?: MappedUser | null;
@@ -134,7 +137,7 @@ function unwrap(r: unknown): unknown[] {
 // sama; category_id maupun assigned_group_id pada incident bisa menunjuk salah
 // satunya. Disatukan jadi satu map, lalu nama level ditelusuri ke parent-nya.
 
-async function fetchEntityMap(): Promise<Record<string | number, InvEntity>> {
+async function fetchEntityMap(): Promise<Record<string | number, InvEntity> | null> {
   const map: Record<string | number, InvEntity> = {};
   for (const path of ["/helpdesks", "/levels"]) {
     try {
@@ -146,34 +149,54 @@ async function fetchEntityMap(): Promise<Record<string | number, InvEntity>> {
       console.error(`Gagal fetch ${path}:`, e);
     }
   }
-  return map;
+  // Map kosong (mis. kredensial belum diset) tidak boleh ter-cache 24 jam
+  return Object.keys(map).length > 0 ? map : null;
 }
 
-export const getEntityMap = () =>
-  cached("envgate:entities", 24 * 3600, fetchEntityMap);
+export const getEntityMap = async () =>
+  (await cached("envgate:v2:entities", 24 * 3600, fetchEntityMap)) ?? {};
 
-/** Entity sederhana (id + name) — dipakai resolve status/priority ticket. */
+/** Entity sederhana (id + name) — dipakai resolve status/priority/kategori. */
 async function fetchSimpleEntities(
   path: string
 ): Promise<Record<string | number, InvEntity>> {
+  const list = unwrap(await api(path)) as InvEntity[];
   const out: Record<string | number, InvEntity> = {};
-  try {
-    const list = unwrap(await api(path)) as InvEntity[];
-    for (const e of list) {
-      if (e?.id != null) out[e.id] = e;
-    }
-  } catch (e) {
-    console.error(`Gagal fetch ${path}:`, e);
+  for (const e of list) {
+    if (e?.id != null) out[e.id] = e;
   }
   return out;
 }
 
-// Namespace ID status/priority berbeda dari category/group — map terpisah
-export const getStatusMap = () =>
-  cached("envgate:statuses", 24 * 3600, () => fetchSimpleEntities("/statuses"));
+// Namespace ID status/priority berbeda dari category/group — map terpisah.
+// Gagal fetch → null → tidak di-cache (lihat cached()), pemanggil dapat {}.
+const simpleMap = (key: string, path: string) =>
+  cached(key, 24 * 3600, () => fetchSimpleEntities(path).catch(() => null));
 
-export const getPriorityMap = () =>
-  cached("envgate:priorities", 24 * 3600, () => fetchSimpleEntities("/priorities"));
+export const getStatusMap = async () =>
+  (await simpleMap("envgate:v2:statuses", "/statuses")) ?? {};
+
+export const getPriorityMap = async () =>
+  (await simpleMap("envgate:v2:priorities", "/priorities")) ?? {};
+
+export const getCategoryMap = async () =>
+  (await simpleMap("envgate:v2:categories", "/categories")) ?? {};
+
+/** Pure: jalur kategori dari root ke id, naik lewat parent_category_id. */
+export function categoryBreadcrumb(
+  map: Record<string | number, InvEntity | undefined>,
+  id: number | string | null | undefined
+): string {
+  const parts: string[] = [];
+  let cur = id != null ? map[id] : undefined;
+  let guard = 0;
+  while (cur && guard++ < 10) {
+    if (cur.name) parts.unshift(cur.name);
+    if (cur.parent_id == null) break;
+    cur = map[cur.parent_id];
+  }
+  return parts.join(" > ");
+}
 
 /** Pure: nama entity dari map gabungan, level tanpa nama naik ke parent. */
 export function resolveEntityName(
@@ -228,13 +251,16 @@ export function mapUser(u: InvUser | null | undefined): MappedUser | null {
 function decorate(
   items: InvTicket[],
   entityMap: Record<string | number, InvEntity>,
-  users: Record<string | number, InvUser>
+  users: Record<string | number, InvUser>,
+  categories: Record<string | number, InvEntity>
 ) {
   return items.map((item) => {
     const out: InvTicket = { ...item };
     if (out.category_id != null) {
       const name = resolveEntityName(entityMap, out.category_id);
       if (name) out.category_details = { id: out.category_id, name };
+      const crumb = categoryBreadcrumb(categories, out.category_id);
+      if (crumb) out.category_breadcrumb = crumb;
     }
     if (out.assigned_group_id != null) {
       const name = resolveEntityName(entityMap, out.assigned_group_id);
@@ -260,7 +286,11 @@ function userIdsOf(items: InvTicket[]): Array<number | undefined> {
 
 export async function getTicket(id: string): Promise<InvTicket | null> {
   return cached(`envgate:ticket:${id}`, 300, async () => {
-    const raw = await apiEither(`/requests?ids[]=${encodeURIComponent(id)}`);
+    // date_format=iso8601 — epoch default InvGate unitnya tidak standar,
+    // ISO string diparse dayjs/browser dengan benar
+    const raw = await apiEither(
+      `/requests?ids[]=${encodeURIComponent(id)}&date_format=iso8601`
+    );
     let inc: InvTicket | null = null;
     if (Array.isArray(raw) && raw.length > 0) {
       inc = raw[0] as InvTicket;
@@ -270,11 +300,12 @@ export async function getTicket(id: string): Promise<InvTicket | null> {
     }
     if (!inc) return null;
 
-    const [entityMap, users] = await Promise.all([
+    const [entityMap, users, categories] = await Promise.all([
       getEntityMap(),
       getUsers(userIdsOf([inc])),
+      getCategoryMap(),
     ]);
-    return decorate([inc], entityMap, users)[0];
+    return decorate([inc], entityMap, users, categories)[0];
   });
 }
 
@@ -301,7 +332,7 @@ export async function getRecentTickets(
     if (!Array.isArray(ids) || ids.length === 0) return [];
 
     const details = await apiEither(
-      `/requests?${ids.map((i: number) => `ids[]=${i}`).join("&")}`
+      `/requests?${ids.map((i: number) => `ids[]=${i}`).join("&")}&date_format=iso8601`
     );
     let items = (unwrap(details) as InvTicket[]).sort((a, b) => b.id - a.id);
 
@@ -330,17 +361,21 @@ export async function getRecentTickets(
       });
     }
 
-    const [entityMap, users] = await Promise.all([
+    const [entityMap, users, categories] = await Promise.all([
       getEntityMap(),
       getUsers(userIdsOf(items)),
+      getCategoryMap(),
     ]);
-    return decorate(items, entityMap, users);
+    return decorate(items, entityMap, users, categories);
   });
 }
 
 /**
- * Fallback report: cari ticket terbaru yang requesternya cocok dengan nama
- * (linking utama tetap managed_service_claims.customer_name).
+ * Fallback report: cari ticket terbaru yang requesternya ATAU agen yang
+ * ditugaskan cocok dengan nama (linking utama tetap
+ * managed_service_claims.customer_name). Di EnvGate, customer/requester
+ * sering berupa nama perusahaan — engineer justru muncul sebagai assigned
+ * agent, jadi dua-duanya dicek.
  * EXACT match setelah normalisasi (lowercase, tanpa tanda baca, spasi rapikan)
  * — tidak nebak: ticket yang salah pada report keuangan lebih buruk daripada kosong.
  */
@@ -352,7 +387,13 @@ export async function findTicketByRequesterName(name: string): Promise<InvTicket
   if (!target) return null;
   try {
     const recent = await getRecentTickets(null, null);
-    return recent.find((t) => norm(t.requester_user?.name) === target) || null;
+    return (
+      recent.find(
+        (t) =>
+          norm(t.requester_user?.name) === target ||
+          norm(t.assigned_user?.name) === target
+      ) || null
+    );
   } catch {
     return null;
   }

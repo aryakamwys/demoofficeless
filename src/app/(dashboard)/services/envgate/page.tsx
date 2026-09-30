@@ -19,12 +19,15 @@ export default async function EnvGateTestPage() {
     ]);
     tickets = recent.map((t) => ({
       id: t.id,
-      subject: ticketTitle(t),
+      pretty_id: t.pretty_id || `PIM-${t.id}`,
+      title: ticketTitle(t),
+      type_id: t.type_id,
+      category: t.category_breadcrumb || t.category_details?.name || "",
       status: t.status_id ? resolveEntityName(statusMap, t.status_id) || `ID ${t.status_id}` : "—",
       priority: t.priority_id ? resolveEntityName(priorityMap, t.priority_id) || `ID ${t.priority_id}` : "—",
       requester: t.requester_user?.name || "",
       assigned: t.assigned_user?.name || "",
-      category: t.category_details?.name || "",
+      helpdesk: t.assigned_group_details?.name || "",
       created_at: t.created_at ? String(t.created_at) : null,
     }));
   } catch (e) {
