@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createServerClient } from "@/lib/supabase-server";
+import { createServerClient, createServiceClient } from "@/lib/supabase-server";
 import { parseGrabCSV, parseGrabPDF, groupTripsByEmployee } from "@/lib/parser";
 
 export async function POST(request: NextRequest) {
@@ -36,8 +36,8 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  // Download file from storage
-  const { data: fileData, error: downloadError } = await supabase.storage
+  // Download file from storage — service role (RLS storage self-host)
+  const { data: fileData, error: downloadError } = await createServiceClient().storage
     .from("dataperkom")
     .download(upload.storage_path);
 

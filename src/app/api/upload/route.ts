@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createServerClient } from "@/lib/supabase-server";
+import { createServerClient, createServiceClient } from "@/lib/supabase-server";
 
 export async function GET() {
   const supabase = await createServerClient();
@@ -55,7 +55,9 @@ export async function POST(request: NextRequest) {
   const storagePath = `statements/${fileName}`;
 
   const buffer = Buffer.from(await file.arrayBuffer());
-  const { error: uploadError } = await supabase.storage
+  // Tulis via service role — user sudah diverifikasi di atas; storage-api
+  // self-host ini tidak menerapkan role JWT utk RLS storage.objects
+  const { error: uploadError } = await createServiceClient().storage
     .from("dataperkom")
     .upload(storagePath, buffer, {
       contentType: file.type,

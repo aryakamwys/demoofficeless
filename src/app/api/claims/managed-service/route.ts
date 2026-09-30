@@ -99,7 +99,8 @@ export async function POST(request: NextRequest) {
   const storagePath = `claims/managed_service/${fileName}`;
 
   const buffer = Buffer.from(await file.arrayBuffer());
-  const { error: uploadError } = await supabase.storage
+  // Tulis via service role — user sudah diverifikasi di atas
+  const { error: uploadError } = await createServiceClient().storage
     .from("dataperkom")
     .upload(storagePath, buffer, {
       contentType: file.type,
