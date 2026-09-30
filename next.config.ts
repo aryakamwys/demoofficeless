@@ -12,6 +12,18 @@ const nextConfig: NextConfig = {
       static: 180,
     },
   },
+  // Dev lokal: NEXT_PUBLIC_SUPABASE_URL di .env.local diarahkan ke dev server
+  // sendiri (http://localhost:<port>), lalu path /auth|rest|storage/v1 di-proxy
+  // ke self-host production — request browser jadi same-origin, bebas CORS.
+  // Hanya aktif saat `next dev`; build production tidak terpengaruh.
+  async rewrites() {
+    if (process.env.NODE_ENV !== "development") return [];
+    const target = process.env.SUPABASE_PROXY_TARGET || "https://perkombusiness.com";
+    return ["auth", "rest", "storage"].map((svc) => ({
+      source: `/${svc}/v1/:path*`,
+      destination: `${target}/${svc}/v1/:path*`,
+    }));
+  },
 };
 
 export default nextConfig;
