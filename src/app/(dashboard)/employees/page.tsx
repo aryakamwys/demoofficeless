@@ -28,12 +28,8 @@ export default function EmployeesPage() {
     return () => clearTimeout(t);
   }, [search]);
 
-  // Search/filters ganti → balik ke halaman 1
-  useEffect(() => {
-    setPage(1);
-  }, [debouncedSearch]);
-
-  // Pagination 10/halaman (data sudah ke-load semua — dataset internal kecil)
+  // Pagination 10/halaman (data sudah ke-load semua — dataset internal kecil;
+  // list menyusut karena search → safePage otomatis clamp, tidak perlu effect reset)
   const PAGE_SIZE = 10;
   const totalPages = Math.max(1, Math.ceil(employees.length / PAGE_SIZE));
   const safePage = Math.min(page, totalPages);
