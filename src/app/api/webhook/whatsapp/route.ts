@@ -916,6 +916,14 @@ export async function POST(request: NextRequest) {
     const phoneNumber = normalizePhone(sender);
     if (!phoneNumber) return NextResponse.json({ success: true });
 
+    // Pesan dari nomor gateway sendiri (chat "Message yourself" / chat
+    // 6285110543115 di dashboard Kirimi) — jangan diproses apalagi dibalas:
+    // balasan bot ke nomornya sendiri masuk webhook lagi dan bisa berulang
+    // (loop pesan). Set KIRIMI_BOT_PHONE di env produksi.
+    if (process.env.KIRIMI_BOT_PHONE && phoneNumber === normalizePhone(process.env.KIRIMI_BOT_PHONE)) {
+      return NextResponse.json({ success: true, reason: "Self message ignored" });
+    }
+
     // Fetch active claims
     const { data: claims } = await supabase
       .from("claims")
