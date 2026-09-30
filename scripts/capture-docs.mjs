@@ -1,7 +1,8 @@
 // scripts/capture-docs.mjs — screenshot halaman app untuk dokumentasi /docs.
 // Membuka Chrome (visible), Anda login manual sekali, lalu semua halaman
 // di-screenshot otomatis ke public/docs/.
-// Pakai: node scripts/capture-docs.mjs  (dev server harus jalan di :3000)
+// Pakai: node scripts/capture-docs.mjs [halaman...]  (dev server harus jalan di :3000)
+// Argumen opsional = nama halaman yang di-capture ulang, mis: node scripts/capture-docs.mjs claims
 import { mkdirSync } from "node:fs";
 import { chromium } from "playwright";
 
@@ -17,6 +18,9 @@ const pages = [
   ["openclaw", "/services/openclaw"],
   ["inventory", "/inventory"],
 ];
+
+const only = process.argv.slice(2);
+const targets = only.length ? pages.filter(([n]) => only.includes(n)) : pages;
 
 mkdirSync("public/docs", { recursive: true });
 
@@ -38,7 +42,7 @@ await page.waitForURL("**/dashboard", { timeout: 300000 });
 console.log(">> Login terdeteksi, mulai screenshot...");
 await page.waitForTimeout(2000);
 
-for (const [name, path] of pages) {
+for (const [name, path] of targets) {
   await page.goto(`${BASE}${path}`, { waitUntil: "networkidle", timeout: 60000 }).catch(() => {});
   await page.waitForTimeout(2500);
   await page.screenshot({ path: `public/docs/${name}.png`, fullPage: true });
