@@ -1,7 +1,8 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import Link from "next/link";
+import dayjs from "dayjs";
 import { ClaimWithEmployee, Upload } from "@/types";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -27,6 +28,7 @@ import {
 export default function ClaimsPage() {
   const [claims, setClaims] = useState<ClaimWithEmployee[]>([]);
   const [search, setSearch] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("ALL");
   const [periodFilter, setPeriodFilter] = useState("ALL");
   const [periods, setPeriods] = useState<string[]>([]);
@@ -39,28 +41,41 @@ export default function ClaimsPage() {
   );
   const [loading, setLoading] = useState(true);
   const [exporting, setExporting] = useState(false);
+  const abortRef = useRef<AbortController | null>(null);
+
+  // Debounce 300ms supaya tidak fetch tiap ketikan
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedSearch(search), 300);
+    return () => clearTimeout(t);
+  }, [search]);
 
   const [sendWADialogOpen, setSendWADialogOpen] = useState(false);
   const [selectedClaim, setSelectedClaim] = useState<ClaimWithEmployee | null>(null);
 
   const fetchClaims = useCallback(async () => {
+    // Batalkan request lama supaya respons stale tidak menimpa hasil baru
+    abortRef.current?.abort();
+    const ctrl = new AbortController();
+    abortRef.current = ctrl;
     setLoading(true);
     try {
       const params = new URLSearchParams();
-      if (search) params.set("search", search);
+      if (debouncedSearch) params.set("search", debouncedSearch);
       if (statusFilter !== "ALL") params.set("status", statusFilter);
       if (periodFilter !== "ALL") params.set("period", periodFilter);
       if (uploadFilter !== "ALL") params.set("upload_id", uploadFilter);
 
-      const res = await fetch(`/api/claims?${params}`);
+      const res = await fetch(`/api/claims?${params}`, { signal: ctrl.signal });
       const result = await res.json();
       if (result.success) {
         setClaims(result.data);
       }
+    } catch {
+      // AbortError diabaikan — request terbaru sudah berjalan
     } finally {
       setLoading(false);
     }
-  }, [search, statusFilter, periodFilter, uploadFilter]);
+  }, [debouncedSearch, statusFilter, periodFilter, uploadFilter]);
 
   const fetchPeriods = useCallback(async () => {
     const res = await fetch("/api/claims?distinct_periods=true");
@@ -221,7 +236,9 @@ export default function ClaimsPage() {
                   {claims.map((claim) => (
                     <tr key={claim.id} className="hover:bg-slate-50/50 transition-colors border-b border-slate-100">
                       <td className="px-4 py-4 align-middle text-slate-500 text-xs">
-                        11 Jun 2026,<br/>12:00:00 PM
+                        {dayjs(claim.updated_at).format("DD MMM YYYY,")}
+                        <br />
+                        {dayjs(claim.updated_at).format("hh:mm:ss A")}
                       </td>
                       <td className="px-4 py-4 font-medium align-middle text-slate-800">
                         {claim.employee?.employee_name || "—"}

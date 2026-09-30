@@ -24,7 +24,10 @@ export async function GET(request: NextRequest) {
   let query = supabase
     .from("claims")
     .select("*, employee:employees!claims_employee_id_fkey(*)")
-    .order("updated_at", { ascending: false });
+    .order("updated_at", { ascending: false })
+    // ponytail: pengaman pertumbuhan data — dataset klaim internal jauh di
+    // bawah ini; ganti ke pagination server kalau sudah mendekati
+    .limit(500);
 
   if (status) {
     query = query.eq("status", status);
