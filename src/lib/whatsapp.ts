@@ -43,16 +43,21 @@ export function normalizePhone(phone: string | undefined | null): string | null 
 export async function sendTextMessage(
   receiver: string,
   message: string,
-  options?: { delayMs?: number; maxRetries?: number }
+  options?: { delayMs?: number; maxRetries?: number; clientMsgId?: string }
 ): Promise<SendTextResponse> {
   const config = getConfig();
   const maxRetries = options?.maxRetries ?? 3;
 
+  // Idempotency (docs Kirimi): retry dengan clientMsgId yang sama tidak akan
+  // pernah dobel-kirim (diingat 24 jam per device di sisi Kirimi)
+  const clientMsgId = options?.clientMsgId || crypto.randomUUID();
+
   // Kirimi requires receiver format 628xxx — normalize at the root so that all callers are safe
   const normalized = normalizePhone(receiver) || receiver;
 
-  // Jeda sebelum pesan dikirim (default 2 detik, anti-bot detection)
-  const delayMs = options?.delayMs ?? 2000;
+  // Jeda acak 3-7 detik antar pesan — jeda tetap & pendek dari device QR
+  // adalah pemicu pembatasan paling sering (docs Kirimi: catatan praktis)
+  const delayMs = options?.delayMs ?? 3000 + Math.floor(Math.random() * 4000);
   if (delayMs > 0) {
     await new Promise((resolve) => setTimeout(resolve, delayMs));
   }
@@ -70,6 +75,7 @@ export async function sendTextMessage(
           device_id: config.device_id,
           receiver: normalized,
           message,
+          clientMsgId,
         }),
       });
 
@@ -81,6 +87,14 @@ export async function sendTextMessage(
       }
 
       lastError = data.error || data.message || `HTTP ${res.status}`;
+
+      // Device terputus — retry tidak akan menolong, gagal cepat
+      // (docs: hentikan bila pengiriman gagal karena perangkat terputus)
+      if (/disconnect/i.test(String(lastError))) {
+        console.error(`[WA] Device disconnected — stop retry for ${normalized}`);
+        break;
+      }
+
       console.warn(`[WA] Send attempt ${attempt}/${maxRetries} failed for ${normalized}: ${lastError}`);
     } catch (error) {
       lastError = error instanceof Error ? error.message : "Unknown error";
