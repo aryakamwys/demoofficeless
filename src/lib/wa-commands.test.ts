@@ -20,6 +20,13 @@ test("revise: dengan dan tanpa alasan", () => {
     type: "REVISE",
     reason: "Tiket HILANG",
   });
+  // salah ketik umum: "2" nempel langsung dengan alasannya
+  assert.deepEqual(parseWaCommand("2banyak yg ga bener"), {
+    type: "REVISE",
+    reason: "banyak yg ga bener",
+  });
+  // angka murni selain 2 bukan revisi
+  assert.notEqual(parseWaCommand("23").type, "REVISE");
 });
 
 test("ubah: format nominal", () => {

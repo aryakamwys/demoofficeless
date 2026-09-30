@@ -43,8 +43,9 @@ export function parseWaCommand(raw: string): WaCommand {
   if (input === "1") return { type: "APPROVE" };
   if (input === "3") return { type: "DETAIL" };
 
-  // "2" atau "2 <alasan>" — alasan dipertahankan apa adanya (huruf besar/kecil)
-  if (/^2(\s|$)/.test(input)) {
+  // "2", "2 <alasan>", atau "2alasan" ( Salah ketik umum: angka nempel kata.
+  // Angka murni selain 2 (mis. "23") tetap ditolak — bukan revisi.
+  if (/^2(?=\D|$)/.test(input)) {
     return { type: "REVISE", reason: input.slice(1).trim() };
   }
 

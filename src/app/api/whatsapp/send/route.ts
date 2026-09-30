@@ -61,6 +61,17 @@ export async function POST(request: NextRequest) {
     if (!claim.manager) {
       return NextResponse.json({ success: false, error: "Manager belum diatur untuk klaim ini" }, { status: 400 });
     }
+    // Webhook hanya mencocokkan balasan Manager bila karyawan sudah konfirmasi
+    // (approved_at terisi). Tanpa guard ini prompt tetap terkirim lalu balasan
+    // Manager ditolak "tidak ada klaim aktif" — flow kelihatan macet.
+    if (!claim.approved_at || claim.manager_status !== "PENDING") {
+      return NextResponse.json({
+        success: false,
+        error: claim.manager_status === "APPROVED"
+          ? "Manager sudah menyetujui klaim ini — tidak perlu kirim ulang."
+          : "Karyawan belum konfirmasi klaim ini (balas 1). Kirim ulang ke Karyawan dulu — prompt ke Manager terkirim otomatis setelah karyawan setuju.",
+      }, { status: 400 });
+    }
     phoneNumber = claim.manager.phone_number;
     messageType = "MANAGER_APPROVAL_PROMPT";
     message = buildManagerApprovalMessage({
@@ -72,6 +83,16 @@ export async function POST(request: NextRequest) {
   } else if (target === "HR") {
     if (!claim.hr) {
       return NextResponse.json({ success: false, error: "HR belum diatur untuk klaim ini" }, { status: 400 });
+    }
+    // Sama seperti Manager: balasan HR baru dicocokkan webhook setelah Manager
+    // menyetujui. Jangan kirim prompt yang balasannya pasti ditolak.
+    if (!claim.approved_at || claim.manager_status !== "APPROVED" || claim.hr_status !== "PENDING") {
+      return NextResponse.json({
+        success: false,
+        error: claim.hr_status === "APPROVED"
+          ? "HR sudah menyetujui klaim ini."
+          : "Manager belum menyetujui klaim ini — prompt ke HR terkirim otomatis setelah Manager membalas 1.",
+      }, { status: 400 });
     }
     phoneNumber = claim.hr.phone_number;
     messageType = "HR_APPROVAL_PROMPT";

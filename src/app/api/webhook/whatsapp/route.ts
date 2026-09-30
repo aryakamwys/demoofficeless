@@ -769,22 +769,23 @@ async function processWebhookReply(
           await proceedToHrOrFinalize(supabase, freshClaim, employeePhone);
         }
 
-      } else if (reply === "2" || reply.startsWith("2 ")) {
-        const cmd = parseWaCommand(reply);
-        const reason = cmd.type === "REVISE" ? cmd.reason : "";
-        await handleRevisionRequest(supabase, claim, "MANAGER", reason, phoneNumber, employeePhone);
       } else {
-        await sendAndLog(
-          supabase, claim.id, phoneNumber,
-          [
-            `Maaf, balasan belum dikenali.`,
-            ``,
-            `Ketik:`,
-            `1 = SETUJU`,
-            `2 = MINTA REVISI — contoh: 2 nominal trip 3 masih salah`,
-          ].join("\n"),
-          "INVALID_REPLY"
-        );
+        const cmd = parseWaCommand(reply);
+        if (cmd.type === "REVISE") {
+          await handleRevisionRequest(supabase, claim, "MANAGER", cmd.reason, phoneNumber, employeePhone);
+        } else {
+          await sendAndLog(
+            supabase, claim.id, phoneNumber,
+            [
+              `Maaf, balasan belum dikenali.`,
+              ``,
+              `Ketik:`,
+              `1 = SETUJU`,
+              `2 = MINTA REVISI — contoh: 2 nominal trip 3 masih salah`,
+            ].join("\n"),
+            "INVALID_REPLY"
+          );
+        }
       }
     }
 
@@ -809,22 +810,23 @@ async function processWebhookReply(
             "EMPLOYEE_STATUS_UPDATE"
           );
         }
-      } else if (reply === "2" || reply.startsWith("2 ")) {
-        const cmd = parseWaCommand(reply);
-        const reason = cmd.type === "REVISE" ? cmd.reason : "";
-        await handleRevisionRequest(supabase, claim, "HR", reason, phoneNumber, employeePhone);
       } else {
-        await sendAndLog(
-          supabase, claim.id, phoneNumber,
-          [
-            `Maaf, balasan belum dikenali.`,
-            ``,
-            `Ketik:`,
-            `1 = SETUJU (klaim selesai)`,
-            `2 = MINTA REVISI — contoh: 2 nominal trip 3 masih salah`,
-          ].join("\n"),
-          "INVALID_REPLY"
-        );
+        const cmd = parseWaCommand(reply);
+        if (cmd.type === "REVISE") {
+          await handleRevisionRequest(supabase, claim, "HR", cmd.reason, phoneNumber, employeePhone);
+        } else {
+          await sendAndLog(
+            supabase, claim.id, phoneNumber,
+            [
+              `Maaf, balasan belum dikenali.`,
+              ``,
+              `Ketik:`,
+              `1 = SETUJU (klaim selesai)`,
+              `2 = MINTA REVISI — contoh: 2 nominal trip 3 masih salah`,
+            ].join("\n"),
+            "INVALID_REPLY"
+          );
+        }
       }
     }
 
