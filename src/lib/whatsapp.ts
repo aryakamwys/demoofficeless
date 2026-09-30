@@ -27,14 +27,18 @@ interface SendTextResponse {
 
 /**
  * Normalisasi nomor ke format Kirimi (6281234567890, tanpa +/spasi/@lid).
+ * Tahan banting untuk data yang beda-beda: "+62…", "62…", "08…", "6208…"
+ * (double prefix), "008…", spasi/tanda hubung/kurung, dan akhiran @lid.
  */
 export function normalizePhone(phone: string | undefined | null): string | null {
   if (!phone) return null;
   return phone
-    .replace(/[\s\-()]/g, "")
+    .replace(/[\s\-().]/g, "")
+    .replace(/@lid$/, "")
     .replace(/^\+/, "")
-    .replace(/^0/, "62")
-    .replace(/@lid$/, "");
+    .replace(/^620+/, "62") // double prefix: 62 + 08xx
+    .replace(/^00+/, "62") // double zero
+    .replace(/^0/, "62"); // leading 0 lokal
 }
 
 /**
