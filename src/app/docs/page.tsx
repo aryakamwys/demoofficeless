@@ -234,7 +234,7 @@ const CONTENT: Record<string, ReactNode> = {
         Jika pengiriman gagal karena rate limit WhatsApp (terlalu banyak pesan beruntun), tunggu
         beberapa menit lalu kirim ulang. Beri jeda antar pengiriman jika mengirim banyak klaim sekaligus.
       </Note>
-      <Shot src="/docs/claims.png" caption="Daftar Claims beserta statusnya" />
+      <Shot src="/docs/claims.png?v=2" caption="Daftar Claims beserta statusnya" />
     </>
   ),
 
