@@ -122,7 +122,7 @@ export function Sidebar({ collapsed, onToggle, isSuperadmin }: SidebarProps) {
                       <Car className="h-4 w-4" />
                     </div>
                   </TooltipTrigger>
-                  <TooltipContent side="right">Trips</TooltipContent>
+                  <TooltipContent side="right">Claims Grab</TooltipContent>
                 </Tooltip>
                 {tripsSubItems.map((item) => (
                   <SidebarLink
@@ -153,7 +153,7 @@ export function Sidebar({ collapsed, onToggle, isSuperadmin }: SidebarProps) {
                     <div className="absolute left-[-8px] top-0 bottom-0 w-1 bg-blue-600 rounded-r-md" />
                   )}
                   <Car className="h-5 w-5 shrink-0" />
-                  <span className="flex-1 text-left">Trips</span>
+                  <span className="flex-1 text-left">Claims Grab</span>
                   <ChevronDown
                     className={cn(
                       "h-4 w-4 transition-transform duration-200",

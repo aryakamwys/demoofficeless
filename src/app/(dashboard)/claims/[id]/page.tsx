@@ -48,14 +48,6 @@ export default async function ClaimDetailPage({ params }: ClaimDetailPageProps) 
     
     if (tickets && tickets.length > 0) {
       ticket = tickets[0];
-    } else if (claim.status === 'APPROVED') {
-      ticket = {
-        ticket_id: "32535",
-        ticket_title: "Preventive Maintenance (PM 1 of 4) Server DRC - Resona Indonesia Finance",
-        customer_name: "Resona Indonesia Finance",
-        location: "Jabodetabek",
-        amount: claim.total_amount
-      };
     }
   }
 

@@ -312,31 +312,18 @@ export async function getRecentTickets(
 /**
  * Fallback report: cari ticket terbaru yang requesternya cocok dengan nama
  * (linking utama tetap managed_service_claims.customer_name).
- * Normalisasi: lowercase, buang tanda baca, rapikan spasi.
- * Matching berlapis: exact → token-subset ("Arya" cocok "Arya Kamwys S.Kom") → substring.
+ * EXACT match setelah normalisasi (lowercase, tanpa tanda baca, spasi rapikan)
+ * — tidak nebak: ticket yang salah pada report keuangan lebih buruk daripada kosong.
  */
 export async function findTicketByRequesterName(name: string): Promise<InvTicket | null> {
   const norm = (s?: string | null) =>
     (s || "").toLowerCase().replace(/[^a-z0-9\s]/g, " ").replace(/\s+/g, " ").trim();
-  // Semua kata dari nama yang lebih pendek ada di nama yang lebih panjang
-  const tokenSubset = (a: string, b: string) => {
-    const ta = a.split(" ").filter(Boolean);
-    const tb = b.split(" ").filter(Boolean);
-    if (!ta.length || !tb.length) return false;
-    const [small, big] = ta.length <= tb.length ? [ta, tb] : [tb, ta];
-    return small.every((w) => big.includes(w));
-  };
 
   const target = norm(name);
   if (!target) return null;
   try {
     const recent = await getRecentTickets(null, null);
-    const names = recent.map((t) => norm(t.requester_user?.name));
-    let idx = names.findIndex((n) => n === target);
-    if (idx < 0) idx = names.findIndex((n) => tokenSubset(n, target));
-    if (idx < 0)
-      idx = names.findIndex((n) => n && (n.includes(target) || target.includes(n)));
-    return idx >= 0 ? recent[idx] : null;
+    return recent.find((t) => norm(t.requester_user?.name) === target) || null;
   } catch {
     return null;
   }

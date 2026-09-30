@@ -115,7 +115,7 @@ export function Header() {
               )}
             >
               <Car className="h-4 w-4 shrink-0" />
-              <span className="flex-1 text-left">Trips</span>
+              <span className="flex-1 text-left">Claims Grab</span>
               <ChevronDown
                 className={cn(
                   "h-3.5 w-3.5 transition-transform duration-200",

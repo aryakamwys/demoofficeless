@@ -11,7 +11,7 @@ const NAV = [
     items: [{ id: "intro", title: "Pengenalan & Login" }],
   },
   {
-    group: "Trips",
+    group: "Claims Grab",
     items: [
       { id: "employees", title: "Employees" },
       { id: "upload", title: "Upload Statement" },
@@ -93,14 +93,14 @@ const CONTENT: Record<string, ReactNode> = {
       <H1>Pengenalan</H1>
       <P>
         Officeless Perkom adalah aplikasi internal untuk mengelola klaim perjalanan Grab Business
-        karyawan (modul <b>Trips</b>) serta layanan pendukung operasional: <b>Manage Service</b>{" "}
+        karyawan (modul <b>Claims Grab</b>) serta layanan pendukung operasional: <b>Manage Service</b>{" "}
         (monitoring OpenClaw) dan <b>Inventory</b> (pendataan aset via barcode).
       </P>
 
       <H2>Struktur Menu</H2>
       <ul className="my-3 list-disc space-y-1 pl-5 text-sm text-slate-600">
         <li><b>Dashboard</b> — ringkasan klaim terbaru.</li>
-        <li><b>Trips</b> — Employees (master karyawan), Upload (statement Grab), Claims (klaim & persetujuan).</li>
+        <li><b>Claims Grab</b> — Employees (master karyawan), Upload (statement Grab), Claims (klaim & persetujuan).</li>
         <li><b>Manage Service</b> — Openclaw Ticket (monitoring Outlook Perkom).</li>
         <li><b>Inventory</b> — pendaftaran aset Perkom dengan scan barcode.</li>
       </ul>
@@ -168,7 +168,7 @@ const CONTENT: Record<string, ReactNode> = {
       <H2>Langkah Upload</H2>
       <Steps
         items={[
-          <>Buka menu <b>Trips → Upload</b>.</>,
+          <>Buka menu <b>Claims Grab → Upload</b>.</>,
           <>Pilih <b>Periode</b> (bulan dan tahun) klaim.</>,
           <>Klik area upload, lalu pilih file statement Grab (format <b>CSV</b> atau <b>PDF</b>).</>,
           <>Klik <b>Upload</b> — file diproses otomatis.</>,
