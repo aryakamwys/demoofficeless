@@ -21,6 +21,17 @@ CREATE TABLE IF NOT EXISTS employees (
 CREATE INDEX IF NOT EXISTS idx_employees_number ON employees(employee_number);
 CREATE INDEX IF NOT EXISTS idx_employees_active ON employees(is_active);
 
+-- ------- Constraint yang hilang: pg_dump menaruh ADD CONSTRAINT di akhir,
+-- restore yang mati tengah jalan menyisakan tabel TANPA primary key -------
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'employees_pkey') THEN
+    ALTER TABLE employees ADD CONSTRAINT employees_pkey PRIMARY KEY (id);
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'employees_number_key') THEN
+    ALTER TABLE employees ADD CONSTRAINT employees_number_key UNIQUE (employee_number);
+  END IF;
+END $$;
+
 CREATE TABLE IF NOT EXISTS uploads (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   period VARCHAR(20) NOT NULL,
