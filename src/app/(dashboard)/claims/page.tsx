@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
-import { ClaimWithEmployee } from "@/types";
+import { ClaimWithEmployee, Upload } from "@/types";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
@@ -30,9 +30,16 @@ export default function ClaimsPage() {
   const [statusFilter, setStatusFilter] = useState("ALL");
   const [periodFilter, setPeriodFilter] = useState("ALL");
   const [periods, setPeriods] = useState<string[]>([]);
+  const [uploads, setUploads] = useState<Upload[]>([]);
+  // Preselect dari ?upload_id= (tombol Claims di halaman Upload) via lazy init — bukan effect
+  const [uploadFilter, setUploadFilter] = useState(() =>
+    typeof window === "undefined"
+      ? "ALL"
+      : new URLSearchParams(window.location.search).get("upload_id") || "ALL"
+  );
   const [loading, setLoading] = useState(true);
   const [exporting, setExporting] = useState(false);
-  
+
   const [sendWADialogOpen, setSendWADialogOpen] = useState(false);
   const [selectedClaim, setSelectedClaim] = useState<ClaimWithEmployee | null>(null);
 
@@ -43,6 +50,7 @@ export default function ClaimsPage() {
       if (search) params.set("search", search);
       if (statusFilter !== "ALL") params.set("status", statusFilter);
       if (periodFilter !== "ALL") params.set("period", periodFilter);
+      if (uploadFilter !== "ALL") params.set("upload_id", uploadFilter);
 
       const res = await fetch(`/api/claims?${params}`);
       const result = await res.json();
@@ -52,7 +60,7 @@ export default function ClaimsPage() {
     } finally {
       setLoading(false);
     }
-  }, [search, statusFilter, periodFilter]);
+  }, [search, statusFilter, periodFilter, uploadFilter]);
 
   const fetchPeriods = useCallback(async () => {
     const res = await fetch("/api/claims?distinct_periods=true");
@@ -73,6 +81,16 @@ export default function ClaimsPage() {
     fetchPeriods();
   }, [fetchPeriods]);
 
+  // Daftar statement untuk filter per-upload
+  useEffect(() => {
+    fetch("/api/upload")
+      .then((r) => r.json())
+      .then((result) => {
+        if (result.success) setUploads(result.data);
+      })
+      .catch(() => {});
+  }, []);
+
   const handleSendWA = (claim: ClaimWithEmployee) => {
     setSelectedClaim(claim);
     setSendWADialogOpen(true);
@@ -84,6 +102,7 @@ export default function ClaimsPage() {
       const params = new URLSearchParams();
       if (statusFilter !== "ALL") params.set("status", statusFilter);
       if (periodFilter !== "ALL") params.set("period", periodFilter);
+      if (uploadFilter !== "ALL") params.set("upload_id", uploadFilter);
       window.open(`/api/claims/export?${params}`, "_blank");
     } finally {
       setTimeout(() => setExporting(false), 1500);
@@ -128,6 +147,20 @@ export default function ClaimsPage() {
               {periods.map((p) => (
                 <SelectItem key={p} value={p}>
                   {p}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+
+          <Select value={uploadFilter} onValueChange={setUploadFilter}>
+            <SelectTrigger className="w-56">
+              <SelectValue placeholder="Statement" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="ALL">All Statement</SelectItem>
+              {uploads.map((u) => (
+                <SelectItem key={u.id} value={u.id}>
+                  {u.period} — {u.filename}
                 </SelectItem>
               ))}
             </SelectContent>

@@ -19,6 +19,7 @@ export async function GET(request: NextRequest) {
   const search = searchParams.get("search") || "";
   const status = searchParams.get("status") || "";
   const period = searchParams.get("period") || "";
+  const uploadId = searchParams.get("upload_id") || "";
 
   let query = supabase
     .from("claims")
@@ -31,6 +32,10 @@ export async function GET(request: NextRequest) {
 
   if (period) {
     query = query.eq("period", period);
+  }
+
+  if (uploadId) {
+    query = query.eq("upload_id", uploadId);
   }
 
   const { data, error } = await query;

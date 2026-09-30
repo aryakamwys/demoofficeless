@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
+import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -203,9 +204,17 @@ export default function UploadPage() {
                       </p>
                     </div>
                   </div>
-                  <span className="text-xs text-muted-foreground uppercase">
-                    {upload.file_type}
-                  </span>
+                  <div className="flex items-center gap-2">
+                    <span className="hidden sm:inline text-xs text-muted-foreground uppercase">
+                      {upload.file_type}
+                    </span>
+                    <Button variant="outline" size="sm" asChild>
+                      <Link href={`/claims?upload_id=${upload.id}`}>
+                        <FileText className="mr-2 h-4 w-4" />
+                        Claims
+                      </Link>
+                    </Button>
+                  </div>
                 </div>
               ))}
             </div>
