@@ -165,7 +165,7 @@ const CONTENT: Record<string, ReactNode> = {
           <>Klik tombol <b>Login</b> — Anda masuk ke Dashboard.</>,
         ]}
       />
-      <Shot src="/docs/dashboard.png" caption="Halaman Dashboard setelah login" />
+      <Shot src="/docs/dashboard.png?v=2" caption="Halaman Dashboard setelah login" />
     </>
   ),
 
