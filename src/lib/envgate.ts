@@ -281,3 +281,28 @@ export async function getRecentTickets(
     return decorate(items, entityMap, users);
   });
 }
+
+/**
+ * Fallback report: cari ticket terbaru yang requesternya cocok dengan nama
+ * (linking utama tetap managed_service_claims.customer_name). Cocok exact
+ * dulu, lalu substring dua arah. Return null bila API tidak terjangkau.
+ */
+export async function findTicketByRequesterName(name: string): Promise<InvTicket | null> {
+  const norm = (s?: string | null) => (s || "").toLowerCase().replace(/\s+/g, " ").trim();
+  const target = norm(name);
+  if (!target) return null;
+  try {
+    const recent = await getRecentTickets(null, null);
+    return (
+      recent.find((t) => norm(t.requester_user?.name) === target) ||
+      recent.find(
+        (t) =>
+          t.requester_user &&
+          (norm(t.requester_user.name).includes(target) || target.includes(norm(t.requester_user.name)))
+      ) ||
+      null
+    );
+  } catch {
+    return null;
+  }
+}

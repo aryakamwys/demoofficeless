@@ -1,7 +1,7 @@
 import { createServerClient, createServiceClient } from "@/lib/supabase-server";
 import { notFound } from "next/navigation";
 import dayjs from "dayjs";
-import { getTicket } from "@/lib/envgate";
+import { getTicket, findTicketByRequesterName } from "@/lib/envgate";
 import { ReportPrintButton } from "@/components/claims/report-print-button";
 
 interface ReportPageProps {
@@ -81,7 +81,12 @@ export default async function ClaimReportPage({ params }: ReportPageProps) {
   }
 
   // Detail ticket dari API EnvGate (cache 5 menit di lib)
-  const invTicket = ticket ? await getTicket(ticket.ticket_id) : null;
+  let invTicket = ticket ? await getTicket(ticket.ticket_id) : null;
+
+  // Fallback: tidak ada link lokal → cari langsung di EnvGate by nama requester
+  if (!ticket && !invTicket && claim.employee?.employee_name) {
+    invTicket = await findTicketByRequesterName(claim.employee.employee_name);
+  }
 
   // Tanda tangan employee / manager / HR
   const sigOf = async (empId: string | null | undefined) => {
@@ -187,12 +192,15 @@ export default async function ClaimReportPage({ params }: ReportPageProps) {
 
       {/* Ticket EnvGate */}
       <h2 className="text-sm font-bold uppercase mb-2">Referensi Ticket EnvGate</h2>
-      {ticket ? (
+      {ticket || invTicket ? (
         <div className="space-y-1 mb-6 text-sm">
-          <Row label="Ticket ID" value={ticket.ticket_id} />
-          <Row label="Judul" value={ticket.ticket_title || "—"} />
-          <Row label="Customer" value={ticket.customer_name || "—"} />
-          <Row label="Lokasi" value={ticket.location || "—"} />
+          <Row label="Ticket ID" value={ticket?.ticket_id || `#${invTicket?.id}`} />
+          <Row
+            label="Judul"
+            value={ticket?.ticket_title || invTicket?.category_details?.name || "—"}
+          />
+          {ticket && <Row label="Customer" value={ticket.customer_name || "—"} />}
+          {ticket && <Row label="Lokasi" value={ticket.location || "—"} />}
           {invTicket && (
             <>
               <Row label="Kategori" value={invTicket.category_details?.name || "—"} />
@@ -211,6 +219,11 @@ export default async function ClaimReportPage({ params }: ReportPageProps) {
               />
             </>
           )}
+          {!invTicket && (
+            <p className="text-xs text-slate-400 italic pt-1">
+              Detail live dari EnvGate tidak tersedia (API tidak terjangkau).
+            </p>
+          )}
           {attachmentUrl && (
             <div className="flex gap-2 text-sm pt-1 print:hidden">
               <span className="w-40 shrink-0 text-slate-500">Lampiran Bukti</span>
@@ -227,7 +240,9 @@ export default async function ClaimReportPage({ params }: ReportPageProps) {
         </div>
       ) : (
         <p className="text-sm text-slate-500 italic mb-6">
-          Tidak ada ticket EnvGate ter-link pada klaim ini.
+          Tidak ada ticket EnvGate yang cocok untuk karyawan ini
+          {claim.employee ? ` (${claim.employee.employee_name})` : ""} — baik di data
+          klaim maupun di pencarian requester EnvGate.
         </p>
       )}
 
