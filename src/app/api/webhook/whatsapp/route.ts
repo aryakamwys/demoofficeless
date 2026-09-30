@@ -20,6 +20,47 @@ import {
 import { parseWaCommand } from "@/lib/wa-commands";
 import { getTicket, ticketTitle } from "@/lib/envgate";
 
+// ============================================================
+// Anti-loop webhook (state di memori proses — cukup untuk 1 VPS)
+//
+// Loop yang pernah terjadi: fallback "Tidak ada klaim aktif..." dibalas
+// ke nomor gateway SENDIRI → pesan itu masuk webhook lagi → dibalas
+// fallback lagi → berulang puluhan kali semenit.
+// Dua lapis pertahanan:
+//  1. autoReplyAllowed: balasan otomatis (fallback/media) maksimal 1x
+//     per nomor per 10 menit — loop putus sendiri maksimal 1 pesan.
+//  2. seenEvent: event Kirimi yang sama (id identik) tidak diproses 2x.
+// ============================================================
+const autoReplyAt = new Map<string, number>();
+const AUTO_REPLY_COOLDOWN_MS = 10 * 60 * 1000;
+
+function autoReplyAllowed(phone: string): boolean {
+  const now = Date.now();
+  if (now - (autoReplyAt.get(phone) || 0) < AUTO_REPLY_COOLDOWN_MS) return false;
+  autoReplyAt.set(phone, now);
+  if (autoReplyAt.size > 500) {
+    for (const [k, v] of autoReplyAt) {
+      if (now - v > AUTO_REPLY_COOLDOWN_MS) autoReplyAt.delete(k);
+    }
+  }
+  return true;
+}
+
+const seenEventAt = new Map<string, number>();
+const SEEN_EVENT_TTL_MS = 60 * 60 * 1000;
+
+function eventAlreadyProcessed(id: string): boolean {
+  const now = Date.now();
+  if (now - (seenEventAt.get(id) || 0) < SEEN_EVENT_TTL_MS) return true;
+  seenEventAt.set(id, now);
+  if (seenEventAt.size > 2000) {
+    for (const [k, v] of seenEventAt) {
+      if (now - v > SEEN_EVENT_TTL_MS) seenEventAt.delete(k);
+    }
+  }
+  return false;
+}
+
 // Helper: fetch a fresh claim with all relations
 async function fetchClaimFresh(supabase: ReturnType<typeof createServiceClient>, claimId: string) {
   const { data } = await supabase
@@ -859,6 +900,17 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     const supabase = createServiceClient();
 
+    // Kirimi bisa mengirim ulang event yang sama — proses sekali saja
+    const eventId =
+      (typeof body.id === "string" && body.id) ||
+      (body.message && typeof body.message === "object" && typeof body.message.id === "string"
+        ? body.message.id
+        : "") ||
+      (typeof body.event_id === "string" ? body.event_id : "");
+    if (eventId && eventAlreadyProcessed(eventId)) {
+      return NextResponse.json({ success: true, reason: "Duplicate event" });
+    }
+
     const sender = body.sender || body.from || body.phone || "";
     let messageText = "";
 
@@ -886,7 +938,7 @@ export async function POST(request: NextRequest) {
       // dibalas, jangan biarkan chat menggantung seolah sistem error.
       if (sender) {
         const mediaPhone = normalizePhone(sender);
-        if (mediaPhone) {
+        if (mediaPhone && autoReplyAllowed(mediaPhone)) {
           after(async () => {
             const result = await sendTextMessage(
               mediaPhone,
@@ -966,6 +1018,11 @@ export async function POST(request: NextRequest) {
       // Jangan diam saja — pengirim perlu tahu pesannya tidak nyambung ke klaim
       // aktif (klaim selesai/dihapus, atau nomor belum terdaftar). Diam membuat
       // balasan yang hilang (device offline, klaim terhapus) tak terbedakan.
+      // Dibatasi 1x/10 menit per nomor: balasan ke nomor gateway sendiri
+      // masuk webhook lagi dan tanpa cooldown menjadi loop tanpa henti.
+      if (!autoReplyAllowed(phoneNumber)) {
+        return NextResponse.json({ success: true, reason: "Auto-reply cooldown (anti-loop)" });
+      }
       after(async () => {
         const result = await sendTextMessage(
           phoneNumber,
