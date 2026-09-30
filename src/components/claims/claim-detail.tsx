@@ -5,7 +5,7 @@ import { ClaimDetail } from "@/types";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { StatusBadge } from "@/components/claims/status-badge";
-import { Send, Info, UserCheck, ChevronRight, Loader2, Printer, Pencil, Trash2, FileText } from "lucide-react";
+import { Send, Info, UserCheck, ChevronRight, Loader2, Printer, Pencil, Trash2, FileText, Undo2 } from "lucide-react";
 import { toast } from "sonner";
 import dayjs from "dayjs";
 import { useRouter } from "next/navigation";
@@ -45,6 +45,7 @@ export function ClaimDetailView({ claim }: ClaimDetailViewProps) {
   const [editDropoff, setEditDropoff] = useState("");
   const [editTicketId, setEditTicketId] = useState("");
   const [editSaving, setEditSaving] = useState(false);
+  const [cancelling, setCancelling] = useState(false);
   const [ticketOptions, setTicketOptions] = useState<{ id: number; title: string }[]>([]);
 
   const editable = claim.status !== "APPROVED";
@@ -106,6 +107,37 @@ export function ClaimDetailView({ claim }: ClaimDetailViewProps) {
       router.refresh();
     } else {
       toast.error(result.error || "Gagal menghapus trip");
+    }
+  };
+
+  // Batalkan approval (kalau ada kesalahan) — klaim kembali menunggu
+  // konfirmasi karyawan via WA, approval Manager & HR direset.
+  const handleCancelApproval = async () => {
+    if (
+      !confirm(
+        "Batalkan approval klaim ini?\n\n" +
+          "Klaim dikembalikan ke menunggu konfirmasi karyawan (balas 1 di WhatsApp).\n" +
+          "Status approval Manager & HR direset ulang.\n" +
+          "Data trip dan ticket tidak berubah."
+      )
+    )
+      return;
+    setCancelling(true);
+    try {
+      const res = await fetch(`/api/claims/${claim.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "cancel_approval" }),
+      });
+      const result = await res.json();
+      if (result.success) {
+        toast.success("Approval dibatalkan — klaim menunggu konfirmasi ulang");
+        router.refresh();
+      } else {
+        toast.error(result.error || "Gagal membatalkan approval");
+      }
+    } finally {
+      setCancelling(false);
     }
   };
 
@@ -212,12 +244,27 @@ export function ClaimDetailView({ claim }: ClaimDetailViewProps) {
           </Button>
 
           {claim.status === "APPROVED" && (
-            <Button variant="outline" asChild>
-              <a href={`/claims/${claim.id}/report`}>
-                <FileText className="mr-2 h-4 w-4" />
-                Report PDF
-              </a>
-            </Button>
+            <>
+              <Button variant="outline" asChild>
+                <a href={`/claims/${claim.id}/report`}>
+                  <FileText className="mr-2 h-4 w-4" />
+                  Report PDF
+                </a>
+              </Button>
+              <Button
+                variant="outline"
+                disabled={cancelling}
+                onClick={handleCancelApproval}
+                className="border-red-200 text-red-600 hover:bg-red-50 hover:text-red-700 disabled:opacity-60"
+              >
+                {cancelling ? (
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                ) : (
+                  <Undo2 className="mr-2 h-4 w-4" />
+                )}
+                {cancelling ? "Membatalkan..." : "Batalkan Approval"}
+              </Button>
+            </>
           )}
 
           {claim.employee && claim.status !== 'APPROVED' && (

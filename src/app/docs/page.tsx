@@ -286,6 +286,14 @@ const CONTENT: Record<string, ReactNode> = {
         Jika pengiriman gagal karena rate limit WhatsApp (terlalu banyak pesan beruntun), tunggu
         beberapa menit lalu kirim ulang. Beri jeda antar pengiriman jika mengirim banyak klaim sekaligus.
       </Note>
+
+      <H2>Membatalkan Approval</H2>
+      <P>
+        Ada kesalahan setelah klaim di-approve? Di halaman detail klaim yang berstatus{" "}
+        <b>Approved</b>, klik tombol <b>Batalkan Approval</b>. Klaim dikembalikan ke menunggu
+        konfirmasi karyawan (balas 1 di WhatsApp), status approval Manager &amp; HR direset — data
+        trip dan ticket tidak berubah. Pembatalan tercatat sebagai note pada klaim.
+      </P>
       <Shot src="/docs/claims.png?v=2" caption="Daftar Claims beserta statusnya" />
     </>
   ),

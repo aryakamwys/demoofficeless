@@ -42,18 +42,9 @@ export async function GET(
       .ilike("customer_name", claim.employee.employee_name)
       .order("created_at", { ascending: false })
       .limit(1);
-    
+
     if (tickets && tickets.length > 0) {
       ticket = tickets[0];
-    } else if (claim.status === 'APPROVED') {
-      // Mock ticket for demonstration if none found but claim is approved
-      ticket = {
-        ticket_id: "32535",
-        ticket_title: "Preventive Maintenance (PM 1 of 4) Server DRC - Resona Indonesia Finance",
-        customer_name: "Resona Indonesia Finance",
-        location: "Jabodetabek",
-        amount: claim.total_amount
-      };
     }
   }
 
@@ -102,6 +93,43 @@ export async function PATCH(
   const supabase = await createServerClient();
   const serviceClient = createServiceClient();
   const body = await request.json();
+
+  // Batalkan approval — klaim kembali menunggu konfirmasi karyawan via WA,
+  // semua approval reset. Dipakai kalau ada kesalahan setelah approve.
+  if (body.action === "cancel_approval") {
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    if (!user) {
+      return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 });
+    }
+
+    const { error } = await serviceClient
+      .from("claims")
+      .update({
+        status: "SENT",
+        approved_at: null,
+        manager_status: "PENDING",
+        hr_status: "PENDING",
+        pending_wa_change: null,
+        ticket_wizard: null,
+      })
+      .eq("id", id);
+    if (error) {
+      return NextResponse.json({ success: false, error: error.message }, { status: 500 });
+    }
+
+    await serviceClient.from("comments").insert({
+      claim_id: id,
+      message:
+        "Approval klaim DIBATALKAN — klaim dikembalikan menunggu konfirmasi ulang karyawan (balas 1 di WhatsApp). Status Manager & HR direset.",
+      author_name: user.email || "-",
+      author_role: "HR",
+    });
+
+    return NextResponse.json({ success: true });
+  }
+
   const { manager_signature, hr_signature, ...updateData } = body;
 
   // If there are signatures, fetch the claim first to get the employee IDs
