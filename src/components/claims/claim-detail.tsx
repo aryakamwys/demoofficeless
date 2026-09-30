@@ -43,15 +43,31 @@ export function ClaimDetailView({ claim }: ClaimDetailViewProps) {
   const [editFare, setEditFare] = useState("");
   const [editPickup, setEditPickup] = useState("");
   const [editDropoff, setEditDropoff] = useState("");
+  const [editTicketId, setEditTicketId] = useState("");
   const [editSaving, setEditSaving] = useState(false);
+  const [ticketOptions, setTicketOptions] = useState<{ id: number; title: string }[]>([]);
 
   const editable = claim.status !== "APPROVED";
+
+  // Saran tiket dari 50 terbaru EnvGate — opsional, input manual tetap jalan
+  const loadTicketOptions = async () => {
+    if (ticketOptions.length > 0) return;
+    try {
+      const res = await fetch("/api/envgate/tickets");
+      const json = await res.json();
+      if (json.success && Array.isArray(json.data)) setTicketOptions(json.data);
+    } catch {
+      // abaikan — HR bisa ketik ID manual
+    }
+  };
 
   const handleEditTrip = (trip: Trip) => {
     setEditTrip(trip);
     setEditFare(String(trip.fare));
     setEditPickup(trip.pickup || "");
     setEditDropoff(trip.dropoff || "");
+    setEditTicketId(trip.ticket_id || "");
+    loadTicketOptions();
   };
 
   const handleSaveTrip = async () => {
@@ -65,6 +81,7 @@ export function ClaimDetailView({ claim }: ClaimDetailViewProps) {
           fare: Number(editFare),
           pickup: editPickup,
           dropoff: editDropoff,
+          ticket_id: editTicketId.trim() || null,
         }),
       });
       const result = await res.json();
@@ -366,6 +383,7 @@ export function ClaimDetailView({ claim }: ClaimDetailViewProps) {
                   <th className="border border-slate-200 px-3 py-3 text-left font-semibold text-slate-600 whitespace-nowrap print:hidden">Cost Code</th>
                   <th className="border border-slate-200 px-3 py-3 text-left font-semibold text-slate-600 whitespace-nowrap print:py-1 print:px-1">Pick-Up</th>
                   <th className="border border-slate-200 px-3 py-3 text-left font-semibold text-slate-600 whitespace-nowrap print:py-1 print:px-1">Drop-Off</th>
+                  <th className="border border-slate-200 px-3 py-3 text-left font-semibold text-slate-600 whitespace-nowrap print:py-1 print:px-1">Ticket</th>
                   {editable && (
                     <th className="border border-slate-200 px-3 py-3 print:hidden w-20">Aksi</th>
                   )}
@@ -398,6 +416,9 @@ export function ClaimDetailView({ claim }: ClaimDetailViewProps) {
                     </td>
                     <td className="border border-slate-200 px-3 py-3 align-top text-slate-600 max-w-[200px] leading-relaxed print:py-1 print:px-1">
                       {trip.dropoff || "—"}
+                    </td>
+                    <td className="border border-slate-200 px-3 py-3 align-top text-slate-600 whitespace-nowrap print:py-1 print:px-1">
+                      {trip.ticket_id ? `#${trip.ticket_id}` : "—"}
                     </td>
                     {editable && (
                       <td className="border border-slate-200 px-2 py-3 print:hidden">
@@ -715,6 +736,26 @@ export function ClaimDetailView({ claim }: ClaimDetailViewProps) {
                 value={editDropoff}
                 onChange={(e) => setEditDropoff(e.target.value)}
               />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="trip-ticket">Ticket EnvGate (bukti kerja)</Label>
+              <Input
+                id="trip-ticket"
+                list="envgate-ticket-options"
+                value={editTicketId}
+                onChange={(e) => setEditTicketId(e.target.value)}
+                placeholder="ID ticket, contoh: 32535"
+              />
+              <datalist id="envgate-ticket-options">
+                {ticketOptions.map((t) => (
+                  <option key={t.id} value={t.id}>
+                    {t.title}
+                  </option>
+                ))}
+              </datalist>
+              <p className="text-xs text-slate-400">
+                Kosongkan untuk hapus. Saran diambil dari 50 ticket terbaru EnvGate.
+              </p>
             </div>
             <p className="text-xs text-slate-500">
               Total klaim dihitung ulang otomatis. Kalau manager sudah approve, klaim

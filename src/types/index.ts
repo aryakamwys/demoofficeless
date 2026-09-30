@@ -81,6 +81,8 @@ export interface Trip {
   pickup: string;
   dropoff: string;
   fare: number;
+  /** Bukti ticket EnvGate per trip (diisi HR, opsional) */
+  ticket_id?: string | null;
   created_at: string;
 }
 

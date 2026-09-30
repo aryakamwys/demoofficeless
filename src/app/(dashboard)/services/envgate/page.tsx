@@ -4,6 +4,7 @@ import {
   getStatusMap,
   getPriorityMap,
   resolveEntityName,
+  ticketTitle,
 } from "@/lib/envgate";
 
 export default async function EnvGateTestPage() {
@@ -18,7 +19,7 @@ export default async function EnvGateTestPage() {
     ]);
     tickets = recent.map((t) => ({
       id: t.id,
-      subject: t.subject || "",
+      subject: ticketTitle(t),
       status: t.status_id ? resolveEntityName(statusMap, t.status_id) || `ID ${t.status_id}` : "—",
       priority: t.priority_id ? resolveEntityName(priorityMap, t.priority_id) || `ID ${t.priority_id}` : "—",
       requester: t.requester_user?.name || "",

@@ -38,6 +38,9 @@ interface MappedUser {
 
 export interface InvTicket {
   id: number;
+  /** Nama field judul di API InvGate adalah `title` (docs: GET /requests) */
+  title?: string;
+  /** Alias lama — beberapa versi memakai subject */
   subject?: string;
   status_id?: number;
   priority_id?: number;
@@ -46,6 +49,8 @@ export interface InvTicket {
   assigned_group_id?: number;
   assigned_id?: number;
   requester_id?: number;
+  /** Docs baru menyebut customer sebagai user_id (requester_id = nama lama) */
+  user_id?: number;
   created_at?: string | number;
   category_details?: { id: number; name: string };
   assigned_group_details?: { id: number; name: string };
@@ -90,6 +95,29 @@ async function api<T = unknown>(path: string): Promise<T> {
       `EnvGate API membalas non-JSON untuk ${path} — kemungkinan kredensial invalid`
     );
   }
+}
+
+/**
+ * Docs baru menamai endpoint /requests; versi lama /incidents.
+ * Coba nama baru dulu, fallback ke legacy — instance self-host bisa salah satunya.
+ */
+async function apiEither<T>(path: string): Promise<T> {
+  const legacy = path.replace("/requests", "/incidents");
+  try {
+    return await api<T>(path);
+  } catch (newErr) {
+    if (legacy === path) throw newErr;
+    try {
+      return await api<T>(legacy);
+    } catch {
+      throw newErr;
+    }
+  }
+}
+
+/** Judul tiket — field `title` di docs, `subject` di versi lama. */
+export function ticketTitle(t: InvTicket | null | undefined): string {
+  return t?.title || t?.subject || "";
 }
 
 /** Ambil payload list dari berbagai bentuk respons InvGate. */
@@ -215,15 +243,16 @@ function decorate(
     if (out.assigned_id != null) {
       out.assigned_user = mapUser(users[out.assigned_id]);
     }
-    if (out.requester_id != null) {
-      out.requester_user = mapUser(users[out.requester_id]);
+    const requesterId = out.requester_id ?? out.user_id;
+    if (requesterId != null) {
+      out.requester_user = mapUser(users[requesterId]);
     }
     return out;
   });
 }
 
 function userIdsOf(items: InvTicket[]): Array<number | undefined> {
-  return items.flatMap((i) => [i.assigned_id, i.requester_id]);
+  return items.flatMap((i) => [i.assigned_id, i.requester_id ?? i.user_id]);
 }
 
 // ---------------------------------------------------------------------------
@@ -231,7 +260,7 @@ function userIdsOf(items: InvTicket[]): Array<number | undefined> {
 
 export async function getTicket(id: string): Promise<InvTicket | null> {
   return cached(`envgate:ticket:${id}`, 300, async () => {
-    const raw = await api(`/incidents?ids[]=${encodeURIComponent(id)}`);
+    const raw = await apiEither(`/requests?ids[]=${encodeURIComponent(id)}`);
     let inc: InvTicket | null = null;
     if (Array.isArray(raw) && raw.length > 0) {
       inc = raw[0] as InvTicket;
@@ -260,19 +289,19 @@ export async function getRecentTickets(
       .join("&");
 
     // Ambil total dulu supaya bisa offset ke item terbaru
-    const first = await api<StatusPage>(`/incidents.by.status?${statusQuery}&limit=1`);
+    const first = await apiEither<StatusPage>(`/requests.by.status?${statusQuery}&limit=1`);
     const total = first.total || 0;
     const limit = fromDateStr || toDateStr ? 200 : 50;
     const offset = total > limit ? total - limit : 0;
 
-    const page = await api<StatusPage>(
-      `/incidents.by.status?${statusQuery}&limit=${limit}&offset=${offset}`
+    const page = await apiEither<StatusPage>(
+      `/requests.by.status?${statusQuery}&limit=${limit}&offset=${offset}`
     );
     const ids = page.requestIds ?? page.response?.requestIds ?? [];
     if (!Array.isArray(ids) || ids.length === 0) return [];
 
-    const details = await api(
-      `/incidents?${ids.map((i: number) => `ids[]=${i}`).join("&")}`
+    const details = await apiEither(
+      `/requests?${ids.map((i: number) => `ids[]=${i}`).join("&")}`
     );
     let items = (unwrap(details) as InvTicket[]).sort((a, b) => b.id - a.id);
 

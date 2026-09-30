@@ -7,6 +7,7 @@ import {
   getStatusMap,
   getPriorityMap,
   resolveEntityName,
+  ticketTitle,
 } from "@/lib/envgate";
 import { ReportPrintButton } from "@/components/claims/report-print-button";
 
@@ -73,6 +74,15 @@ export default async function ClaimReportPage({ params }: ReportPageProps) {
     .select("*")
     .eq("claim_id", id)
     .order("trip_date", { ascending: true });
+
+  // Bukti ticket per trip (kebutuhan HR): resolve detail live via cache 5 menit
+  const tripTicketIds = [
+    ...new Set((trips || []).map((t) => (t.ticket_id || "").trim()).filter(Boolean)),
+  ];
+  const tripTickets = await Promise.all(tripTicketIds.map((tid) => getTicket(tid)));
+  const ticketById = new Map(
+    tripTickets.filter(Boolean).map((t) => [String(t!.id), t!])
+  );
 
   // Ticket managed-service yang ter-link via customer_name (pola sama dengan detail klaim)
   let ticket: { ticket_id: string; ticket_title?: string | null; customer_name?: string | null; location?: string | null; storage_path?: string | null } | null = null;
@@ -179,6 +189,7 @@ export default async function ClaimReportPage({ params }: ReportPageProps) {
             <th className="border border-slate-300 px-2 py-2 text-left">No</th>
             <th className="border border-slate-300 px-2 py-2 text-left">Tanggal</th>
             <th className="border border-slate-300 px-2 py-2 text-left">Rute</th>
+            <th className="border border-slate-300 px-2 py-2 text-left">Ticket</th>
             <th className="border border-slate-300 px-2 py-2 text-right">Nominal (IDR)</th>
           </tr>
         </thead>
@@ -192,13 +203,27 @@ export default async function ClaimReportPage({ params }: ReportPageProps) {
               <td className="border border-slate-300 px-2 py-1">
                 {t.pickup} → {t.dropoff}
               </td>
+              <td className="border border-slate-300 px-2 py-1">
+                {t.ticket_id ? (
+                  <>
+                    <span>#{t.ticket_id}</span>
+                    {ticketById.get(t.ticket_id) && (
+                      <span className="block text-[10px] text-slate-500 leading-tight">
+                        {ticketTitle(ticketById.get(t.ticket_id))}
+                      </span>
+                    )}
+                  </>
+                ) : (
+                  "—"
+                )}
+              </td>
               <td className="border border-slate-300 px-2 py-1 text-right">
                 {Number(t.fare).toLocaleString("id-ID")}
               </td>
             </tr>
           ))}
           <tr className="font-semibold bg-slate-50">
-            <td colSpan={3} className="border border-slate-300 px-2 py-1 text-right">
+            <td colSpan={4} className="border border-slate-300 px-2 py-1 text-right">
               Total
             </td>
             <td className="border border-slate-300 px-2 py-1 text-right">
@@ -215,7 +240,7 @@ export default async function ClaimReportPage({ params }: ReportPageProps) {
           <Row label="Ticket ID" value={ticket?.ticket_id || `#${invTicket?.id}`} />
           <Row
             label="Judul"
-            value={invTicket?.subject || ticket?.ticket_title || invTicket?.category_details?.name || "—"}
+            value={ticketTitle(invTicket) || ticket?.ticket_title || invTicket?.category_details?.name || "—"}
           />
           {ticket && <Row label="Customer" value={ticket.customer_name || "—"} />}
           {ticket && <Row label="Lokasi" value={ticket.location || "—"} />}

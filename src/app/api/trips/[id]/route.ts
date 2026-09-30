@@ -6,6 +6,8 @@ const tripEditSchema = z.object({
   fare: z.number().positive("Nominal harus lebih dari 0").max(100_000_000).optional(),
   pickup: z.string().max(500).optional(),
   dropoff: z.string().max(500).optional(),
+  // null = hapus ticket, string = set bukti ticket EnvGate
+  ticket_id: z.string().trim().max(50, "Ticket ID maks 50 karakter").nullable().optional(),
 });
 
 async function getTripWithClaim(tripId: string) {
@@ -22,6 +24,7 @@ async function getTripWithClaim(tripId: string) {
         fare: number;
         pickup: string;
         dropoff: string;
+        ticket_id: string | null;
         claim: { status: string; manager_status: string } | null;
       }
     | null;
@@ -31,15 +34,17 @@ async function recalcAndNote(
   claimId: string,
   claim: { status: string; manager_status: string },
   note: string,
-  author: string
+  author: string,
+  resetApproval = true
 ) {
   const svc = createServiceClient();
   const { data: fares } = await svc.from("trips").select("fare").eq("claim_id", claimId);
   const total = (fares || []).reduce((acc, t) => acc + Number(t.fare), 0);
 
   // Nominal berubah setelah manager approve → perlu approval ulang
+  // (edit non-nominal seperti ticket tidak perlu approval ulang)
   const patch: Record<string, unknown> = { total_amount: total };
-  if (claim.manager_status === "APPROVED") {
+  if (resetApproval && claim.manager_status === "APPROVED") {
     patch.manager_status = "PENDING";
   }
   await svc.from("claims").update(patch).eq("id", claimId);
@@ -102,11 +107,15 @@ export async function PATCH(
       `rute "${trip.pickup} -> ${trip.dropoff}" -> "${result.data.pickup ?? trip.pickup} -> ${result.data.dropoff ?? trip.dropoff}"`
     );
   }
+  if (result.data.ticket_id !== undefined) {
+    changes.push(`ticket EnvGate: ${trip.ticket_id || "-"} -> ${result.data.ticket_id || "-"}`);
+  }
   const total = await recalcAndNote(
     trip.claim_id,
     trip.claim!,
     `Edit klaim oleh HR (${user.email}): ${changes.join("; ")}.`,
-    user.email || "HR"
+    user.email || "HR",
+    result.data.fare !== undefined
   );
 
   return NextResponse.json({ success: true, data: { total_amount: total } });
