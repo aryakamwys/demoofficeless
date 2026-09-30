@@ -343,12 +343,12 @@ const CONTENT: Record<string, ReactNode> = {
         messages={[
           {
             from: "bot",
-            text: "[Ref: 4F8K2Q]\nHalo Mario,\n\nIni rangkuman klaim Grab Business Anda periode Agustus 2026. Mohon dicek dulu sebelum disetujui:\n\n- 02 Jul: Menara Karya Main Lobb... -> MID Plaza (Rp40.500)\n- 10 Jul: Palmerah Motorcycle St... -> MID Plaza 1 Main Lobby (Rp61.000)\n\nJumlah perjalanan: 3\nTotal biaya: Rp137.500\n\nCARA MEMBALAS (ketik nomornya saja):\n1 = SETUJU - semua data benar, langsung diteruskan ke Manager\n2 = ADA YANG SALAH - ceritakan apa yang salah\n3 = LIHAT DETAIL - alamat lengkap tiap perjalanan",
+            text: "Halo Mario,\n\nIni rangkuman klaim Grab Business Anda periode Agustus 2026. Mohon dicek dulu sebelum disetujui:\n\n- 02 Jul: Menara Karya Main Lobb... -> MID Plaza (Rp40.500)\n- 10 Jul: Palmerah Motorcycle St... -> MID Plaza 1 Main Lobby (Rp61.000)\n\nJumlah perjalanan: 3\nTotal biaya: Rp137.500\n\nCARA MEMBALAS (ketik nomornya saja):\n1 = SETUJU - semua data benar, langsung diteruskan ke Manager\n2 = ADA YANG SALAH - ceritakan apa yang salah\n3 = LIHAT DETAIL - alamat lengkap tiap perjalanan",
           },
           { from: "user", text: "1" },
           {
             from: "bot",
-            text: "[Ref: 9X2PLM]\nTERIMA KASIH. Data klaim Anda sudah SETUJU.\n\nSekarang menunggu persetujuan Manager Anda (Rini).\n\nAnda tidak perlu membalas pesan ini lagi.",
+            text: "TERIMA KASIH. Data klaim Anda sudah SETUJU.\n\nSekarang menunggu persetujuan Manager Anda (Rini).\n\nAnda tidak perlu membalas pesan ini lagi.",
           },
         ]}
       />
@@ -364,12 +364,12 @@ const CONTENT: Record<string, ReactNode> = {
           { from: "user", text: "2" },
           {
             from: "bot",
-            text: "[Ref: F43DSD]\nBaik, ada yang salah. Tolong tulis masalahnya dalam SATU pesan saja.\n\nContoh balasan:\n- trip 10 Juli bukan perjalanan saya\n- nominal trip no 2 seharusnya Rp50.000\n\nTulisan Anda akan menjadi catatan untuk HR.",
+            text: "Baik, ada yang salah. Tolong tulis masalahnya dalam SATU pesan saja.\n\nContoh balasan:\n- trip 10 Juli bukan perjalanan saya\n- nominal trip no 2 seharusnya Rp50.000\n\nTulisan Anda akan menjadi catatan untuk HR.",
           },
           { from: "user", text: "trip 10 Juli bukan perjalanan saya, itu teman saya yang pinjam akun" },
           {
             from: "bot",
-            text: '[Ref: 7QW1NE]\nSUDAH TERSIMPAN. Catatan Anda:\n"trip 10 Juli bukan perjalanan saya, itu teman saya yang pinjam akun"\n\nBalas 1 = SETUJU, 3 = lihat detail,\natau tulis catatan lain.',
+            text: 'SUDAH TERSIMPAN. Catatan Anda:\n"trip 10 Juli bukan perjalanan saya, itu teman saya yang pinjam akun"\n\nBalas 1 = SETUJU, 3 = lihat detail,\natau tulis catatan lain.',
           },
           { from: "user", text: "1" },
         ]}
@@ -392,27 +392,27 @@ const CONTENT: Record<string, ReactNode> = {
         messages={[
           {
             from: "bot",
-            text: "[Ref: K3M8ZR]\nHalo Mario,\n\nKlaim periode Agustus 2026 DIMINTA REVISI oleh Manager (Rini).\nAlasan: nominal trip 3 masih kurang tepat\n\nCARA REVISI LEWAT WHATSAPP INI (langkah demi langkah):\n1. Ketik LIST - untuk melihat daftar trip bernomor\n2. Ketik UBAH <nomor trip> <nominal baru> - contoh: UBAH 3 75000\n3. Ketik TICKET <nomor trip> <id ticket> - contoh: TICKET 3 PIM-34285\n4. Ketik SELESAI - klaim dikirim ulang ke Manager",
+            text: "Halo Mario,\n\nKlaim periode Agustus 2026 DIMINTA REVISI oleh Manager (Rini).\nAlasan: nominal trip 3 masih kurang tepat\n\nCARA REVISI LEWAT WHATSAPP INI (langkah demi langkah):\n1. Ketik LIST - untuk melihat daftar trip bernomor\n2. Ketik UBAH <nomor trip> <nominal baru> - contoh: UBAH 3 75000\n3. Ketik TICKET <nomor trip> <id ticket> - contoh: TICKET 3 PIM-34285\n4. Ketik SELESAI - klaim dikirim ulang ke Manager",
           },
           { from: "user", text: "list" },
           {
             from: "bot",
-            text: "[Ref: V3TW35]\nDaftar Trip klaim periode Agustus 2026:\n1. 02 Jul: Menara Karya ... -> MID Plaza (Rp40.500)\n2. 02 Jul: MID Plaza ... -> Menara Karya (Rp36.000)\n3. 10 Jul: Palmerah ... -> MID Plaza 1 (Rp61.000)\n\nTotal: Rp137.500",
+            text: "Daftar Trip klaim periode Agustus 2026:\n1. 02 Jul: Menara Karya ... -> MID Plaza (Rp40.500)\n2. 02 Jul: MID Plaza ... -> Menara Karya (Rp36.000)\n3. 10 Jul: Palmerah ... -> MID Plaza 1 (Rp61.000)\n\nTotal: Rp137.500",
           },
           { from: "user", text: "UBAH 3 75000" },
           {
             from: "bot",
-            text: "[Ref: B2N9QX]\nKONFIRMASI UBAH NOMINAL - trip no 3\n10 Jul: Palmerah ... -> MID Plaza 1\nNominal sekarang: Rp61.000\nNominal baru: Rp75.000\n\nBalas YA untuk SIMPAN, atau BATAL untuk membatalkan.",
+            text: "KONFIRMASI UBAH NOMINAL - trip no 3\n10 Jul: Palmerah ... -> MID Plaza 1\nNominal sekarang: Rp61.000\nNominal baru: Rp75.000\n\nBalas YA untuk SIMPAN, atau BATAL untuk membatalkan.",
           },
           { from: "user", text: "YA" },
           {
             from: "bot",
-            text: "[Ref: H5R2JK]\nSUDAH TERSIMPAN. Trip no 3 berubah dari Rp61.000 jadi Rp75.000.\nTotal klaim sekarang: Rp151.500\n\nSudah selesai? Ketik SELESAI.",
+            text: "SUDAH TERSIMPAN. Trip no 3 berubah dari Rp61.000 jadi Rp75.000.\nTotal klaim sekarang: Rp151.500\n\nSudah selesai? Ketik SELESAI.",
           },
           { from: "user", text: "SELESAI" },
           {
             from: "bot",
-            text: "[Ref: Z8C4VN]\nSELESAI. Revisi Anda sudah dikirim ulang ke Manager untuk disetujui.\nAnda akan dikabari lagi setelah ada hasilnya.",
+            text: "SELESAI. Revisi Anda sudah dikirim ulang ke Manager untuk disetujui.\nAnda akan dikabari lagi setelah ada hasilnya.",
           },
         ]}
       />
@@ -430,7 +430,7 @@ const CONTENT: Record<string, ReactNode> = {
           { from: "user", text: "TICKET 3 PIM-34285" },
           {
             from: "bot",
-            text: "[Ref: R6T1WQ]\nSUDAH TERSIMPAN. Trip no 3 kini punya bukti ticket #PIM-34285.\nJudul ticket: Keyboard T14 (Cocacola - Cust. Perkom)\n\n5 dari 8 trip sudah punya ticket — sisa 3 belum.\nLanjut isi sisanya satu per satu? Ketik: TICKET SEMUA\n\nBalas 1 = SETUJU kalau semua data sudah benar.",
+            text: "SUDAH TERSIMPAN. Trip no 3 kini punya bukti ticket #PIM-34285.\nJudul ticket: Keyboard T14 (Cocacola - Cust. Perkom)\n\n5 dari 8 trip sudah punya ticket — sisa 3 belum.\nLanjut isi sisanya satu per satu? Ketik: TICKET SEMUA\n\nBalas 1 = SETUJU kalau semua data sudah benar.",
           },
         ]}
       />
@@ -456,12 +456,12 @@ const CONTENT: Record<string, ReactNode> = {
           { from: "user", text: "TICKET SEMUA" },
           {
             from: "bot",
-            text: "[Ref: W1Z4RD]\nMODE NGISI TICKET — sisa 3 trip lagi.\nKita isi SATU PER SATU supaya tidak tertukar.\n\nTrip 2 (28 Jul: Jl. Jend. Sudirman Kav.10-11... -> MID Plaza 2 ...)\nKirim nomor ticket untuk trip ini. Contoh: PIM-34285\n\nKetik LEWATI kalau trip ini tidak punya ticket.\nKetik BATAL kalau mau berhenti dulu.",
+            text: "MODE NGISI TICKET — sisa 3 trip lagi.\nKita isi SATU PER SATU supaya tidak tertukar.\n\nTrip 2 (28 Jul: Jl. Jend. Sudirman Kav.10-11... -> MID Plaza 2 ...)\nKirim nomor ticket untuk trip ini. Contoh: PIM-34285\n\nKetik LEWATI kalau trip ini tidak punya ticket.\nKetik BATAL kalau mau berhenti dulu.",
           },
           { from: "user", text: "PIM-34285" },
           {
             from: "bot",
-            text: "[Ref: N8X2KQ]\nSUDAH TERSIMPAN. Trip no 2 → #PIM-34285.\nJudul: Keyboard T14 (Cocacola - Cust. Perkom)\n\nMODE NGISI TICKET — sisa 2 trip lagi.\n\nTrip 4 (30 Jul: Palmerah ... -> MID Plaza 1 ...)\nKirim nomor ticket untuk trip ini. Contoh: PIM-34285\n\nKetik LEWATI kalau trip ini tidak punya ticket.\nKetik BATAL kalau mau berhenti dulu.",
+            text: "SUDAH TERSIMPAN. Trip no 2 → #PIM-34285.\nJudul: Keyboard T14 (Cocacola - Cust. Perkom)\n\nMODE NGISI TICKET — sisa 2 trip lagi.\n\nTrip 4 (30 Jul: Palmerah ... -> MID Plaza 1 ...)\nKirim nomor ticket untuk trip ini. Contoh: PIM-34285\n\nKetik LEWATI kalau trip ini tidak punya ticket.\nKetik BATAL kalau mau berhenti dulu.",
           },
           { from: "user", text: "LEWATI" },
         ]}
@@ -519,12 +519,12 @@ const CONTENT: Record<string, ReactNode> = {
         messages={[
           {
             from: "bot",
-            text: "[Ref: Q7M3XD]\nHalo Manager,\n\nMario mengajukan klaim Grab periode Agustus 2026.\nKaryawan tersebut SUDAH mengecek dan menyetujui datanya sendiri.\n\n- 02 Jul: Menara Karya ... -> MID Plaza (Rp40.500)\n- 10 Jul: Palmerah ... -> MID Plaza 1 (Rp61.000)\n\nJumlah perjalanan: 3\nTotal biaya: Rp137.500\n\nKEPUTUSAN ANDA (ketik nomornya):\n1 = SETUJU - klaim diteruskan ke HR\n2 = MINTA REVISI - ketik 2 lalu tulis alasannya\n   Contoh: 2 nominal trip 3 masih kurang tepat",
+            text: "Halo Manager,\n\nMario mengajukan klaim Grab periode Agustus 2026.\nKaryawan tersebut SUDAH mengecek dan menyetujui datanya sendiri.\n\n- 02 Jul: Menara Karya ... -> MID Plaza (Rp40.500)\n- 10 Jul: Palmerah ... -> MID Plaza 1 (Rp61.000)\n\nJumlah perjalanan: 3\nTotal biaya: Rp137.500\n\nKEPUTUSAN ANDA (ketik nomornya):\n1 = SETUJU - klaim diteruskan ke HR\n2 = MINTA REVISI - ketik 2 lalu tulis alasannya\n   Contoh: 2 nominal trip 3 masih kurang tepat",
           },
           { from: "user", text: "1" },
           {
             from: "bot",
-            text: "[Ref: P4L8VN]\nTERIMA KASIH. Klaim atas nama Mario sudah Anda SETUJUI.\nKlaim diteruskan ke HR untuk persetujuan terakhir.",
+            text: "TERIMA KASIH. Klaim atas nama Mario sudah Anda SETUJUI.\nKlaim diteruskan ke HR untuk persetujuan terakhir.",
           },
         ]}
       />
@@ -540,7 +540,7 @@ const CONTENT: Record<string, ReactNode> = {
           { from: "user", text: "2 nominal trip 3 masih kurang tepat, tolong cek ulang" },
           {
             from: "bot",
-            text: "[Ref: M9K2QS]\nTERIMA KASIH. Permintaan revisi sudah dicatat\ndan diteruskan ke Mario lewat WhatsApp.\n\nAlasan revisi: nominal trip 3 masih kurang tepat, tolong cek ulang",
+            text: "TERIMA KASIH. Permintaan revisi sudah dicatat\ndan diteruskan ke Mario lewat WhatsApp.\n\nAlasan revisi: nominal trip 3 masih kurang tepat, tolong cek ulang",
           },
         ]}
       />

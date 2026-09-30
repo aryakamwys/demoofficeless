@@ -189,9 +189,7 @@ export function buildClaimMessage(params: {
   trips: WaTripLine[];
 }): string {
   const { employee_name, period, trip_count, total_amount, trips } = params;
-  const refId = Math.random().toString(36).substring(2, 8).toUpperCase();
   return [
-    `[Ref: ${refId}]`,
     `Halo ${employee_name},`,
     ``,
     `Ini rangkuman klaim Grab Business Anda periode ${period}.`,
@@ -217,9 +215,7 @@ export function buildDetailMessage(
   trips: WaTripLine[],
   total_amount: number
 ): string {
-  const refId = Math.random().toString(36).substring(2, 8).toUpperCase();
   return [
-    `[Ref: ${refId}]`,
     `DETAIL PERJALANAN (alamat lengkap):`,
     ``,
     ...trips.map((t) => tripLine(t, true)),
@@ -234,9 +230,7 @@ export function buildDetailMessage(
  * Build the confirmation message (after employee replies "1").
  */
 export function buildConfirmationMessage(managerName?: string): string {
-  const refId = Math.random().toString(36).substring(2, 8).toUpperCase();
   return [
-    `[Ref: ${refId}]`,
     `TERIMA KASIH. Data klaim Anda sudah SETUJU.`,
     ``,
     managerName
@@ -248,9 +242,7 @@ export function buildConfirmationMessage(managerName?: string): string {
 }
 
 export function buildCorrectionPrompt(): string {
-  const refId = Math.random().toString(36).substring(2, 8).toUpperCase();
   return [
-    `[Ref: ${refId}]`,
     `Baik, ada yang salah. Tolong tulis masalahnya dalam SATU pesan saja.`,
     ``,
     `Contoh balasan:`,
@@ -266,9 +258,7 @@ export function buildCorrectionPrompt(): string {
 
 /** Balasan untuk teks yang tidak dikenali — ulangi menu dengan santun. */
 export function buildEmployeeHelpMessage(): string {
-  const refId = Math.random().toString(36).substring(2, 8).toUpperCase();
   return [
-    `[Ref: ${refId}]`,
     `Maaf, pesan Anda belum saya mengerti.`,
     ``,
     ...employeeMenuLines(),
@@ -286,9 +276,7 @@ export function buildManagerApprovalMessage(params: {
   trips: WaTripLine[];
 }): string {
   const { employee_name, period, total_amount, trips } = params;
-  const refId = Math.random().toString(36).substring(2, 8).toUpperCase();
   return [
-    `[Ref: ${refId}]`,
     `Halo Manager,`,
     ``,
     `${employee_name} mengajukan klaim Grab periode ${period}.`,
@@ -318,9 +306,7 @@ export function buildHrApprovalMessage(params: {
   trips: WaTripLine[];
 }): string {
   const { employee_name, manager_name, period, total_amount, trips } = params;
-  const refId = Math.random().toString(36).substring(2, 8).toUpperCase();
   return [
-    `[Ref: ${refId}]`,
     `Halo HR,`,
     ``,
     `${employee_name} mengajukan klaim Grab periode ${period}.`,
@@ -351,18 +337,14 @@ export function buildEmployeeStatusUpdateMessage(status: string, actorName: stri
     msg = `SELESAI: klaim Anda sudah disetujui penuh oleh Manager dan HR (${actorName}). Terima kasih.`;
   }
 
-  const refId = Math.random().toString(36).substring(2, 8).toUpperCase();
   return [
-    `[Ref: ${refId}]`,
     msg
   ].join("\n");
 }
 
 /** Umpan balik setelah catatan karyawan/notes tersimpan — tester harus LIHAT kalau catatannya masuk. */
 export function buildNoteSavedMessage(text: string, nextHint: string): string {
-  const refId = Math.random().toString(36).substring(2, 8).toUpperCase();
   return [
-    `[Ref: ${refId}]`,
     `SUDAH TERSIMPAN. Catatan Anda:`,
     `"${text.slice(0, 300)}"`,
     ``,
@@ -396,9 +378,7 @@ export function buildRevisionRequestMessage(params: {
   reason: string;
 }): string {
   const roleLabel = params.requester_role === "MANAGER" ? "Manager" : "HR";
-  const refId = Math.random().toString(36).substring(2, 8).toUpperCase();
   return [
-    `[Ref: ${refId}]`,
     `Halo ${params.employee_name},`,
     ``,
     `Klaim periode ${params.period} DIMINTA REVISI oleh ${roleLabel} (${params.requester_name}).`,
@@ -429,9 +409,7 @@ export function buildRevisionTripListMessage(
     const costCode = t.cost_code ? ` [Code: ${t.cost_code}]` : "";
     return `${i + 1}. ${formatTripDate(t.trip_date)}: ${t.pickup} -> ${t.dropoff} (${formatAmount(t.fare)})${costCode}${ticketChip(t.ticket_id)}`;
   });
-  const refId = Math.random().toString(36).substring(2, 8).toUpperCase();
   return [
-    `[Ref: ${refId}]`,
     `Daftar Trip klaim periode ${period}:`,
     ...lines,
     ``,
@@ -454,9 +432,7 @@ export function buildChangeConfirmMessage(
   oldFare: number,
   newFare: number
 ): string {
-  const refId = Math.random().toString(36).substring(2, 8).toUpperCase();
   return [
-    `[Ref: ${refId}]`,
     `KONFIRMASI UBAH NOMINAL - trip no ${tripNo}`,
     `${formatTripDate(trip.trip_date)}: ${trip.pickup} -> ${trip.dropoff}`,
     `Nominal sekarang: ${formatAmount(oldFare)}`,
@@ -475,9 +451,7 @@ export function buildChangeAppliedMessage(
   newFare: number,
   newTotal: number
 ): string {
-  const refId = Math.random().toString(36).substring(2, 8).toUpperCase();
   return [
-    `[Ref: ${refId}]`,
     `SUDAH TERSIMPAN. Trip no ${tripNo} berubah dari ${formatAmount(oldFare)} jadi ${formatAmount(newFare)}.`,
     `Total klaim sekarang: ${formatAmount(newTotal)}`,
     ``,
@@ -491,9 +465,7 @@ export function buildChangeAppliedMessage(
  */
 export function buildResubmittedMessage(targetRole: "MANAGER" | "HR"): string {
   const roleLabel = targetRole === "MANAGER" ? "Manager" : "HR";
-  const refId = Math.random().toString(36).substring(2, 8).toUpperCase();
   return [
-    `[Ref: ${refId}]`,
     `SELESAI. Revisi Anda sudah dikirim ulang ke ${roleLabel} untuk disetujui.`,
     `Anda akan dikabari lagi setelah ada hasilnya.`,
   ].join("\n");

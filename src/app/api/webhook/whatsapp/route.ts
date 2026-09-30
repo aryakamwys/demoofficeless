@@ -19,6 +19,7 @@ import {
 } from "@/lib/whatsapp";
 import { parseWaCommand } from "@/lib/wa-commands";
 import { getTicket, ticketTitle } from "@/lib/envgate";
+import { matchRole, type WaRole, type ClaimRow } from "@/lib/wa-match";
 
 // ============================================================
 // Anti-loop webhook (state di memori proses — cukup untuk 1 VPS)
@@ -60,6 +61,19 @@ function eventAlreadyProcessed(id: string): boolean {
   }
   return false;
 }
+
+// ============================================================
+// Session chat — selama alur klaim berjalan, 1 nomor terikat ke
+// 1 klaim. Tanpa ini balasan bisa jatuh ke klaim lain: nomor yang
+// terdaftar di banyak klaim (manager beberapa karyawan, atasan
+// yang kebetulan juga karyawan) dicocokkan ke klaim mana pun yang
+// kebetulan lebih dulu di daftar, bukan klaim yang sedang dibalas.
+// Session lepas otomatis begitu tahap pengirim selesai (kondisi
+// role tidak lagi terpenuhi) — lalu dicocokkan ulang.
+// ============================================================
+type WaSession = { claimId: string; role: WaRole; at: number };
+const waSession = new Map<string, WaSession>();
+const WA_SESSION_TTL_MS = 24 * 60 * 60 * 1000;
 
 // Helper: fetch a fresh claim with all relations
 async function fetchClaimFresh(supabase: ReturnType<typeof createServiceClient>, claimId: string) {
@@ -354,9 +368,6 @@ function wizardPromptLines(trips: WaTripRow[], no: number, remaining: number): s
   ];
 }
 
-const refOf = () =>
-  `[Ref: ${Math.random().toString(36).substring(2, 8).toUpperCase()}]`;
-
 async function startTicketWizard(
   supabase: ReturnType<typeof createServiceClient>,
   claim: ClaimWithRelations,
@@ -376,7 +387,7 @@ async function startTicketWizard(
   await supabase.from("claims").update({ ticket_wizard: { queue, i: 0 } }).eq("id", claim.id);
   await sendAndLog(
     supabase, claim.id, employeePhone,
-    [refOf(), ...wizardPromptLines(trips, queue[0]!, queue.length)].join("\n"),
+    wizardPromptLines(trips, queue[0]!, queue.length).join("\n"),
     "TICKET_WIZARD_START"
   );
 }
@@ -396,7 +407,7 @@ async function handleWizardTurn(
   const cur = wiz.queue[wiz.i]!;
 
   const sendWizard = (lines: string[], type: string) =>
-    sendAndLog(supabase, claim.id, phone, [refOf(), ...lines].join("\n"), type);
+    sendAndLog(supabase, claim.id, phone, lines.join("\n"), type);
 
   const finishHint = claim.approved_at
     ? "Balas SELESAI untuk mengajukan ulang klaim."
@@ -994,23 +1005,76 @@ export async function POST(request: NextRequest) {
     }
 
     let claim = null;
-    let role = null;
+    let role: WaRole | null = null;
 
-    for (const c of claims) {
-      if (!c.employee) continue;
-
-      const empPhone = normalizePhone(c.employee.phone_number);
-      const mgrPhone = c.manager ? normalizePhone(c.manager.phone_number) : null;
-      const hrPhone = c.hr ? normalizePhone(c.hr.phone_number) : null;
-
-      if (hrPhone && hrPhone === phoneNumber && c.approved_at && c.manager_status === 'APPROVED' && c.hr_status === 'PENDING') {
-        claim = c; role = 'HR'; break;
+    // 1) Session aktif → tetap di klaim yang sama sampai tahapnya selesai,
+    //    supaya balasan tidak melompat ke klaim lain di tengah alur.
+    const sess = waSession.get(phoneNumber);
+    if (sess && Date.now() - sess.at < WA_SESSION_TTL_MS) {
+      const c = claims.find((x: ClaimRow) => x.id === sess.claimId);
+      const r = c ? matchRole(c, phoneNumber) : null;
+      if (c && r) {
+        claim = c;
+        role = r;
+      } else {
+        waSession.delete(phoneNumber); // tahap pengirim selesai → cocokkan ulang
       }
-      if (mgrPhone && mgrPhone === phoneNumber && c.approved_at && c.manager_status === 'PENDING') {
-        claim = c; role = 'MANAGER'; break;
+    }
+
+    // 2) Approver dulu, baru karyawan — manager/HR yang kebetulan juga punya
+    //    klaim sendiri tidak salah terdeteksi sebagai karyawan klaimnya sendiri
+    //    (ini penyebab balasan manager "tidak terdeteksi").
+    if (!claim) {
+      for (const c of claims as ClaimRow[]) {
+        const r = matchRole(c, phoneNumber);
+        if (r === "HR" || r === "MANAGER") { claim = c; role = r; break; }
       }
-      if (empPhone === phoneNumber && (!c.approved_at || c.status === 'NEED_REVIEW')) {
-        claim = c; role = 'EMPLOYEE'; break;
+    }
+    if (!claim) {
+      for (const c of claims as ClaimRow[]) {
+        if (matchRole(c, phoneNumber) === "EMPLOYEE") { claim = c; role = "EMPLOYEE"; break; }
+      }
+    }
+
+    // 3) Nomor dikenal sebagai approver tapi belum/sudah lewat tahapnya —
+    //    jelaskan status klaimnya, jangan biarkan "tidak ada klaim aktif"
+    //    untuk orang yang jelas terdaftar sebagai Manager/HR.
+    if (!claim) {
+      const known = (claims as ClaimRow[]).find((c) => {
+        const mgrPhone = c.manager ? normalizePhone(c.manager.phone_number) : null;
+        const hrPhone = c.hr ? normalizePhone(c.hr.phone_number) : null;
+        return mgrPhone === phoneNumber || hrPhone === phoneNumber;
+      });
+      if (known) {
+        if (!autoReplyAllowed(phoneNumber)) {
+          return NextResponse.json({ success: true, reason: "Auto-reply cooldown (anti-loop)" });
+        }
+        const asHr = known.hr ? normalizePhone(known.hr.phone_number) === phoneNumber : false;
+        const stage = !known.approved_at
+          ? "masih menunggu konfirmasi KARYAWAN"
+          : known.manager_status !== "APPROVED"
+            ? "masih menunggu persetujuan MANAGER"
+            : "sudah disetujui Manager dan sedang menunggu HR";
+        after(async () => {
+          const result = await sendTextMessage(
+            phoneNumber,
+            [
+              `Anda terdaftar sebagai ${asHr ? "HR" : "Manager"} pada klaim ${known.employee?.employee_name || "karyawan"} periode ${known.period}.`,
+              `Klaim itu ${stage} — belum ada yang perlu Anda balas di sini.`,
+              `Anda akan menerima pesan baru saat giliran Anda.`,
+            ].join("\n")
+          );
+          const { error: logErr } = await supabase.from("whatsapp_logs").insert({
+            phone_number: phoneNumber,
+            message_type: "APPROVER_STAGE_INFO",
+            status: result.success ? "SENT" : "FAILED",
+            response: result.success
+              ? "approver dikenali, tahap belum tiba"
+              : result.error || "Unknown error",
+          });
+          if (logErr) console.error("[WA] APPROVER_STAGE_INFO log gagal:", logErr.message);
+        });
+        return NextResponse.json({ success: true, reason: "Approver known, stage not ready" });
       }
     }
 
@@ -1045,6 +1109,15 @@ export async function POST(request: NextRequest) {
         if (logErr) console.error("[WA] UNMATCHED_REPLY log gagal:", logErr.message);
       });
       return NextResponse.json({ success: true, reason: "No matching claim/role" });
+    }
+
+    // Kunci session: balasan berikutnya dari nomor ini tetap di klaim ini.
+    waSession.set(phoneNumber, { claimId: claim.id, role: role!, at: Date.now() });
+    if (waSession.size > 500) {
+      const now = Date.now();
+      for (const [k, v] of waSession) {
+        if (now - v.at > WA_SESSION_TTL_MS) waSession.delete(k);
+      }
     }
 
     const reply = messageText.trim();
