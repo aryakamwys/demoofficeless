@@ -6,6 +6,8 @@ import { mkdirSync } from "node:fs";
 import { chromium } from "playwright";
 
 const BASE = process.env.DOCS_BASE_URL || "http://localhost:3000";
+// Jika DOCS_EMAIL & DOCS_PASS di-set, login otomatis (headless) — tanpa itu, login manual di jendela browser.
+const AUTO = Boolean(process.env.DOCS_EMAIL && process.env.DOCS_PASS);
 
 const pages = [
   ["dashboard", "/dashboard"],
@@ -18,12 +20,19 @@ const pages = [
 
 mkdirSync("public/docs", { recursive: true });
 
-const browser = await chromium.launch({ headless: false });
+const browser = await chromium.launch({ headless: AUTO });
 const ctx = await browser.newContext({ viewport: { width: 1440, height: 900 } });
 const page = await ctx.newPage();
 
 await page.goto(`${BASE}/login`);
-console.log(">> Login di jendela browser yang terbuka (timeout 5 menit)...");
+if (AUTO) {
+  console.log(">> Login otomatis...");
+  await page.fill("#email", process.env.DOCS_EMAIL);
+  await page.fill("#password", process.env.DOCS_PASS);
+  await page.click("button[type=submit]");
+} else {
+  console.log(">> Login di jendela browser yang terbuka (timeout 5 menit)...");
+}
 
 await page.waitForURL("**/dashboard", { timeout: 300000 });
 console.log(">> Login terdeteksi, mulai screenshot...");
