@@ -6,10 +6,12 @@ import {
   resolveEntityName,
   ticketTitle,
 } from "@/lib/envgate";
+import { PRIORITY_NAMES } from "@/components/services/invgate-ui";
 
 export default async function EnvGateTestPage() {
   let tickets: EnvGateTicketRow[] = [];
   let error: string | null = null;
+  let mapInfo = "";
 
   try {
     const [recent, statusMap, priorityMap] = await Promise.all([
@@ -17,6 +19,7 @@ export default async function EnvGateTestPage() {
       getStatusMap(),
       getPriorityMap(),
     ]);
+    mapInfo = `${Object.keys(statusMap).length} status · ${Object.keys(priorityMap).length} priority ter-resolve`;
     tickets = recent.map((t) => ({
       id: t.id,
       pretty_id: t.pretty_id || `PIM-${t.id}`,
@@ -24,7 +27,12 @@ export default async function EnvGateTestPage() {
       type_id: t.type_id,
       category: t.category_breadcrumb || t.category_details?.name || "",
       status: t.status_id ? resolveEntityName(statusMap, t.status_id) || `ID ${t.status_id}` : "—",
-      priority: t.priority_id ? resolveEntityName(priorityMap, t.priority_id) || `ID ${t.priority_id}` : "—",
+      priority:
+        t.priority_id
+          ? resolveEntityName(priorityMap, t.priority_id) ||
+            PRIORITY_NAMES[t.priority_id] ||
+            `ID ${t.priority_id}`
+          : "—",
       requester: t.requester_user?.name || "",
       assigned: t.assigned_user?.name || "",
       helpdesk: t.assigned_group_details?.name || "",
@@ -43,7 +51,7 @@ export default async function EnvGateTestPage() {
           klaim untuk referensi ticket.
         </p>
       </div>
-      <EnvGateTest tickets={tickets} error={error} />
+      <EnvGateTest tickets={tickets} error={error} mapInfo={mapInfo} />
     </div>
   );
 }

@@ -11,6 +11,40 @@ export const TYPE_NAMES: Record<number, string> = {
   6: "Major Incident",
 };
 
+/** Docs InvGate (fixed): 1=Low..5=Critical — fallback kalau /priorities tidak terjangkau. */
+export const PRIORITY_NAMES: Record<number, string> = {
+  1: "Low",
+  2: "Medium",
+  3: "High",
+  4: "Urgent",
+  5: "Critical",
+};
+
+/** pretty_id dari API bisa sudah ber-awalan # — normalisasi supaya tidak jadi "##PIM-x". */
+export function invPrettyId(inv: { pretty_id?: string; id: number }): string {
+  return `#${(inv.pretty_id || `PIM-${inv.id}`).replace(/^#*/, "")}`;
+}
+
+/**
+ * Description ticket EnvGate berisi HTML mentah (<p>, <br>, &nbsp;).
+ * Ubah ke teks polos: <br>/<p> jadi baris baru, tag dibuang, entity didecode.
+ */
+export function stripInvHtml(html: string): string {
+  return html
+    .replace(/<br\s*\/?>/gi, "\n")
+    .replace(/<\/(p|div|li)>/gi, "\n")
+    .replace(/<li[^>]*>/gi, "• ")
+    .replace(/<[^>]+>/g, "")
+    .replace(/&nbsp;/g, " ")
+    .replace(/&amp;/g, "&")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+}
+
 export const TYPE_STYLES: Record<number, { bg: string; label: string }> = {
   1: { bg: "bg-orange-500", label: "!" },
   2: { bg: "bg-blue-500", label: "»" },

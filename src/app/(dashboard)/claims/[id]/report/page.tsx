@@ -14,7 +14,8 @@ import {
   ticketTitle,
   type InvTicket,
 } from "@/lib/envgate";
-import { TYPE_NAMES, InvAvatar, InvTypeIcon } from "@/components/services/invgate-ui";
+import { TYPE_NAMES, PRIORITY_NAMES, InvAvatar, InvTypeIcon, invPrettyId, stripInvHtml } from "@/components/services/invgate-ui";
+import { formatTripDateTime } from "@/lib/format";
 import { ReportPrintButton } from "@/components/claims/report-print-button";
 
 interface ReportPageProps {
@@ -135,7 +136,7 @@ function InvGateCard({
           )}
         </div>
         <span className="rounded-sm bg-blue-600 px-2 py-0.5 font-semibold text-white">
-          #{inv.pretty_id || `PIM-${inv.id}`}
+          {invPrettyId(inv)}
         </span>
       </div>
 
@@ -159,7 +160,10 @@ function InvGateCard({
       <div className="grid grid-cols-5 divide-x divide-slate-200 border-b border-slate-200">
         <MetricCell
           label="Priority"
-          value={priorityName || (inv.priority_id ? `ID ${inv.priority_id}` : "—")}
+          value={
+            priorityName ||
+            (inv.priority_id ? PRIORITY_NAMES[inv.priority_id] || `ID ${inv.priority_id}` : "—")
+          }
         />
         <MetricCell label="Type" value={typeName} />
         <MetricCell label="Source" value={sourceName || "—"} />
@@ -185,7 +189,7 @@ function InvGateCard({
             </span>
           </div>
           <div className="whitespace-pre-line rounded-sm border border-slate-200 bg-slate-50 p-2 leading-relaxed text-slate-700">
-            {inv.description || ticketTitle(inv) || "—"}
+            {(inv.description && stripInvHtml(inv.description)) || ticketTitle(inv) || "—"}
           </div>
         </div>
       </div>
@@ -395,8 +399,8 @@ export default async function ClaimReportPage({ params }: ReportPageProps) {
           {(trips || []).map((t, i) => (
             <tr key={t.id}>
               <td className="border border-slate-300 px-2 py-1">{i + 1}</td>
-              <td className="border border-slate-300 px-2 py-1">
-                {dayjs(t.trip_date).format("DD MMM YYYY HH:mm")}
+              <td className="border border-slate-300 px-2 py-1 whitespace-nowrap">
+                {formatTripDateTime(t.trip_date)}
               </td>
               <td className="border border-slate-300 px-2 py-1">
                 {t.pickup} → {t.dropoff}

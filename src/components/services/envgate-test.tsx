@@ -72,9 +72,11 @@ const PAGE_SIZE = 10;
 export function EnvGateTest({
   tickets,
   error,
+  mapInfo,
 }: {
   tickets: EnvGateTicketRow[];
   error: string | null;
+  mapInfo?: string;
 }) {
   const [filter, setFilter] = useState("");
   const [page, setPage] = useState(1);
@@ -110,6 +112,12 @@ export function EnvGateTest({
             Data live dari EnvGate (cache 5 menit). Kolom Customer = perusahaan
             requester; engineer yang mengerjakan ada di kolom Assigned agent.
           </p>
+          {mapInfo && (
+            <p className="mt-0.5 text-xs text-emerald-600">
+              Entity map: {mapInfo}
+              {mapInfo.startsWith("0 status") && " — /statuses tidak terjangkau, status tampil sebagai ID."}
+            </p>
+          )}
         </div>
       )}
 
