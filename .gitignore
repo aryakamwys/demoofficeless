@@ -46,3 +46,9 @@ next-env.d.ts
 /.agents
 
 .claude/
+
+# AI tooling lokal — bukan untuk repo publik
+/CLAUDE.md
+/AGENTS.md
+/skills-lock.json
+/docs/superpowers
