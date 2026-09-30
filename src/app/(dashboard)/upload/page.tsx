@@ -9,7 +9,9 @@ import { Skeleton } from "@/components/ui/skeleton";
 import {
   Select,
   SelectContent,
+  SelectGroup,
   SelectItem,
+  SelectLabel,
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
@@ -24,14 +26,17 @@ const months = [
 ];
 
 export default function UploadPage() {
-  const [period, setPeriod] = useState("");
+  // Default: bulan berjalan (index month dayjs = 0-11)
+  const [period, setPeriod] = useState(
+    () => `${months[dayjs().month()]} ${dayjs().year()}`
+  );
   const [file, setFile] = useState<File | null>(null);
   const [loading, setLoading] = useState(false);
   const [uploads, setUploads] = useState<Upload[]>([]);
   const [historyLoading, setHistoryLoading] = useState(true);
 
-  const currentYear = dayjs().year();
-  const years = [currentYear - 1, currentYear, currentYear + 1];
+  // Tahun terbaru dulu, bulan terbaru dulu dalam tiap tahun
+  const years = [dayjs().year() + 1, dayjs().year(), dayjs().year() - 1];
 
   const fetchUploads = useCallback(async () => {
     setHistoryLoading(true);
@@ -120,16 +125,24 @@ export default function UploadPage() {
                   <SelectValue placeholder="Pilih periode" />
                 </SelectTrigger>
                 <SelectContent>
-                  {years.map((year) =>
-                    months.map((month, idx) => (
-                      <SelectItem
-                        key={`${year}-${idx}`}
-                        value={`${month} ${year}`}
-                      >
-                        {month} {year}
-                      </SelectItem>
-                    ))
-                  )}
+                  {years.map((year) => (
+                    <SelectGroup key={year}>
+                      <SelectLabel className="text-xs font-semibold uppercase tracking-wide text-slate-400">
+                        {year}
+                      </SelectLabel>
+                      {months
+                        .map((month, idx) => ({ month, idx }))
+                        .reverse()
+                        .map(({ month, idx }) => (
+                          <SelectItem
+                            key={`${year}-${idx}`}
+                            value={`${month} ${year}`}
+                          >
+                            {month}
+                          </SelectItem>
+                        ))}
+                    </SelectGroup>
+                  ))}
                 </SelectContent>
               </Select>
             </div>
