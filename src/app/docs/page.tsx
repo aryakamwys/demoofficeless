@@ -11,16 +11,28 @@ const NAV = [
     items: [{ id: "intro", title: "Pengenalan & Login" }],
   },
   {
+    group: "Alur WhatsApp",
+    items: [
+      { id: "wa-karyawan", title: "Panduan Karyawan" },
+      { id: "wa-approver", title: "Panduan Manager & HR" },
+    ],
+  },
+  {
     group: "Claims Grab",
     items: [
       { id: "employees", title: "Employees" },
       { id: "upload", title: "Upload Statement" },
       { id: "claims", title: "Claims" },
+      { id: "trip-ticket", title: "Ticket EnvGate per Trip" },
+      { id: "report", title: "Report PDF" },
     ],
   },
   {
     group: "Manage Service",
-    items: [{ id: "openclaw", title: "Openclaw Ticket" }],
+    items: [
+      { id: "openclaw", title: "Openclaw Ticket" },
+      { id: "envgate", title: "EnvGate Test" },
+    ],
   },
   {
     group: "Inventory",
@@ -62,6 +74,46 @@ function Note({ children }: { children: ReactNode }) {
     <div className="my-4 rounded-lg border border-blue-200 bg-blue-50 px-4 py-3 text-sm leading-relaxed text-blue-900">
       {children}
     </div>
+  );
+}
+
+/** Chip perintah, mis. UBAH 3 75000 */
+function Cmd({ children }: { children: ReactNode }) {
+  return (
+    <code className="rounded bg-slate-100 px-1.5 py-0.5 font-mono text-[12px] font-semibold text-blue-700">
+      {children}
+    </code>
+  );
+}
+
+/** Mock chat WhatsApp — bot di kiri (putih), balasan Anda di kanan (hijau). */
+function Chat({
+  title,
+  messages,
+}: {
+  title: string;
+  messages: Array<{ from: "bot" | "user"; text: string }>;
+}) {
+  return (
+    <figure className="my-5 rounded-xl border border-slate-200 bg-[#ece5dd] p-3">
+      <figcaption className="mb-2 px-1 text-[10px] font-semibold uppercase tracking-wider text-slate-500">
+        {title}
+      </figcaption>
+      <div className="space-y-2">
+        {messages.map((m, i) => (
+          <div key={i} className={cn("flex", m.from === "user" ? "justify-end" : "justify-start")}>
+            <div
+              className={cn(
+                "max-w-[88%] whitespace-pre-line rounded-xl px-3 py-2 text-[12px] leading-snug text-slate-800 shadow-sm",
+                m.from === "user" ? "rounded-br-sm bg-[#d9fdd3]" : "rounded-bl-sm bg-white"
+              )}
+            >
+              {m.text}
+            </div>
+          </div>
+        ))}
+      </div>
+    </figure>
   );
 }
 
@@ -226,7 +278,7 @@ const CONTENT: Record<string, ReactNode> = {
           <>Klik claim yang ingin dikirim (atau tombol kirim pada barisnya).</>,
           <>Pilih <b>Manager (Approver 1)</b> dan <b>HR (Approver 2)</b> — bisa dibiarkan kosong untuk auto-bypass.</>,
           <>Klik <b>Kirim WhatsApp</b> — karyawan menerima rincian perjalanan + total biaya.</>,
-          <>Karyawan membalas langsung di WhatsApp: <b>1</b> = Setuju, <b>2</b> = Koreksi, <b>3</b> = Detail.</>,
+          <>Karyawan membalas langsung di WhatsApp: <b>1</b> = Setuju, <b>2</b> = Ada yang salah, <b>3</b> = Lihat detail — lihat <b>Panduan Karyawan</b>.</>,
           <>Jika setuju, persetujuan berlanjut otomatis ke <b>Manager</b>, lalu <b>HR</b>, juga via WhatsApp.</>,
         ]}
       />
@@ -235,6 +287,300 @@ const CONTENT: Record<string, ReactNode> = {
         beberapa menit lalu kirim ulang. Beri jeda antar pengiriman jika mengirim banyak klaim sekaligus.
       </Note>
       <Shot src="/docs/claims.png?v=2" caption="Daftar Claims beserta statusnya" />
+    </>
+  ),
+
+  "wa-karyawan": (
+    <>
+      <H1>Panduan Karyawan (WhatsApp)</H1>
+      <P>
+        Setiap periode, sistem mengirim ringkasan klaim Grab Anda lewat WhatsApp. Anda tidak perlu
+        buka aplikasi apa pun — <b>cukup balas pesannya dengan angka</b>. Panduan ini menunjukkan
+        percakapan aslinya langkah demi langkah.
+      </P>
+
+      <H2>1. Menerima Ringkasan Klaim</H2>
+      <P>
+        Bot mengirim rangkuman perjalanan + total biaya. Baca dulu, lalu balas dengan salah satu
+        angka ini:
+      </P>
+      <div className="my-4 overflow-x-auto rounded-lg border border-slate-200">
+        <table className="w-full border-collapse text-left text-xs">
+          <thead>
+            <tr className="bg-slate-50">
+              <th className="border-b border-slate-200 px-3 py-2 font-semibold text-slate-700">Balas</th>
+              <th className="border-b border-slate-200 px-3 py-2 font-semibold text-slate-700">Arti</th>
+            </tr>
+          </thead>
+          <tbody className="text-slate-600">
+            {[
+              ["1", "SETUJU — semua data benar, langsung diteruskan ke Manager Anda."],
+              ["2", "ADA YANG SALAH — Anda akan ditanya apa masalahnya."],
+              ["3", "LIHAT DETAIL — melihat alamat lengkap tiap perjalanan."],
+            ].map(([s, d]) => (
+              <tr key={s}>
+                <td className="border-b border-slate-100 px-3 py-2 text-center font-mono text-base font-bold text-blue-700">{s}</td>
+                <td className="border-b border-slate-100 px-3 py-2">{d}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      <H2>2. Contoh: Semua Data Benar</H2>
+      <Chat
+        title="Contoh percakapan — SETUJU"
+        messages={[
+          {
+            from: "bot",
+            text: "[Ref: 4F8K2Q]\nHalo Mario,\n\nIni rangkuman klaim Grab Business Anda periode Agustus 2026. Mohon dicek dulu sebelum disetujui:\n\n- 02 Jul: Menara Karya Main Lobb... -> MID Plaza (Rp40.500)\n- 10 Jul: Palmerah Motorcycle St... -> MID Plaza 1 Main Lobby (Rp61.000)\n\nJumlah perjalanan: 3\nTotal biaya: Rp137.500\n\nCARA MEMBALAS (ketik nomornya saja):\n1 = SETUJU - semua data benar, langsung diteruskan ke Manager\n2 = ADA YANG SALAH - ceritakan apa yang salah\n3 = LIHAT DETAIL - alamat lengkap tiap perjalanan",
+          },
+          { from: "user", text: "1" },
+          {
+            from: "bot",
+            text: "[Ref: 9X2PLM]\nTERIMA KASIH. Data klaim Anda sudah SETUJU.\n\nSekarang menunggu persetujuan Manager Anda (Rini).\n\nAnda tidak perlu membalas pesan ini lagi.",
+          },
+        ]}
+      />
+
+      <H2>3. Contoh: Ada yang Salah</H2>
+      <P>
+        Ketik <b>2</b>, lalu tulis masalahnya dalam satu pesan. Tulisan Anda menjadi catatan untuk
+        HR. Setelah yakin benar, tetap akhiri dengan <b>1</b> (SETUJU).
+      </P>
+      <Chat
+        title="Contoh percakapan — KOREKSI"
+        messages={[
+          { from: "user", text: "2" },
+          {
+            from: "bot",
+            text: "[Ref: F43DSD]\nBaik, ada yang salah. Tolong tulis masalahnya dalam SATU pesan saja.\n\nContoh balasan:\n- trip 10 Juli bukan perjalanan saya\n- nominal trip no 2 seharusnya Rp50.000\n\nTulisan Anda akan menjadi catatan untuk HR.",
+          },
+          { from: "user", text: "trip 10 Juli bukan perjalanan saya, itu teman saya yang pinjam akun" },
+          {
+            from: "bot",
+            text: '[Ref: 7QW1NE]\nSUDAH TERSIMPAN. Catatan Anda:\n"trip 10 Juli bukan perjalanan saya, itu teman saya yang pinjam akun"\n\nBalas 1 = SETUJU, 3 = lihat detail,\natau tulis catatan lain.',
+          },
+          { from: "user", text: "1" },
+        ]}
+      />
+
+      <H2>4. Contoh: Diminta Revisi oleh Manager / HR</H2>
+      <P>
+        Kalau Manager atau HR meminta revisi, Anda bisa mengubah nominal sendiri lewat chat —
+        tanpa buka laptop. Tiga perintahnya:
+      </P>
+      <ul className="my-3 list-disc space-y-1 pl-5 text-sm text-slate-600">
+        <li><Cmd>LIST</Cmd> — lihat daftar trip bernomor.</li>
+        <li><Cmd>UBAH 3 75000</Cmd> — ubah trip no 3 jadi Rp75.000 (contoh).</li>
+        <li><Cmd>SELESAI</Cmd> — sudah selesai, kirim ulang ke approver.</li>
+      </ul>
+      <Chat
+        title="Contoh percakapan — REVISI"
+        messages={[
+          {
+            from: "bot",
+            text: "[Ref: K3M8ZR]\nHalo Mario,\n\nKlaim periode Agustus 2026 DIMINTA REVISI oleh Manager (Rini).\nAlasan: nominal trip 3 masih kurang tepat\n\nCARA REVISI LEWAT WHATSAPP INI (langkah demi langkah):\n1. Ketik LIST - untuk melihat daftar trip bernomor\n2. Ketik UBAH <nomor trip> <nominal baru> - contoh: UBAH 3 75000\n3. Ketik SELESAI - klaim dikirim ulang ke Manager",
+          },
+          { from: "user", text: "list" },
+          {
+            from: "bot",
+            text: "[Ref: V3TW35]\nDaftar Trip klaim periode Agustus 2026:\n1. 02 Jul: Menara Karya ... -> MID Plaza (Rp40.500)\n2. 02 Jul: MID Plaza ... -> Menara Karya (Rp36.000)\n3. 10 Jul: Palmerah ... -> MID Plaza 1 (Rp61.000)\n\nTotal: Rp137.500",
+          },
+          { from: "user", text: "UBAH 3 75000" },
+          {
+            from: "bot",
+            text: "[Ref: B2N9QX]\nKONFIRMASI UBAH NOMINAL - trip no 3\n10 Jul: Palmerah ... -> MID Plaza 1\nNominal sekarang: Rp61.000\nNominal baru: Rp75.000\n\nBalas YA untuk SIMPAN, atau BATAL untuk membatalkan.",
+          },
+          { from: "user", text: "YA" },
+          {
+            from: "bot",
+            text: "[Ref: H5R2JK]\nSUDAH TERSIMPAN. Trip no 3 berubah dari Rp61.000 jadi Rp75.000.\nTotal klaim sekarang: Rp151.500\n\nSudah selesai? Ketik SELESAI.",
+          },
+          { from: "user", text: "SELESAI" },
+          {
+            from: "bot",
+            text: "[Ref: Z8C4VN]\nSELESAI. Revisi Anda sudah dikirim ulang ke Manager untuk disetujui.\nAnda akan dikabari lagi setelah ada hasilnya.",
+          },
+        ]}
+      />
+
+      <H2>Hal yang Perlu Diketahui</H2>
+      <ul className="my-3 list-disc space-y-1 pl-5 text-sm text-slate-600">
+        <li>Huruf besar atau kecil sama saja — <Cmd>list</Cmd> = <Cmd>LIST</Cmd>.</li>
+        <li>Satu pesan = satu perintah. Jangan gabung dua perintah dalam satu balasan.</li>
+        <li>Bot menjawab agak lambat (3–7 detik) — itu <b>disengaja</b> agar nomor pengirim aman dari pembatasan WhatsApp. Tunggu saja, jangan kirim ulang.</li>
+        <li>Balasan singkat seperti “eh” atau “?” akan dibalas menu bantuan — tidak jadi catatan.</li>
+      </ul>
+    </>
+  ),
+
+  "wa-approver": (
+    <>
+      <H1>Panduan Manager &amp; HR (WhatsApp)</H1>
+      <P>
+        Setelah karyawan menyetujui klaimnya, Anda menerima pesan berisi rincian klaim. Cukup balas
+        dengan angka — tidak perlu buka aplikasi.
+      </P>
+
+      <H2>Menu Keputusan</H2>
+      <div className="my-4 overflow-x-auto rounded-lg border border-slate-200">
+        <table className="w-full border-collapse text-left text-xs">
+          <thead>
+            <tr className="bg-slate-50">
+              <th className="border-b border-slate-200 px-3 py-2 font-semibold text-slate-700">Balas</th>
+              <th className="border-b border-slate-200 px-3 py-2 font-semibold text-slate-700">Arti</th>
+            </tr>
+          </thead>
+          <tbody className="text-slate-600">
+            {[
+              ["1", "SETUJU — klaim diteruskan ke HR (Manager) / selesai disetujui (HR)."],
+              ["2 <alasan>", "MINTA REVISI — klaim kembali ke karyawan beserta alasan Anda."],
+            ].map(([s, d]) => (
+              <tr key={s}>
+                <td className="border-b border-slate-100 px-3 py-2 font-mono font-bold text-blue-700">{s}</td>
+                <td className="border-b border-slate-100 px-3 py-2">{d}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      <H2>Contoh: Menyetujui</H2>
+      <Chat
+        title="Contoh percakapan — Manager menyetujui"
+        messages={[
+          {
+            from: "bot",
+            text: "[Ref: Q7M3XD]\nHalo Manager,\n\nMario mengajukan klaim Grab periode Agustus 2026.\nKaryawan tersebut SUDAH mengecek dan menyetujui datanya sendiri.\n\n- 02 Jul: Menara Karya ... -> MID Plaza (Rp40.500)\n- 10 Jul: Palmerah ... -> MID Plaza 1 (Rp61.000)\n\nJumlah perjalanan: 3\nTotal biaya: Rp137.500\n\nKEPUTUSAN ANDA (ketik nomornya):\n1 = SETUJU - klaim diteruskan ke HR\n2 = MINTA REVISI - ketik 2 lalu tulis alasannya\n   Contoh: 2 nominal trip 3 masih kurang tepat",
+          },
+          { from: "user", text: "1" },
+          {
+            from: "bot",
+            text: "[Ref: P4L8VN]\nTERIMA KASIH. Klaim atas nama Mario sudah Anda SETUJUI.\nKlaim diteruskan ke HR untuk persetujuan terakhir.",
+          },
+        ]}
+      />
+
+      <H2>Contoh: Minta Revisi</H2>
+      <P>
+        Ketik <b>2</b> <i>langsung diikuti alasan</i> dalam pesan yang sama. Alasan ini diteruskan
+        ke karyawan supaya tahu apa yang harus diperbaiki.
+      </P>
+      <Chat
+        title="Contoh percakapan — Manager meminta revisi"
+        messages={[
+          { from: "user", text: "2 nominal trip 3 masih kurang tepat, tolong cek ulang" },
+          {
+            from: "bot",
+            text: "[Ref: M9K2QS]\nTERIMA KASIH. Permintaan revisi sudah dicatat\ndan diteruskan ke Mario lewat WhatsApp.\n\nAlasan revisi: nominal trip 3 masih kurang tepat, tolong cek ulang",
+          },
+        ]}
+      />
+      <P>
+        Karyawan lalu merevisi sendiri lewat chat (lihat <b>Panduan Karyawan</b>) — mengubah nominal
+        dengan <Cmd>UBAH</Cmd> lalu <Cmd>SELESAI</Cmd>. Setelah itu Anda menerima lagi pesan
+        klaimnya untuk keputusan berikutnya. Alur ini bisa berulang sampai Anda setuju.
+      </P>
+
+      <H2>Urutan Persetujuan</H2>
+      <Steps
+        items={[
+          <>Karyawan mengecek dan menyetujui datanya sendiri (balas 1).</>,
+          <>Manager menyetujui (balas 1) — atau meminta revisi (balas 2 + alasan).</>,
+          <>HR memberi persetujuan terakhir (balas 1) — klaim selesai.</>,
+        ]}
+      />
+      <Note>
+        Ini persetujuan <b>klaim</b> (bukan pembayaran). Salah ketik? Balasan angka yang tidak
+        dikenali akan dibalas dengan menu bantuan — cukup kirim balasan yang benar setelahnya.
+      </Note>
+    </>
+  ),
+
+  "trip-ticket": (
+    <>
+      <H1>Ticket EnvGate per Trip</H1>
+      <P>
+        Setiap perjalanan (trip) pada klaim bisa dilengkapi <b>nomor ticket EnvGate</b> sebagai
+        bukti pekerjaan engineer. Ticket ini muncul di Report PDF dan hanya bisa diisi oleh{" "}
+        <b>HR</b> lewat halaman detail klaim.
+      </P>
+
+      <H2>Cara Mengisi Ticket</H2>
+      <Steps
+        items={[
+          <>Buka <b>Claims Grab → Claims</b>, lalu klik klaim yang mau diedit.</>,
+          <>Pada tabel <b>Bookings</b>, klik ikon <b>pensil</b> (✏️) di baris trip yang mau diberi ticket.</>,
+          <>Isi kolom <b>Ticket EnvGate (bukti kerja)</b> — pilih dari saran yang muncul (50 ticket terbaru) atau ketik nomornya manual, mis. <Cmd>32535</Cmd>.</>,
+          <>Klik <b>Simpan</b> — perubahan tercatat sebagai note pada klaim.</>,
+        ]}
+      />
+      <Shot src="/docs/claims.png?v=2" caption="Tabel Bookings — kolom Ticket & tombol edit (pensil) per baris trip" />
+
+      <H2>Yang Perlu Diketahui</H2>
+      <ul className="my-3 list-disc space-y-1 pl-5 text-sm text-slate-600">
+        <li>Ticket <b>opsional</b> — trip tanpa ticket tetap valid.</li>
+        <li>Mengisi/mengubah ticket <b>tidak</b> membatalkan persetujuan Manager (berbeda dengan mengubah nominal).</li>
+        <li>Kosongkan kolom lalu simpan untuk <b>menghapus</b> ticket dari trip.</li>
+        <li>Nomor ticket yang muncul di Report PDF otomatis diperluas menjadi judul, status, prioritas, dan detail lain yang diambil langsung dari EnvGate.</li>
+      </ul>
+    </>
+  ),
+
+  report: (
+    <>
+      <H1>Report PDF</H1>
+      <P>
+        Report adalah dokumen bukti klaim yang bisa dicetak/di-PDF-kan, berisi ringkasan klaim,
+        timeline persetujuan, rincian trip, kartu ticket EnvGate, dan tanda tangan. Tersedia setelah
+        klaim berstatus <b>Approved</b>.
+      </P>
+
+      <H2>Cara Membuka &amp; Mencetak</H2>
+      <Steps
+        items={[
+          <>Buka detail klaim yang sudah <b>Approved</b>.</>,
+          <>Klik tombol <b>Report PDF</b> di pojok kanan atas.</>,
+          <>Di halaman report, klik <b>Print / Simpan PDF</b> — pilih “Save as PDF” pada dialog cetak browser.</>,
+        ]}
+      />
+
+      <H2>Isi Report</H2>
+      <ul className="my-3 list-disc space-y-1 pl-5 text-sm text-slate-600">
+        <li><b>Ringkasan</b> — karyawan, departemen, periode, jumlah trip, total biaya.</li>
+        <li><b>Timeline Approval</b> — waktu konfirmasi engineer, status Manager, status HR.</li>
+        <li><b>Detail Perjalanan</b> — tabel trip + kolom <b>Ticket</b> per baris (nomor + judul ticket).</li>
+        <li><b>Kartu Ticket EnvGate</b> — tampilan meniru halaman ticket EnvGate: badge <Cmd>#PIM-xxxxx</Cmd>, status, prioritas, tipe, kategori, deskripsi, customer, dan agen yang mengerjakan. Satu kartu untuk referensi klaim + satu kartu per trip yang diberi ticket.</li>
+        <li><b>Tanda tangan</b> — engineer, Manager, dan HR (dari data signature masing-masing).</li>
+      </ul>
+      <Note>
+        Data ticket diambil <b>live</b> dari EnvGate saat report dibuka (cache 5 menit). Kalau
+        detail ticket tidak muncul, cek halaman <b>EnvGate Test</b> — kemungkinan koneksi API
+        bermasalah.
+      </Note>
+    </>
+  ),
+
+  envgate: (
+    <>
+      <H1>EnvGate Test</H1>
+      <P>
+        Halaman untuk memastikan koneksi ke <b>EnvGate Service Desk</b> (service desk internal
+        Perkom) baik-baik saja. Data ticket di Report PDF bergantung pada koneksi ini.
+      </P>
+
+      <H2>Cara Membaca Halaman</H2>
+      <ul className="my-3 list-disc space-y-1 pl-5 text-sm text-slate-600">
+        <li><b>Banner hijau “Terhubung”</b> — API nyambung, 50 ticket terbaru berhasil diambil.</li>
+        <li><b>Banner merah “Gagal”</b> — API tidak terjangkau: kredensial <Cmd>SERVICEDESK_USERNAME</Cmd>/<Cmd>SERVICEDESK_PASSWORD</Cmd> belum diset atau jaringan VPS ke servicedesk.perkom.co.id terputus.</li>
+        <li><b>Tabel ticket</b> — tampilan mengikuti panel request EnvGate: <Cmd>#PIM-xxxxx</Cmd>, judul + kategori, status, agen, customer, dan help desk-nya.</li>
+        <li><b>Kolom filter</b> — cari berdasarkan ID, judul, customer, atau nama agen.</li>
+      </ul>
+      <Note>
+        Data di-cache 5 menit di server — perubahan di EnvGate baru terlihat paling lama 5 menit
+        setelah refresh.
+      </Note>
     </>
   ),
 
