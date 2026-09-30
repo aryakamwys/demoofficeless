@@ -51,14 +51,21 @@ export interface InvTicket {
   requester_id?: number;
   /** Docs baru menyebut customer sebagai user_id (requester_id = nama lama) */
   user_id?: number;
+  creator_id?: number;
+  source_id?: number;
+  location_id?: number;
   created_at?: string | number;
   pretty_id?: string;
+  description?: string;
+  sla_incident_first_reply?: string;
+  sla_incident_resolution?: string;
   category_details?: { id: number; name: string };
   /** Jalur kategori lengkap: "Technical Support > Managed Service > Others" */
   category_breadcrumb?: string;
   assigned_group_details?: { id: number; name: string };
   assigned_user?: MappedUser | null;
   requester_user?: MappedUser | null;
+  creator_user?: MappedUser | null;
 }
 
 interface StatusPage {
@@ -182,6 +189,12 @@ export const getPriorityMap = async () =>
 export const getCategoryMap = async () =>
   (await simpleMap("envgate:v2:categories", "/categories")) ?? {};
 
+export const getSourceMap = async () =>
+  (await simpleMap("envgate:v2:sources", "/sources")) ?? {};
+
+export const getLocationsMap = async () =>
+  (await simpleMap("envgate:v2:locations", "/locations")) ?? {};
+
 /** Pure: jalur kategori dari root ke id, naik lewat parent_category_id. */
 export function categoryBreadcrumb(
   map: Record<string | number, InvEntity | undefined>,
@@ -273,12 +286,15 @@ function decorate(
     if (requesterId != null) {
       out.requester_user = mapUser(users[requesterId]);
     }
+    if (out.creator_id != null) {
+      out.creator_user = mapUser(users[out.creator_id]);
+    }
     return out;
   });
 }
 
 function userIdsOf(items: InvTicket[]): Array<number | undefined> {
-  return items.flatMap((i) => [i.assigned_id, i.requester_id ?? i.user_id]);
+  return items.flatMap((i) => [i.assigned_id, i.requester_id ?? i.user_id, i.creator_id]);
 }
 
 // ---------------------------------------------------------------------------

@@ -6,6 +6,8 @@ import {
   buildDetailMessage,
   buildConfirmationMessage,
   buildCorrectionPrompt,
+  buildEmployeeHelpMessage,
+  buildNoteSavedMessage,
   buildManagerApprovalMessage,
   buildHrApprovalMessage,
   buildEmployeeStatusUpdateMessage,
@@ -127,7 +129,12 @@ async function handleRevisionRequest(
 
   await sendAndLog(
     supabase, claim.id, approverPhone,
-    `Permintaan revisi tercatat dan telah diteruskan ke ${claim.employee?.employee_name || "karyawan"}.`,
+    [
+      `TERIMA KASIH. Permintaan revisi sudah dicatat`,
+      `dan diteruskan ke ${claim.employee?.employee_name || "karyawan"} lewat WhatsApp.`,
+      ``,
+      `Alasan revisi: ${reason || "-"}`,
+    ].join("\n"),
     `${role}_REVISION_REQUESTED`
   );
 
@@ -260,14 +267,22 @@ async function handleRevisionCommands(
     return;
   }
 
-  // NOTE / lainnya → catatan pada klaim
+  // NOTE / lainnya → catatan pada klaim (dengan umpan balik jelas)
+  const noteText = cmd.type === "NOTE" ? cmd.text : reply;
   await supabase.from("comments").insert({
     claim_id: claim.id,
-    message: cmd.type === "NOTE" ? cmd.text : reply,
+    message: noteText,
     author_name: empName,
     author_role: "EMPLOYEE",
   });
-  await sendAndLog(supabase, claim.id, employeePhone, "Catatan tersimpan di klaim Anda.\n\nBalas SELESAI untuk mengajukan ulang.", "REVISION_NOTE");
+  await sendAndLog(
+    supabase, claim.id, employeePhone,
+    buildNoteSavedMessage(
+      noteText,
+      "Balas UBAH <no> <nominal> untuk ubah nominal,\natau SELESAI untuk mengajukan ulang."
+    ),
+    "REVISION_NOTE"
+  );
 }
 
 // ==========================================
@@ -339,11 +354,25 @@ async function processWebhookReply(
           await sendAndLog(supabase, claim.id, employeePhone, buildDetailMessage(trips, claim.total_amount), "DETAIL_MESSAGE");
         }
       } else {
-        if (claim.status === "NEED_REVIEW" || reply.length > 5) {
+        // Teks bebas → jadi catatan. SELALU balas (test user: catatan dulu
+        // tersimpan diam-diam — pengirim tidak tahu kalau berhasil).
+        if (!employeePhone) return;
+        if (reply.replace(/\s/g, "").length < 3) {
+          // "eh", "?", "y" — bukan catatan, arahkan ke menu
+          await sendAndLog(supabase, claim.id, employeePhone, buildEmployeeHelpMessage(), "INVALID_REPLY");
+        } else {
           await supabase.from("comments").insert({ claim_id: claim.id, message: reply });
           if (claim.status !== "NEED_REVIEW") {
             await supabase.from("claims").update({ status: "NEED_REVIEW" }).eq("id", claim.id);
           }
+          await sendAndLog(
+            supabase, claim.id, employeePhone,
+            buildNoteSavedMessage(
+              reply,
+              "Balas 1 = SETUJU, 3 = lihat detail,\natau tulis catatan lain."
+            ),
+            "EMPLOYEE_NOTE"
+          );
         }
       }
     }
@@ -354,7 +383,14 @@ async function processWebhookReply(
     else if (role === 'MANAGER') {
       if (reply === "1") {
         await supabase.from("claims").update({ manager_status: "APPROVED" }).eq("id", claim.id);
-        await sendAndLog(supabase, claim.id, phoneNumber, "Terima kasih, klaim telah Anda setujui.", "MANAGER_CONFIRMED");
+        await sendAndLog(
+          supabase, claim.id, phoneNumber,
+          [
+            `TERIMA KASIH. Klaim atas nama ${claim.employee?.employee_name || "karyawan"} sudah Anda SETUJUI.`,
+            `Klaim diteruskan ke HR untuk persetujuan terakhir.`,
+          ].join("\n"),
+          "MANAGER_CONFIRMED"
+        );
 
         if (employeePhone) {
           await sendAndLog(
@@ -374,7 +410,17 @@ async function processWebhookReply(
         const reason = cmd.type === "REVISE" ? cmd.reason : "";
         await handleRevisionRequest(supabase, claim, "MANAGER", reason, phoneNumber, employeePhone);
       } else {
-        await sendAndLog(supabase, claim.id, phoneNumber, "Balasan tidak valid. Silakan balas 1 untuk Approve atau 2 <alasan> untuk Minta Revisi.", "INVALID_REPLY");
+        await sendAndLog(
+          supabase, claim.id, phoneNumber,
+          [
+            `Maaf, balasan belum dikenali.`,
+            ``,
+            `Ketik:`,
+            `1 = SETUJU`,
+            `2 = MINTA REVISI — contoh: 2 nominal trip 3 masih salah`,
+          ].join("\n"),
+          "INVALID_REPLY"
+        );
       }
     }
 
@@ -384,7 +430,14 @@ async function processWebhookReply(
     else if (role === 'HR') {
       if (reply === "1") {
         await supabase.from("claims").update({ hr_status: "APPROVED", status: "APPROVED" }).eq("id", claim.id);
-        await sendAndLog(supabase, claim.id, phoneNumber, "Terima kasih, klaim telah selesai Anda setujui.", "HR_CONFIRMED");
+        await sendAndLog(
+          supabase, claim.id, phoneNumber,
+          [
+            `TERIMA KASIH. Klaim atas nama ${claim.employee?.employee_name || "karyawan"} SELESAI —`,
+            `disetujui Manager dan HR. Karyawan sudah dinotifikasi.`,
+          ].join("\n"),
+          "HR_CONFIRMED"
+        );
         if (employeePhone) {
           await sendAndLog(
             supabase, claim.id, employeePhone,
@@ -397,7 +450,17 @@ async function processWebhookReply(
         const reason = cmd.type === "REVISE" ? cmd.reason : "";
         await handleRevisionRequest(supabase, claim, "HR", reason, phoneNumber, employeePhone);
       } else {
-        await sendAndLog(supabase, claim.id, phoneNumber, "Balasan tidak valid. Silakan balas 1 untuk Approve atau 2 <alasan> untuk Minta Revisi.", "INVALID_REPLY");
+        await sendAndLog(
+          supabase, claim.id, phoneNumber,
+          [
+            `Maaf, balasan belum dikenali.`,
+            ``,
+            `Ketik:`,
+            `1 = SETUJU (klaim selesai)`,
+            `2 = MINTA REVISI — contoh: 2 nominal trip 3 masih salah`,
+          ].join("\n"),
+          "INVALID_REPLY"
+        );
       }
     }
 

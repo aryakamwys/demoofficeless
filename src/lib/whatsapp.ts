@@ -121,86 +121,94 @@ export async function sendTextMessage(
 }
 
 /**
+ * Pesan-pesan WA ditulis untuk pembaca awam: bahasa simpel, setiap opsi
+ * dijelaskan apa yang terjadi + contoh, dan selalu ada umpan balik jelas.
+ * (Hasil test user pertama: menu 1/2/3 tanpa penjelasan bikin bingung.)
+ */
+
+type WaTripLine = { trip_date: string; pickup: string; dropoff: string; fare: number; cost_code?: string };
+
+/** Ringkas alamat supaya pesan ringkasan mudah dibaca (alamat lengkap ada di DETAIL). */
+function shortAddr(s: string, max = 32): string {
+  const t = (s || "").trim();
+  if (t.length <= max) return t;
+  return t.slice(0, max).replace(/\s+\S*$/, "") + "...";
+}
+
+function tripLine(t: WaTripLine, full: boolean): string {
+  const addr = (s: string) => (full ? (s || "").trim() : shortAddr(s));
+  const costCode = t.cost_code ? ` [Code: ${t.cost_code}]` : "";
+  return `- ${formatTripDate(t.trip_date)}: ${addr(t.pickup)} -> ${addr(t.dropoff)} (${formatAmount(t.fare)})${costCode}`;
+}
+
+/** Menu karyawan — selalu dengan penjelasan + contoh. */
+function employeeMenuLines(): string[] {
+  return [
+    "CARA MEMBALAS (ketik nomornya saja):",
+    "1 = SETUJU - semua data benar, langsung diteruskan ke Manager",
+    "2 = ADA YANG SALAH - ceritakan apa yang salah",
+    "3 = LIHAT DETAIL - alamat lengkap tiap perjalanan",
+    "",
+    "Contoh: ketik 1 lalu kirim.",
+  ];
+}
+
+/** Menu approver (Manager/HR) — `next` = kalimat lanjutan setelah SETUJU. */
+function approverMenuLines(next: string): string[] {
+  return [
+    "KEPUTUSAN ANDA (ketik nomornya):",
+    `1 = SETUJU - ${next}`,
+    "2 = MINTA REVISI - ketik 2 lalu tulis alasannya",
+    "   Contoh: 2 nominal trip 3 masih kurang tepat",
+  ];
+}
+
+/**
  * Build the claim notification message.
- * Professional tone, no emoji, following user's WhatsApp flow spec.
  */
 export function buildClaimMessage(params: {
   employee_name: string;
   period: string;
   trip_count: number;
   total_amount: number;
-  trips: Array<{ trip_date: string; pickup: string; dropoff: string; fare: number; cost_code?: string }>;
+  trips: WaTripLine[];
 }): string {
   const { employee_name, period, trip_count, total_amount, trips } = params;
-  const numAmount = typeof total_amount === 'string' ? parseFloat(total_amount) : total_amount;
-  const formattedAmount = `Rp${numAmount.toLocaleString("id-ID")}`;
-
-  const tripDetails = trips.map((t) => {
-    const date = new Date(t.trip_date);
-    const day = date.getDate().toString().padStart(2, "0");
-    const monthNames = ["Jan", "Feb", "Mar", "Apr", "Mei", "Jun", "Jul", "Agu", "Sep", "Okt", "Nov", "Des"];
-    const dateStr = `${day} ${monthNames[date.getMonth()]}`;
-    const numFare = typeof t.fare === 'string' ? parseFloat(t.fare) : t.fare;
-    const fare = `Rp${numFare.toLocaleString("id-ID")}`;
-    const costCode = t.cost_code ? ` [Code: ${t.cost_code}]` : "";
-    return `- ${dateStr}: ${t.pickup} -> ${t.dropoff} (${fare})${costCode}`;
-  }).join("\n");
-
   const refId = Math.random().toString(36).substring(2, 8).toUpperCase();
   return [
     `[Ref: ${refId}]`,
     `Halo ${employee_name},`,
     ``,
-    `Data perjalanan Grab Business periode ${period} telah tersedia.`,
+    `Ini rangkuman klaim Grab Business Anda periode ${period}.`,
+    `Mohon dicek dulu sebelum disetujui:`,
     ``,
-    `Detail Perjalanan:`,
-    tripDetails,
+    ...trips.map((t) => tripLine(t, false)),
     ``,
-    `Total perjalanan: ${trip_count} Trip`,
-    `Total biaya: ${formattedAmount}`,
+    `Jumlah perjalanan: ${trip_count}`,
+    `Total biaya: ${formatAmount(total_amount)}`,
     ``,
-    `Silakan lakukan konfirmasi.`,
-    ``,
-    `Balas:`,
-    `1 - Setuju`,
-    `2 - Koreksi`,
-    `3 - Detail`
+    ...employeeMenuLines(),
   ].join("\n");
 }
 
 /**
- * Build the trip detail message.
+ * Build the trip detail message (alamat lengkap).
  */
 export function buildDetailMessage(
-  trips: Array<{ trip_date: string; pickup: string; dropoff: string; fare: number; cost_code?: string }>,
+  trips: WaTripLine[],
   total_amount: number
 ): string {
-  const lines = trips.map((t) => {
-    const date = new Date(t.trip_date);
-    const day = date.getDate().toString().padStart(2, "0");
-    const monthNames = [
-      "Jan", "Feb", "Mar", "Apr", "Mei", "Jun",
-      "Jul", "Agu", "Sep", "Okt", "Nov", "Des",
-    ];
-    const month = monthNames[date.getMonth()];
-    const numFare = typeof t.fare === 'string' ? parseFloat(t.fare) : t.fare;
-    const fare = `Rp${numFare.toLocaleString("id-ID")}`;
-    const costCode = t.cost_code ? ` [Code: ${t.cost_code}]` : "";
-    return `- ${day} ${month}: ${t.pickup} -> ${t.dropoff} (${fare})${costCode}`;
-  });
-
   const refId = Math.random().toString(36).substring(2, 8).toUpperCase();
-  lines.unshift(`[Ref: ${refId}]`, "");
-  lines.push("");
-  const numTotal = typeof total_amount === 'string' ? parseFloat(total_amount) : total_amount;
-  lines.push(`Total: Rp${numTotal.toLocaleString("id-ID")}`);
-  lines.push("");
-  lines.push(`Balas:`);
-  lines.push(`1 - Setuju`);
-  lines.push(`2 - Koreksi`);
-  lines.push(`3 - Detail`);
-
-  return lines.join("\n");
+  return [
+    `[Ref: ${refId}]`,
+    `DETAIL PERJALANAN (alamat lengkap):`,
+    ``,
+    ...trips.map((t) => tripLine(t, true)),
+    ``,
+    `Total biaya: ${formatAmount(total_amount)}`,
+    ``,
+    ...employeeMenuLines(),
+  ].join("\n");
 }
 
 /**
@@ -208,19 +216,15 @@ export function buildDetailMessage(
  */
 export function buildConfirmationMessage(managerName?: string): string {
   const refId = Math.random().toString(36).substring(2, 8).toUpperCase();
-  if (managerName) {
-    return [
-      `[Ref: ${refId}]`,
-      "Terima kasih.",
-      "",
-      `Data telah dikonfirmasi dan sedang diteruskan ke Manager Anda (${managerName}) untuk persetujuan.`
-    ].join("\n");
-  }
   return [
     `[Ref: ${refId}]`,
-    "Terima kasih.",
-    "",
-    "Data telah dikonfirmasi dan sedang diproses lebih lanjut."
+    `TERIMA KASIH. Data klaim Anda sudah SETUJU.`,
+    ``,
+    managerName
+      ? `Sekarang menunggu persetujuan Manager Anda (${managerName}).`
+      : `Klaim sedang diproses lebih lanjut.`,
+    ``,
+    `Anda tidak perlu membalas pesan ini lagi.`,
   ].join("\n");
 }
 
@@ -228,12 +232,27 @@ export function buildCorrectionPrompt(): string {
   const refId = Math.random().toString(36).substring(2, 8).toUpperCase();
   return [
     `[Ref: ${refId}]`,
-    "Silakan tuliskan koreksi yang ingin disampaikan.",
-    "",
-    "Setelah Anda selesai, Anda dapat memilih:",
-    `1 - Setuju`,
-    `2 - Koreksi (Ulangi)`,
-    `3 - Detail`
+    `Baik, ada yang salah. Tolong tulis masalahnya dalam SATU pesan saja.`,
+    ``,
+    `Contoh balasan:`,
+    `- trip 10 Juli bukan perjalanan saya`,
+    `- nominal trip no 2 seharusnya Rp50.000`,
+    ``,
+    `Tulisan Anda akan menjadi catatan untuk HR.`,
+    ``,
+    `Kalau ternyata semua sudah benar, ketik: 1`,
+    `Ingin lihat detail dulu, ketik: 3`,
+  ].join("\n");
+}
+
+/** Balasan untuk teks yang tidak dikenali — ulangi menu dengan santun. */
+export function buildEmployeeHelpMessage(): string {
+  const refId = Math.random().toString(36).substring(2, 8).toUpperCase();
+  return [
+    `[Ref: ${refId}]`,
+    `Maaf, pesan Anda belum saya mengerti.`,
+    ``,
+    ...employeeMenuLines(),
   ].join("\n");
 }
 
@@ -245,43 +264,26 @@ export function buildManagerApprovalMessage(params: {
   period: string;
   total_amount: number;
   revised?: boolean;
-  trips: Array<{ trip_date: string; pickup: string; dropoff: string; fare: number; cost_code?: string }>;
+  trips: WaTripLine[];
 }): string {
   const { employee_name, period, total_amount, trips } = params;
-  const numAmount = typeof total_amount === 'string' ? parseFloat(total_amount) : total_amount;
-  const formattedAmount = `Rp${numAmount.toLocaleString("id-ID")}`;
-
-  const tripDetails = trips.map((t) => {
-    const date = new Date(t.trip_date);
-    const day = date.getDate().toString().padStart(2, "0");
-    const monthNames = ["Jan", "Feb", "Mar", "Apr", "Mei", "Jun", "Jul", "Agu", "Sep", "Okt", "Nov", "Des"];
-    const dateStr = `${day} ${monthNames[date.getMonth()]}`;
-    const numFare = typeof t.fare === 'string' ? parseFloat(t.fare) : t.fare;
-    const fare = `Rp${numFare.toLocaleString("id-ID")}`;
-    const costCode = t.cost_code ? ` [Code: ${t.cost_code}]` : "";
-    return `- ${dateStr}: ${t.pickup} -> ${t.dropoff} (${fare})${costCode}`;
-  }).join("\n");
-
   const refId = Math.random().toString(36).substring(2, 8).toUpperCase();
   return [
     `[Ref: ${refId}]`,
     `Halo Manager,`,
     ``,
-    `Terdapat pengajuan klaim Grab Business yang membutuhkan persetujuan Anda:`,
+    `${employee_name} mengajukan klaim Grab periode ${period}.`,
+    `Karyawan tersebut SUDAH mengecek dan menyetujui datanya sendiri.`,
     ``,
-    `Karyawan: ${employee_name}`,
-    `Periode: ${period}`,
+    ...trips.map((t) => tripLine(t, false)),
     ``,
-    `Detail Perjalanan:`,
-    tripDetails,
+    `Jumlah perjalanan: ${trips.length}`,
+    `Total biaya: ${formatAmount(total_amount)}`,
     ``,
-    `Total Biaya: ${formattedAmount}`,
-    ``,
-    `Karyawan telah menyetujui data ini.`,
-    ...(params.revised ? [`Klaim ini telah direvisi oleh karyawan.`] : []),
-    `Balas:`,
-    `1 - Approve`,
-    `2 - Minta Revisi (contoh: 2 alasan revisi)`
+    ...(params.revised
+      ? [`Catatan: klaim ini pernah direvisi oleh karyawan.`, ``]
+      : []),
+    ...approverMenuLines("klaim diteruskan ke HR"),
   ].join("\n");
 }
 
@@ -294,42 +296,26 @@ export function buildHrApprovalMessage(params: {
   period: string;
   total_amount: number;
   revised?: boolean;
-  trips: Array<{ trip_date: string; pickup: string; dropoff: string; fare: number; cost_code?: string }>;
+  trips: WaTripLine[];
 }): string {
   const { employee_name, manager_name, period, total_amount, trips } = params;
-  const numAmount = typeof total_amount === 'string' ? parseFloat(total_amount) : total_amount;
-  const formattedAmount = `Rp${numAmount.toLocaleString("id-ID")}`;
-
-  const tripDetails = trips.map((t) => {
-    const date = new Date(t.trip_date);
-    const day = date.getDate().toString().padStart(2, "0");
-    const monthNames = ["Jan", "Feb", "Mar", "Apr", "Mei", "Jun", "Jul", "Agu", "Sep", "Okt", "Nov", "Des"];
-    const dateStr = `${day} ${monthNames[date.getMonth()]}`;
-    const numFare = typeof t.fare === 'string' ? parseFloat(t.fare) : t.fare;
-    const fare = `Rp${numFare.toLocaleString("id-ID")}`;
-    const costCode = t.cost_code ? ` [Code: ${t.cost_code}]` : "";
-    return `- ${dateStr}: ${t.pickup} -> ${t.dropoff} (${fare})${costCode}`;
-  }).join("\n");
-
   const refId = Math.random().toString(36).substring(2, 8).toUpperCase();
   return [
     `[Ref: ${refId}]`,
     `Halo HR,`,
     ``,
-    `Terdapat pengajuan klaim Grab Business yang telah disetujui oleh Manager (${manager_name}):`,
+    `${employee_name} mengajukan klaim Grab periode ${period}.`,
+    `Managernya (${manager_name}) SUDAH menyetujui — Anda pemberi persetujuan terakhir.`,
     ``,
-    `Karyawan: ${employee_name}`,
-    `Periode: ${period}`,
+    ...trips.map((t) => tripLine(t, false)),
     ``,
-    `Detail Perjalanan:`,
-    tripDetails,
+    `Jumlah perjalanan: ${trips.length}`,
+    `Total biaya: ${formatAmount(total_amount)}`,
     ``,
-    `Total Biaya: ${formattedAmount}`,
-    ``,
-    ...(params.revised ? [`Klaim ini telah direvisi oleh karyawan.`] : []),
-    `Balas:`,
-    `1 - Approve`,
-    `2 - Minta Revisi (contoh: 2 alasan revisi)`
+    ...(params.revised
+      ? [`Catatan: klaim ini pernah direvisi oleh karyawan.`, ``]
+      : []),
+    ...approverMenuLines("klaim selesai disetujui"),
   ].join("\n");
 }
 
@@ -339,13 +325,13 @@ export function buildHrApprovalMessage(params: {
 export function buildEmployeeStatusUpdateMessage(status: string, actorName: string, role: 'MANAGER' | 'HR'): string {
   let msg = `Status klaim Anda: ${status}`;
   if (status === 'APPROVED') {
-    msg = `Klaim Anda telah disetujui oleh ${role} (${actorName}).`;
+    msg = `KABAR BAIK: klaim Anda sudah disetujui Manager (${actorName}). Sekarang menunggu persetujuan HR.`;
   } else if (status === 'REJECTED') {
-    msg = `Mohon maaf, klaim Anda telah ditolak oleh ${role} (${actorName}).`;
+    msg = `Mohon maaf, klaim Anda ditolak oleh ${role} (${actorName}). Hubungi HR untuk info lebih lanjut.`;
   } else if (status === 'FINALIZED') {
-    msg = `Klaim Anda telah selesai diproses dan disetujui oleh HR (${actorName}).`;
+    msg = `SELESAI: klaim Anda sudah disetujui penuh oleh Manager dan HR (${actorName}). Terima kasih.`;
   }
-  
+
   const refId = Math.random().toString(36).substring(2, 8).toUpperCase();
   return [
     `[Ref: ${refId}]`,
@@ -353,11 +339,21 @@ export function buildEmployeeStatusUpdateMessage(status: string, actorName: stri
   ].join("\n");
 }
 
+/** Umpan balik setelah catatan karyawan/notes tersimpan — tester harus LIHAT kalau catatannya masuk. */
+export function buildNoteSavedMessage(text: string, nextHint: string): string {
+  const refId = Math.random().toString(36).substring(2, 8).toUpperCase();
+  return [
+    `[Ref: ${refId}]`,
+    `SUDAH TERSIMPAN. Catatan Anda:`,
+    `"${text.slice(0, 300)}"`,
+    ``,
+    nextHint,
+  ].join("\n");
+}
+
 // ============================================================
 // Revision flow — klaim dikembalikan ke engineer via chat
 // ============================================================
-
-type WaTrip = { trip_date: string; pickup: string; dropoff: string; fare: number; cost_code?: string };
 
 function formatAmount(n: number | string): string {
   const num = typeof n === "string" ? parseFloat(n) : n;
@@ -386,16 +382,16 @@ export function buildRevisionRequestMessage(params: {
     `[Ref: ${refId}]`,
     `Halo ${params.employee_name},`,
     ``,
-    `Klaim periode ${params.period} diminta revisi oleh ${roleLabel} (${params.requester_name}).`,
-    ``,
+    `Klaim periode ${params.period} DIMINTA REVISI oleh ${roleLabel} (${params.requester_name}).`,
     `Alasan: ${params.reason || "tidak disertakan"}`,
     ``,
-    `Untuk revisi via chat, balas:`,
-    `LIST - lihat daftar trip bernomor`,
-    `UBAH <no> <nominal> - ubah nominal, contoh: UBAH 3 75000`,
-    `SELESAI - ajukan ulang ke ${roleLabel}`,
+    `CARA REVISI LEWAT WHATSAPP INI (langkah demi langkah):`,
+    `1. Ketik LIST - untuk melihat daftar trip bernomor`,
+    `2. Ketik UBAH <nomor trip> <nominal baru> - contoh: UBAH 3 75000`,
+    `   (artinya: ubah trip no 3 jadi Rp75.000)`,
+    `3. Ketik SELESAI - klaim dikirim ulang ke ${roleLabel}`,
     ``,
-    `Anda juga bisa menulis catatan langsung dengan membalas pesan ini.`,
+    `Bisa juga tulis catatan untuk ${roleLabel} — langsung balas pesan ini.`,
   ].join("\n");
 }
 
@@ -403,7 +399,7 @@ export function buildRevisionRequestMessage(params: {
  * Daftar trip bernomor untuk command LIST / UBAH.
  */
 export function buildRevisionTripListMessage(
-  trips: WaTrip[],
+  trips: WaTripLine[],
   total_amount: number,
   period: string
 ): string {
@@ -421,7 +417,7 @@ export function buildRevisionTripListMessage(
     ``,
     `Balas:`,
     `UBAH <no> <nominal> - ubah nominal, contoh: UBAH 3 75000`,
-    `SELESAI - ajukan ulang`,
+    `SELESAI - sudah selesai, kirim ulang ke approver`,
   ].join("\n");
 }
 
@@ -429,7 +425,7 @@ export function buildRevisionTripListMessage(
  * Konfirmasi sebelum nominal diubah (jalur uang — wajib YA/BATAL).
  */
 export function buildChangeConfirmMessage(
-  trip: WaTrip,
+  trip: WaTripLine,
   tripNo: number,
   oldFare: number,
   newFare: number
@@ -437,11 +433,12 @@ export function buildChangeConfirmMessage(
   const refId = Math.random().toString(36).substring(2, 8).toUpperCase();
   return [
     `[Ref: ${refId}]`,
-    `Konfirmasi perubahan nominal Trip ${tripNo}:`,
+    `KONFIRMASI UBAH NOMINAL - trip no ${tripNo}`,
     `${formatTripDate(trip.trip_date)}: ${trip.pickup} -> ${trip.dropoff}`,
-    `${formatAmount(oldFare)} -> ${formatAmount(newFare)}`,
+    `Nominal sekarang: ${formatAmount(oldFare)}`,
+    `Nominal baru: ${formatAmount(newFare)}`,
     ``,
-    `Balas YA untuk simpan, BATAL untuk batal.`,
+    `Balas YA untuk SIMPAN, atau BATAL untuk membatalkan.`,
   ].join("\n");
 }
 
@@ -457,10 +454,11 @@ export function buildChangeAppliedMessage(
   const refId = Math.random().toString(36).substring(2, 8).toUpperCase();
   return [
     `[Ref: ${refId}]`,
-    `Trip ${tripNo} berhasil diubah: ${formatAmount(oldFare)} -> ${formatAmount(newFare)}.`,
+    `SUDAH TERSIMPAN. Trip no ${tripNo} berubah dari ${formatAmount(oldFare)} jadi ${formatAmount(newFare)}.`,
     `Total klaim sekarang: ${formatAmount(newTotal)}`,
     ``,
-    `Lanjutkan revisi lainnya atau balas SELESAI untuk mengajukan ulang.`,
+    `Masih ada yang mau diubah? Ketik UBAH lagi (atau LIST).`,
+    `Sudah selesai? Ketik SELESAI.`,
   ].join("\n");
 }
 
@@ -472,6 +470,7 @@ export function buildResubmittedMessage(targetRole: "MANAGER" | "HR"): string {
   const refId = Math.random().toString(36).substring(2, 8).toUpperCase();
   return [
     `[Ref: ${refId}]`,
-    `Terima kasih. Klaim Anda telah diajukan ulang ke ${roleLabel} untuk persetujuan.`,
+    `SELESAI. Revisi Anda sudah dikirim ulang ke ${roleLabel} untuk disetujui.`,
+    `Anda akan dikabari lagi setelah ada hasilnya.`,
   ].join("\n");
 }
