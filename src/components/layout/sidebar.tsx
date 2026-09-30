@@ -243,13 +243,13 @@ export function Sidebar({ collapsed, onToggle, isSuperadmin }: SidebarProps) {
               />
             </div>
 
-            {/* User Login — hanya superadmin (SUPERADMIN_EMAILS) */}
+            {/* User — hanya superadmin (SUPERADMIN_EMAILS) */}
             {isSuperadmin && (
               <div className="pt-2 mt-2 border-t border-slate-100">
                 <SidebarLink
                   href="/users"
                   icon={ShieldCheck}
-                  label="User Login"
+                  label="User"
                   isActive={pathname === "/users"}
                   collapsed={collapsed}
                 />

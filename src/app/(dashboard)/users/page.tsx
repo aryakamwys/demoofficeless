@@ -9,7 +9,7 @@ export default async function UsersPage() {
 
   return (
     <div className="space-y-4">
-      <h1 className="text-lg font-semibold">User Login</h1>
+      <h1 className="text-lg font-semibold">User</h1>
       <UserTable />
     </div>
   );
