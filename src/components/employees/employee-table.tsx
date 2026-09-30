@@ -57,11 +57,11 @@ export function EmployeeTable({
     <Table>
       <TableHeader>
         <TableRow>
-          <TableHead>Employee No.</TableHead>
+          <TableHead className="hidden sm:table-cell">Employee No.</TableHead>
           <TableHead>Nama</TableHead>
-          <TableHead>Department</TableHead>
+          <TableHead className="hidden md:table-cell">Department</TableHead>
           <TableHead>Role</TableHead>
-          <TableHead>Phone</TableHead>
+          <TableHead className="hidden md:table-cell">Phone</TableHead>
           <TableHead>Status</TableHead>
           <TableHead className="w-12" />
         </TableRow>
@@ -69,11 +69,11 @@ export function EmployeeTable({
       <TableBody>
         {employees.map((emp) => (
           <TableRow key={emp.id}>
-            <TableCell className="font-medium">
+            <TableCell className="hidden sm:table-cell font-medium">
               {emp.employee_number}
             </TableCell>
             <TableCell>{emp.employee_name}</TableCell>
-            <TableCell className="text-muted-foreground">
+            <TableCell className="hidden md:table-cell text-muted-foreground">
               {emp.department || "—"}
             </TableCell>
             <TableCell>
@@ -81,7 +81,7 @@ export function EmployeeTable({
                 {emp.role}
               </Badge>
             </TableCell>
-            <TableCell className="text-muted-foreground">
+            <TableCell className="hidden md:table-cell text-muted-foreground">
               {emp.phone_number}
             </TableCell>
             <TableCell>

@@ -19,6 +19,7 @@ export default function EmployeesPage() {
   const [importOpen, setImportOpen] = useState(false);
   const [editEmployee, setEditEmployee] = useState<Employee | null>(null);
   const [loading, setLoading] = useState(true);
+  const [page, setPage] = useState(1);
   const abortRef = useRef<AbortController | null>(null);
 
   // Debounce 300ms supaya tidak fetch tiap ketikan
@@ -26,6 +27,17 @@ export default function EmployeesPage() {
     const t = setTimeout(() => setDebouncedSearch(search), 300);
     return () => clearTimeout(t);
   }, [search]);
+
+  // Search/filters ganti → balik ke halaman 1
+  useEffect(() => {
+    setPage(1);
+  }, [debouncedSearch]);
+
+  // Pagination 10/halaman (data sudah ke-load semua — dataset internal kecil)
+  const PAGE_SIZE = 10;
+  const totalPages = Math.max(1, Math.ceil(employees.length / PAGE_SIZE));
+  const safePage = Math.min(page, totalPages);
+  const paged = employees.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE);
 
   const fetchEmployees = useCallback(async () => {
     // Batalkan request lama supaya respons stale tidak menimpa hasil baru
@@ -78,7 +90,7 @@ export default function EmployeesPage() {
             className="pl-9"
           />
         </div>
-        <div className="flex gap-2">
+        <div className="grid grid-cols-2 gap-2 sm:flex">
           <Button
             variant="outline"
             onClick={() => setImportOpen(true)}
@@ -113,10 +125,40 @@ export default function EmployeesPage() {
             </div>
           ) : (
             <EmployeeTable
-              employees={employees}
+              employees={paged}
               onEdit={handleEdit}
               onRefresh={fetchEmployees}
             />
+          )}
+          {employees.length > 0 && (
+            <div className="flex flex-col gap-2 border-t border-slate-100 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+              <p className="text-xs text-slate-500">
+                Menampilkan {(safePage - 1) * PAGE_SIZE + 1}–
+                {Math.min(safePage * PAGE_SIZE, employees.length)} dari{" "}
+                {employees.length} employee
+              </p>
+              <div className="flex items-center justify-between gap-2 sm:justify-end">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={safePage <= 1}
+                  onClick={() => setPage(safePage - 1)}
+                >
+                  Sebelumnya
+                </Button>
+                <span className="text-sm text-slate-600">
+                  {safePage} / {totalPages}
+                </span>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={safePage >= totalPages}
+                  onClick={() => setPage(safePage + 1)}
+                >
+                  Berikutnya
+                </Button>
+              </div>
+            </div>
           )}
         </CardContent>
       </Card>
