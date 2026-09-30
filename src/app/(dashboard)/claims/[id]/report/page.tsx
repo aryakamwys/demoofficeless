@@ -1,14 +1,20 @@
 import { createServerClient, createServiceClient } from "@/lib/supabase-server";
 import { notFound } from "next/navigation";
+import Link from "next/link";
 import dayjs from "dayjs";
+import { MapPin } from "lucide-react";
 import {
   getTicket,
   findTicketByRequesterName,
   getStatusMap,
   getPriorityMap,
+  getSourceMap,
+  getLocationsMap,
   resolveEntityName,
   ticketTitle,
+  type InvTicket,
 } from "@/lib/envgate";
+import { TYPE_NAMES, InvAvatar, InvTypeIcon } from "@/components/services/invgate-ui";
 import { ReportPrintButton } from "@/components/claims/report-print-button";
 
 interface ReportPageProps {
@@ -48,6 +54,164 @@ function SignatureBlock({
         <p className="text-xs font-semibold text-slate-700">{name}</p>
         <p className="text-[10px] text-slate-500">{title}</p>
       </div>
+    </div>
+  );
+}
+
+function MetricCell({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="px-2 py-1.5">
+      <p className="text-[8px] font-semibold uppercase tracking-wider text-slate-400">{label}</p>
+      <p className="font-medium leading-tight text-slate-700">{value}</p>
+    </div>
+  );
+}
+
+function Participant({
+  name,
+  role,
+  showClock,
+}: {
+  name: string;
+  role: string;
+  showClock?: boolean;
+}) {
+  return (
+    <div className="flex items-center gap-2">
+      <InvAvatar name={name} />
+      <div>
+        <p className="font-medium leading-tight text-slate-700">{name}</p>
+        <p className="flex items-center gap-1 text-[9px] text-slate-400">
+          {role}
+          {showClock && (
+            <span className="inline-block h-1.5 w-1.5 rounded-full bg-emerald-500" />
+          )}
+        </p>
+      </div>
+    </div>
+  );
+}
+
+/** Kartu bukti ticket — meniru layout halaman ticket EnvGate (semua data live API). */
+function InvGateCard({
+  caption,
+  inv,
+  statusName,
+  priorityName,
+  sourceName,
+  locationName,
+  attachmentUrl,
+}: {
+  caption: string;
+  inv: InvTicket;
+  statusName: string;
+  priorityName: string;
+  sourceName: string;
+  locationName: string;
+  attachmentUrl: string | null;
+}) {
+  const typeName = TYPE_NAMES[inv.type_id ?? 0] ?? (inv.type_id ? `ID ${inv.type_id}` : "—");
+  const created = inv.created_at
+    ? dayjs(String(inv.created_at)).format("DD MMM YYYY HH:mm")
+    : "—";
+  const customer = inv.requester_user?.name || "—";
+  const agent = inv.assigned_user?.name || "—";
+  const helpdesk = inv.assigned_group_details?.name || "—";
+  const creator = inv.creator_user?.name || inv.requester_user?.name || "—";
+  const crumb = inv.category_breadcrumb?.replace(/ > /g, " » ");
+
+  return (
+    <div className="mb-3 break-inside-avoid rounded-sm border border-slate-300 text-xs">
+      {/* Bar atas: status + badge ID */}
+      <div className="flex items-center justify-between border-b border-slate-200 bg-slate-50 px-3 py-2">
+        <div className="flex items-center gap-2">
+          <span className="rounded border border-slate-300 bg-white px-2 py-0.5 text-slate-600">
+            {statusName || (inv.status_id ? `ID ${inv.status_id}` : "—")}
+          </span>
+          {caption && (
+            <span className="text-[9px] font-semibold uppercase tracking-wider text-slate-400">
+              {caption}
+            </span>
+          )}
+        </div>
+        <span className="rounded-sm bg-blue-600 px-2 py-0.5 font-semibold text-white">
+          #{inv.pretty_id || `PIM-${inv.id}`}
+        </span>
+      </div>
+
+      {/* Judul + breadcrumb + lokasi */}
+      <div className="flex items-start gap-2 border-b border-slate-200 px-3 py-2">
+        <InvTypeIcon typeId={inv.type_id} />
+        <div className="min-w-0 flex-1">
+          <p className="font-semibold leading-snug text-slate-800">
+            {ticketTitle(inv) || "—"}
+          </p>
+          {crumb && <p className="mt-0.5 text-[10px] text-slate-400">{crumb}</p>}
+        </div>
+        {locationName && (
+          <span className="flex items-center gap-0.5 whitespace-nowrap text-[10px] text-slate-500">
+            <MapPin className="h-3 w-3" /> {locationName}
+          </span>
+        )}
+      </div>
+
+      {/* Metrics baris 1 */}
+      <div className="grid grid-cols-5 divide-x divide-slate-200 border-b border-slate-200">
+        <MetricCell
+          label="Priority"
+          value={priorityName || (inv.priority_id ? `ID ${inv.priority_id}` : "—")}
+        />
+        <MetricCell label="Type" value={typeName} />
+        <MetricCell label="Source" value={sourceName || "—"} />
+        <MetricCell label="First Response" value={inv.sla_incident_first_reply || "—"} />
+        <MetricCell label="Resolution" value={inv.sla_incident_resolution || "—"} />
+      </div>
+
+      {/* Metrics baris 2 */}
+      <div className="grid grid-cols-3 divide-x divide-slate-200 border-b border-slate-200 bg-slate-50/50">
+        <MetricCell label="Incident Location" value={locationName || "—"} />
+        <MetricCell label="Details Location" value={customer} />
+        <MetricCell label="Ticket Dibuat" value={created} />
+      </div>
+
+      {/* Kartu DESCRIPTION */}
+      <div className="flex gap-2 border-b border-slate-200 px-3 py-2">
+        <InvAvatar name={creator} />
+        <div className="min-w-0 flex-1">
+          <div className="mb-1 flex items-center justify-between gap-2">
+            <span className="font-medium text-slate-700">{creator}</span>
+            <span className="rounded-sm bg-blue-600 px-1.5 py-0.5 text-[8px] font-bold uppercase tracking-wider text-white">
+              Description
+            </span>
+          </div>
+          <div className="whitespace-pre-line rounded-sm border border-slate-200 bg-slate-50 p-2 leading-relaxed text-slate-700">
+            {inv.description || ticketTitle(inv) || "—"}
+          </div>
+        </div>
+      </div>
+
+      {/* Participants */}
+      <div className="flex flex-wrap gap-x-8 gap-y-2 px-3 py-2">
+        <Participant name={customer} role="Customer" />
+        <Participant
+          name={agent}
+          role={helpdesk !== "—" ? `Agent — ${helpdesk}` : "Agent"}
+          showClock
+        />
+      </div>
+
+      {attachmentUrl && (
+        <div className="border-t border-slate-200 px-3 py-2 print:hidden">
+          <a
+            href={attachmentUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="font-medium text-blue-700 underline"
+          >
+            Lihat File Bukti (lampiran ticket)
+          </a>
+        </div>
+      )}
     </div>
   );
 }
@@ -104,17 +268,54 @@ export default async function ClaimReportPage({ params }: ReportPageProps) {
     invTicket = await findTicketByRequesterName(claim.employee.employee_name);
   }
 
-  // Nama status/priority dari entity EnvGate (cache 24 jam)
-  const [statusMap, priorityMap] = await Promise.all([
+  // Lampiran file ticket — signed URL (bucket private)
+  let attachmentUrl: string | null = null;
+  if (ticket?.storage_path) {
+    const { data: signed } = await serviceClient.storage
+      .from("dataperkom")
+      .createSignedUrl(ticket.storage_path, 3600);
+    attachmentUrl = signed?.signedUrl ?? null;
+  }
+
+  // Nama status/priority/source/lokasi dari entity EnvGate (cache 24 jam)
+  const [statusMap, priorityMap, sourceMap, locationsMap] = await Promise.all([
     getStatusMap(),
     getPriorityMap(),
+    getSourceMap(),
+    getLocationsMap(),
   ]);
-  const statusName = invTicket?.status_id
-    ? resolveEntityName(statusMap, invTicket.status_id)
-    : "";
-  const priorityName = invTicket?.priority_id
-    ? resolveEntityName(priorityMap, invTicket.priority_id)
-    : "";
+
+  // Kartu ticket bergaya halaman InvGate: level klaim + satu per trip
+  const namesOf = (inv: InvTicket) => ({
+    statusName: inv.status_id ? resolveEntityName(statusMap, inv.status_id) : "",
+    priorityName: inv.priority_id ? resolveEntityName(priorityMap, inv.priority_id) : "",
+    sourceName: inv.source_id ? resolveEntityName(sourceMap, inv.source_id) : "",
+    locationName:
+      (inv.location_id ? resolveEntityName(locationsMap, inv.location_id) : "") ||
+      ticket?.location ||
+      "",
+  });
+  const invCards: Array<{ inv: InvTicket; caption: string; attachmentUrl: string | null } & ReturnType<typeof namesOf>> = [];
+  if (invTicket) {
+    invCards.push({
+      inv: invTicket,
+      caption: "Referensi klaim",
+      attachmentUrl,
+      ...namesOf(invTicket),
+    });
+  }
+  for (const [tid, inv] of ticketById) {
+    if (invCards.some((c) => String(c.inv.id) === tid)) continue;
+    const nos = (trips || [])
+      .map((t, i) => ((t.ticket_id || "").trim() === tid ? i + 1 : 0))
+      .filter((n) => n > 0);
+    invCards.push({
+      inv,
+      caption: nos.length ? `Bukti trip ke-${nos.join(", ")}` : "",
+      attachmentUrl: null,
+      ...namesOf(inv),
+    });
+  }
 
   // Tanda tangan employee / manager / HR
   const sigOf = async (empId: string | null | undefined) => {
@@ -132,15 +333,6 @@ export default async function ClaimReportPage({ params }: ReportPageProps) {
     sigOf(claim.hr_id || claim.employee?.hr_id),
   ]);
 
-  // Lampiran file ticket — signed URL (bucket private)
-  let attachmentUrl: string | null = null;
-  if (ticket?.storage_path) {
-    const { data: signed } = await serviceClient.storage
-      .from("dataperkom")
-      .createSignedUrl(ticket.storage_path, 3600);
-    attachmentUrl = signed?.signedUrl ?? null;
-  }
-
   const managerName = claim.manager?.employee_name || "—";
   const hrName = claim.hr?.employee_name || "—";
   const total = Number(claim.total_amount);
@@ -148,7 +340,13 @@ export default async function ClaimReportPage({ params }: ReportPageProps) {
   return (
     <div className="mx-auto max-w-3xl bg-white p-6 lg:p-10 text-slate-800 print:p-0">
       {/* Toolbar — hilang saat print */}
-      <div className="flex justify-end mb-4 print:hidden">
+      <div className="flex items-center justify-between mb-4 print:hidden">
+        <Link
+          href={`/claims/${id}`}
+          className="rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm text-slate-600 transition-colors hover:border-blue-300 hover:text-blue-700"
+        >
+          ← Kembali ke Claim
+        </Link>
         <ReportPrintButton />
       </div>
 
@@ -233,61 +431,29 @@ export default async function ClaimReportPage({ params }: ReportPageProps) {
         </tbody>
       </table>
 
-      {/* Ticket EnvGate */}
+      {/* Ticket EnvGate — kartu bergaya halaman ticket InvGate */}
       <h2 className="text-sm font-bold uppercase mb-2">Referensi Ticket EnvGate</h2>
-      {ticket || invTicket ? (
-        <div className="space-y-1 mb-6 text-sm">
-          <Row label="Ticket ID" value={ticket?.ticket_id || `#${invTicket?.id}`} />
-          <Row
-            label="Judul"
-            value={ticketTitle(invTicket) || ticket?.ticket_title || invTicket?.category_details?.name || "—"}
-          />
-          {ticket && <Row label="Customer" value={ticket.customer_name || "—"} />}
-          {ticket && <Row label="Lokasi" value={ticket.location || "—"} />}
-          {invTicket && (
-            <>
-              <Row label="Status" value={statusName || `ID ${invTicket.status_id ?? "—"}`} />
-              <Row label="Priority" value={priorityName || `ID ${invTicket.priority_id ?? "—"}`} />
-              <Row label="Kategori" value={invTicket.category_details?.name || "—"} />
-              <Row
-                label="Assigned Group"
-                value={invTicket.assigned_group_details?.name || "—"}
-              />
-              <Row
-                label="Ditugaskan Kepada"
-                value={invTicket.assigned_user?.name || "—"}
-              />
-              <Row label="Requester" value={invTicket.requester_user?.name || "—"} />
-              <Row
-                label="Ticket Dibuat"
-                value={invTicket.created_at ? dayjs(String(invTicket.created_at)).format("DD MMM YYYY") : "—"}
-              />
-            </>
-          )}
-          {!invTicket && (
-            <p className="text-xs text-slate-400 italic pt-1">
-              Detail live dari EnvGate tidak tersedia (API tidak terjangkau).
-            </p>
-          )}
-          {attachmentUrl && (
-            <div className="flex gap-2 text-sm pt-1 print:hidden">
-              <span className="w-40 shrink-0 text-slate-500">Lampiran Bukti</span>
-              <a
-                href={attachmentUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="font-medium text-blue-700 underline"
-              >
-                : Lihat File Bukti
-              </a>
-            </div>
-          )}
+      {invCards.length > 0 ? (
+        <div className="mb-6">
+          {invCards.map((c) => (
+            <InvGateCard
+              key={`${c.inv.id}-${c.caption}`}
+              caption={c.caption}
+              inv={c.inv}
+              statusName={c.statusName}
+              priorityName={c.priorityName}
+              sourceName={c.sourceName}
+              locationName={c.locationName}
+              attachmentUrl={c.attachmentUrl}
+            />
+          ))}
         </div>
       ) : (
         <p className="text-sm text-slate-500 italic mb-6">
           Tidak ada ticket EnvGate yang cocok untuk karyawan ini
           {claim.employee ? ` (${claim.employee.employee_name})` : ""} — baik di data
-          klaim maupun di pencarian requester EnvGate.
+          klaim maupun di pencarian requester EnvGate. Isi kolom Ticket pada tiap
+          trip di halaman detail klaim untuk melampirkan bukti.
         </p>
       )}
 

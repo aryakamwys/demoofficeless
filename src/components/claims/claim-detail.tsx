@@ -213,7 +213,7 @@ export function ClaimDetailView({ claim }: ClaimDetailViewProps) {
 
           {claim.status === "APPROVED" && (
             <Button variant="outline" asChild>
-              <a href={`/claims/${claim.id}/report`} target="_blank" rel="noopener noreferrer">
+              <a href={`/claims/${claim.id}/report`}>
                 <FileText className="mr-2 h-4 w-4" />
                 Report PDF
               </a>
