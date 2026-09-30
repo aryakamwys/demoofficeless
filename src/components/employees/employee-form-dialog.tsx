@@ -52,7 +52,6 @@ export function EmployeeFormDialog({
   const form = useForm<EmployeeSchemaType>({
     resolver: zodResolver(employeeSchema),
     defaultValues: {
-      employee_number: employee?.employee_number || "",
       employee_name: employee?.employee_name || "",
       department: employee?.department || "",
       phone_number: employee?.phone_number || "",
@@ -66,7 +65,6 @@ export function EmployeeFormDialog({
   // Reset form when employee changes or dialog opens
   useEffect(() => {
     form.reset({
-      employee_number: employee?.employee_number || "",
       employee_name: employee?.employee_name || "",
       department: employee?.department || "",
       phone_number: employee?.phone_number || "",
@@ -167,21 +165,6 @@ export function EmployeeFormDialog({
           </DialogDescription>
         </DialogHeader>
         <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-          <div className="space-y-2">
-            <Label htmlFor="employee_number">Employee Number</Label>
-            <Input
-              id="employee_number"
-              {...form.register("employee_number")}
-              placeholder="EMP001"
-              disabled={isEdit}
-            />
-            {form.formState.errors.employee_number && (
-              <p className="text-sm text-destructive">
-                {form.formState.errors.employee_number.message}
-              </p>
-            )}
-          </div>
-
           <div className="space-y-2">
             <Label htmlFor="employee_name">Nama</Label>
             <Input

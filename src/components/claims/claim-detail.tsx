@@ -300,7 +300,6 @@ export function ClaimDetailView({ claim }: ClaimDetailViewProps) {
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-3 pt-4 print:pt-2 print:space-y-1">
-            <InfoRow label="Employee Number" value={claim.employee?.employee_number || "—"} />
             <InfoRow label="Full Name" value={claim.employee?.employee_name || "—"} />
             <InfoRow label="Department" value={claim.employee?.department || "—"} />
           </CardContent>

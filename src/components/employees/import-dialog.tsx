@@ -74,8 +74,8 @@ export function ImportDialog({
         <DialogHeader>
           <DialogTitle>Import Employees</DialogTitle>
           <DialogDescription>
-            Upload file CSV dengan kolom: employee_number, employee_name,
-            department, phone_number
+            Upload file CSV dengan kolom: employee_name, department,
+            phone_number (employee_number opsional — dibuat otomatis)
           </DialogDescription>
         </DialogHeader>
 

@@ -1,10 +1,11 @@
 import { z } from "zod";
 
 export const employeeSchema = z.object({
+  // Opsional — di-generate server (pendaftaran via signature tidak punya nomor)
   employee_number: z
     .string()
-    .min(1, "Employee number wajib diisi")
-    .max(50, "Employee number maksimal 50 karakter"),
+    .max(50, "Employee number maksimal 50 karakter")
+    .optional(),
   employee_name: z
     .string()
     .min(1, "Nama karyawan wajib diisi")

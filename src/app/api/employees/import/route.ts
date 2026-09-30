@@ -29,14 +29,12 @@ export async function POST(request: NextRequest) {
   }
 
   const employees = parsed.data
-    .filter(
-      (row) =>
-        row.employee_number &&
-        row.employee_name &&
-        row.phone_number
-    )
+    .filter((row) => row.employee_name && row.phone_number)
     .map((row) => ({
-      employee_number: row.employee_number.trim(),
+      // Nomor opsional di CSV — tanpa nomor, dibuat deterministik dari phone
+      // supaya re-import upsert (onConflict) tidak bikin baris dobel
+      employee_number:
+        row.employee_number?.trim() || `EMP-${row.phone_number.trim()}`,
       employee_name: row.employee_name.trim(),
       department: row.department?.trim() || "",
       phone_number: row.phone_number.trim(),
@@ -48,7 +46,7 @@ export async function POST(request: NextRequest) {
       {
         success: false,
         error:
-          "Tidak ada data valid. Pastikan kolom: employee_number, employee_name, phone_number",
+          "Tidak ada data valid. Pastikan kolom: employee_name, phone_number",
       },
       { status: 400 }
     );

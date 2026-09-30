@@ -91,7 +91,10 @@ export async function POST(request: NextRequest) {
   const { data, error } = await supabase
     .from("employees")
     .insert({
-      employee_number: result.data.employee_number,
+      // Nomor employee opsional — dibuat otomatis kalau tidak dikirim
+      employee_number:
+        result.data.employee_number ||
+        `EMP-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
       employee_name: result.data.employee_name,
       department: result.data.department,
       phone_number: result.data.phone_number,
