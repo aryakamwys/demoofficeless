@@ -177,13 +177,6 @@ export default function UploadPage() {
             </div>
           </div>
 
-          {file && (
-            <div className="flex items-center gap-2 text-sm text-muted-foreground">
-              <FileText className="h-4 w-4" />
-              {file.name} ({(file.size / 1024).toFixed(1)} KB)
-            </div>
-          )}
-
           <Button onClick={handleUpload} disabled={loading || !period || !file}>
             {loading ? (
               <Loader2 className="mr-2 h-4 w-4 animate-spin" />
