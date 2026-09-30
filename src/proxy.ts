@@ -43,7 +43,6 @@ export async function proxy(request: NextRequest) {
     "/settings",
     "/inventory",
     "/users",
-    "/docs",
     "/api/services",
     "/api/inventory",
     "/api/admin/users",
