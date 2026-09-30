@@ -5,12 +5,22 @@ import { ClaimDetail } from "@/types";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { StatusBadge } from "@/components/claims/status-badge";
-import { Send, Info, UserCheck, ChevronRight, Loader2, Printer } from "lucide-react";
+import { Send, Info, UserCheck, ChevronRight, Loader2, Printer, Pencil, Trash2, FileText } from "lucide-react";
 import { toast } from "sonner";
 import dayjs from "dayjs";
 import { useRouter } from "next/navigation";
 import { SendWADialog } from "@/components/claims/send-wa-dialog";
 import { SignaturePadDialog } from "@/components/claims/signature-pad-dialog";
+import { Trip } from "@/types";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -29,6 +39,58 @@ export function ClaimDetailView({ claim }: ClaimDetailViewProps) {
   const [approving, setApproving] = useState(false);
   const [sigPadOpen, setSigPadOpen] = useState(false);
   const [sigRole, setSigRole] = useState<"MANAGER" | "HR">("MANAGER");
+  const [editTrip, setEditTrip] = useState<Trip | null>(null);
+  const [editFare, setEditFare] = useState("");
+  const [editPickup, setEditPickup] = useState("");
+  const [editDropoff, setEditDropoff] = useState("");
+  const [editSaving, setEditSaving] = useState(false);
+
+  const editable = claim.status !== "APPROVED";
+
+  const handleEditTrip = (trip: Trip) => {
+    setEditTrip(trip);
+    setEditFare(String(trip.fare));
+    setEditPickup(trip.pickup || "");
+    setEditDropoff(trip.dropoff || "");
+  };
+
+  const handleSaveTrip = async () => {
+    if (!editTrip) return;
+    setEditSaving(true);
+    try {
+      const res = await fetch(`/api/trips/${editTrip.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          fare: Number(editFare),
+          pickup: editPickup,
+          dropoff: editDropoff,
+        }),
+      });
+      const result = await res.json();
+      if (result.success) {
+        toast.success("Trip berhasil diubah");
+        setEditTrip(null);
+        router.refresh();
+      } else {
+        toast.error(result.error || "Gagal mengubah trip");
+      }
+    } finally {
+      setEditSaving(false);
+    }
+  };
+
+  const handleDeleteTrip = async (trip: Trip) => {
+    if (!confirm(`Hapus trip "${trip.pickup} -> ${trip.dropoff}"?`)) return;
+    const res = await fetch(`/api/trips/${trip.id}`, { method: "DELETE" });
+    const result = await res.json();
+    if (result.success) {
+      toast.success("Trip dihapus");
+      router.refresh();
+    } else {
+      toast.error(result.error || "Gagal menghapus trip");
+    }
+  };
 
   const handleSendWA = () => {
     setSendWADialogOpen(true);
@@ -131,6 +193,15 @@ export function ClaimDetailView({ claim }: ClaimDetailViewProps) {
             <Printer className="mr-2 h-4 w-4" />
             Print Bukti
           </Button>
+
+          {claim.status === "APPROVED" && (
+            <Button variant="outline" asChild>
+              <a href={`/claims/${claim.id}/report`} target="_blank" rel="noopener noreferrer">
+                <FileText className="mr-2 h-4 w-4" />
+                Report PDF
+              </a>
+            </Button>
+          )}
 
           {claim.employee && claim.status !== 'APPROVED' && (
               <>
@@ -296,6 +367,9 @@ export function ClaimDetailView({ claim }: ClaimDetailViewProps) {
                   <th className="border border-slate-200 px-3 py-3 text-left font-semibold text-slate-600 whitespace-nowrap print:hidden">Cost Code</th>
                   <th className="border border-slate-200 px-3 py-3 text-left font-semibold text-slate-600 whitespace-nowrap print:py-1 print:px-1">Pick-Up</th>
                   <th className="border border-slate-200 px-3 py-3 text-left font-semibold text-slate-600 whitespace-nowrap print:py-1 print:px-1">Drop-Off</th>
+                  {editable && (
+                    <th className="border border-slate-200 px-3 py-3 print:hidden w-20">Aksi</th>
+                  )}
                 </tr>
               </thead>
               <tbody>
@@ -326,6 +400,30 @@ export function ClaimDetailView({ claim }: ClaimDetailViewProps) {
                     <td className="border border-slate-200 px-3 py-3 align-top text-slate-600 max-w-[200px] leading-relaxed print:py-1 print:px-1">
                       {trip.dropoff || "—"}
                     </td>
+                    {editable && (
+                      <td className="border border-slate-200 px-2 py-3 print:hidden">
+                        <div className="flex gap-1">
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-7 w-7 text-slate-500 hover:text-blue-700"
+                            title="Edit trip (HR)"
+                            onClick={() => handleEditTrip(trip)}
+                          >
+                            <Pencil className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-7 w-7 text-slate-500 hover:text-red-600"
+                            title="Hapus trip"
+                            onClick={() => handleDeleteTrip(trip)}
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      </td>
+                    )}
                   </tr>
                 ))}
               </tbody>
@@ -585,6 +683,55 @@ export function ClaimDetailView({ claim }: ClaimDetailViewProps) {
           </CardContent>
         </Card>
       )}
+
+      {/* Dialog edit trip (HR) */}
+      <Dialog open={!!editTrip} onOpenChange={(open) => !open && setEditTrip(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Edit Trip</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="trip-fare">Nominal (IDR)</Label>
+              <Input
+                id="trip-fare"
+                type="number"
+                min={0}
+                value={editFare}
+                onChange={(e) => setEditFare(e.target.value)}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="trip-pickup">Pick-Up</Label>
+              <Input
+                id="trip-pickup"
+                value={editPickup}
+                onChange={(e) => setEditPickup(e.target.value)}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="trip-dropoff">Drop-Off</Label>
+              <Input
+                id="trip-dropoff"
+                value={editDropoff}
+                onChange={(e) => setEditDropoff(e.target.value)}
+              />
+            </div>
+            <p className="text-xs text-slate-500">
+              Total klaim dihitung ulang otomatis. Kalau manager sudah approve, klaim
+              kembali ke approval manager. Perubahan tercatat sebagai note.
+            </p>
+          </div>
+          <DialogFooter>
+            <Button
+              onClick={handleSaveTrip}
+              disabled={editSaving || !editFare || Number(editFare) <= 0}
+            >
+              {editSaving && <Loader2 className="h-4 w-4 animate-spin" />} Simpan
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <SendWADialog
         open={sendWADialogOpen}
