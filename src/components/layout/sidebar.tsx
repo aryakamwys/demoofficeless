@@ -24,6 +24,7 @@ import {
   Wrench,
   Boxes,
   ShieldCheck,
+  Activity,
 } from "lucide-react";
 import { useState } from "react";
 
@@ -206,6 +207,7 @@ export function Sidebar({ collapsed, onToggle, isSuperadmin }: SidebarProps) {
                     <TooltipContent side="right">Manage Service</TooltipContent>
                   </Tooltip>
                   <SidebarLink href="/services/openclaw" icon={Ticket} label="Openclaw Ticket" isActive={pathname === "/services/openclaw"} collapsed={collapsed} />
+                  <SidebarLink href="/services/envgate" icon={Activity} label="EnvGate Test" isActive={pathname === "/services/envgate"} collapsed={collapsed} />
                 </>
               ) : (
                 <div>
@@ -225,6 +227,9 @@ export function Sidebar({ collapsed, onToggle, isSuperadmin }: SidebarProps) {
                     <div className="ml-5 mt-1 space-y-0.5 border-l border-slate-200 pl-3">
                       <Link href="/services/openclaw" className={cn("flex items-center gap-3 py-2 px-3 text-sm font-medium transition-colors rounded-lg", pathname === "/services/openclaw" ? "bg-blue-50/50 text-blue-700" : "text-slate-500 hover:bg-slate-50 hover:text-slate-800")}>
                         <Ticket className="h-4 w-4 shrink-0" /> Openclaw Ticket
+                      </Link>
+                      <Link href="/services/envgate" className={cn("flex items-center gap-3 py-2 px-3 text-sm font-medium transition-colors rounded-lg", pathname === "/services/envgate" ? "bg-blue-50/50 text-blue-700" : "text-slate-500 hover:bg-slate-50 hover:text-slate-800")}>
+                        <Activity className="h-4 w-4 shrink-0" /> EnvGate Test
                       </Link>
                     </div>
                   </div>
