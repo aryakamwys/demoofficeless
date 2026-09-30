@@ -1,7 +1,13 @@
 import { createServerClient, createServiceClient } from "@/lib/supabase-server";
 import { notFound } from "next/navigation";
 import dayjs from "dayjs";
-import { getTicket, findTicketByRequesterName } from "@/lib/envgate";
+import {
+  getTicket,
+  findTicketByRequesterName,
+  getStatusMap,
+  getPriorityMap,
+  resolveEntityName,
+} from "@/lib/envgate";
 import { ReportPrintButton } from "@/components/claims/report-print-button";
 
 interface ReportPageProps {
@@ -87,6 +93,18 @@ export default async function ClaimReportPage({ params }: ReportPageProps) {
   if (!ticket && !invTicket && claim.employee?.employee_name) {
     invTicket = await findTicketByRequesterName(claim.employee.employee_name);
   }
+
+  // Nama status/priority dari entity EnvGate (cache 24 jam)
+  const [statusMap, priorityMap] = await Promise.all([
+    getStatusMap(),
+    getPriorityMap(),
+  ]);
+  const statusName = invTicket?.status_id
+    ? resolveEntityName(statusMap, invTicket.status_id)
+    : "";
+  const priorityName = invTicket?.priority_id
+    ? resolveEntityName(priorityMap, invTicket.priority_id)
+    : "";
 
   // Tanda tangan employee / manager / HR
   const sigOf = async (empId: string | null | undefined) => {
@@ -197,12 +215,14 @@ export default async function ClaimReportPage({ params }: ReportPageProps) {
           <Row label="Ticket ID" value={ticket?.ticket_id || `#${invTicket?.id}`} />
           <Row
             label="Judul"
-            value={ticket?.ticket_title || invTicket?.category_details?.name || "—"}
+            value={invTicket?.subject || ticket?.ticket_title || invTicket?.category_details?.name || "—"}
           />
           {ticket && <Row label="Customer" value={ticket.customer_name || "—"} />}
           {ticket && <Row label="Lokasi" value={ticket.location || "—"} />}
           {invTicket && (
             <>
+              <Row label="Status" value={statusName || `ID ${invTicket.status_id ?? "—"}`} />
+              <Row label="Priority" value={priorityName || `ID ${invTicket.priority_id ?? "—"}`} />
               <Row label="Kategori" value={invTicket.category_details?.name || "—"} />
               <Row
                 label="Assigned Group"

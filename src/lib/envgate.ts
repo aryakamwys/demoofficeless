@@ -38,6 +38,10 @@ interface MappedUser {
 
 export interface InvTicket {
   id: number;
+  subject?: string;
+  status_id?: number;
+  priority_id?: number;
+  type_id?: number;
   category_id?: number;
   assigned_group_id?: number;
   assigned_id?: number;
@@ -119,6 +123,29 @@ async function fetchEntityMap(): Promise<Record<string | number, InvEntity>> {
 
 export const getEntityMap = () =>
   cached("envgate:entities", 24 * 3600, fetchEntityMap);
+
+/** Entity sederhana (id + name) — dipakai resolve status/priority ticket. */
+async function fetchSimpleEntities(
+  path: string
+): Promise<Record<string | number, InvEntity>> {
+  const out: Record<string | number, InvEntity> = {};
+  try {
+    const list = unwrap(await api(path)) as InvEntity[];
+    for (const e of list) {
+      if (e?.id != null) out[e.id] = e;
+    }
+  } catch (e) {
+    console.error(`Gagal fetch ${path}:`, e);
+  }
+  return out;
+}
+
+// Namespace ID status/priority berbeda dari category/group — map terpisah
+export const getStatusMap = () =>
+  cached("envgate:statuses", 24 * 3600, () => fetchSimpleEntities("/statuses"));
+
+export const getPriorityMap = () =>
+  cached("envgate:priorities", 24 * 3600, () => fetchSimpleEntities("/priorities"));
 
 /** Pure: nama entity dari map gabungan, level tanpa nama naik ke parent. */
 export function resolveEntityName(
