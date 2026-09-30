@@ -89,6 +89,12 @@ test("ticket: format salah jadi BAD_TICKET, bukan note", () => {
   assert.equal(parseWaCommand("TICKET 3 abc").type, "BAD_TICKET");
 });
 
+test("ticket: TICKET SEMUA memulai mode wizard", () => {
+  assert.deepEqual(parseWaCommand("TICKET SEMUA"), { type: "TICKET_WIZARD" });
+  assert.deepEqual(parseWaCommand("ticket semua"), { type: "TICKET_WIZARD" });
+  assert.deepEqual(parseWaCommand("TICKET ALL"), { type: "TICKET_WIZARD" });
+});
+
 test("ticket: id telanjang dengan penanda #/PIM dikenali, angka biasa tetap note", () => {
   assert.deepEqual(parseWaCommand("#PIM-34285"), {
     type: "TICKET_ID",

@@ -374,6 +374,7 @@ const CONTENT: Record<string, ReactNode> = {
         <li><Cmd>LIST</Cmd> — lihat daftar trip bernomor.</li>
         <li><Cmd>UBAH 3 75000</Cmd> — ubah trip no 3 jadi Rp75.000 (contoh).</li>
         <li><Cmd>TICKET 3 PIM-34285</Cmd> — lampirkan bukti ticket EnvGate ke trip no 3.</li>
+        <li><Cmd>TICKET SEMUA</Cmd> — isi ticket semua trip, dipandu satu per satu.</li>
         <li><Cmd>SELESAI</Cmd> — sudah selesai, kirim ulang ke approver.</li>
       </ul>
       <Chat
@@ -419,7 +420,7 @@ const CONTENT: Record<string, ReactNode> = {
           { from: "user", text: "TICKET 3 PIM-34285" },
           {
             from: "bot",
-            text: "[Ref: R6T1WQ]\nSUDAH TERSIMPAN. Trip no 3 kini punya bukti ticket #PIM-34285.\nJudul ticket: Keyboard T14 (Cocacola - Cust. Perkom)\n\nBalas 1 = SETUJU kalau semua data sudah benar.",
+            text: "[Ref: R6T1WQ]\nSUDAH TERSIMPAN. Trip no 3 kini punya bukti ticket #PIM-34285.\nJudul ticket: Keyboard T14 (Cocacola - Cust. Perkom)\n\n5 dari 8 trip sudah punya ticket — sisa 3 belum.\nLanjut isi sisanya satu per satu? Ketik: TICKET SEMUA\n\nBalas 1 = SETUJU kalau semua data sudah benar.",
           },
         ]}
       />
@@ -427,6 +428,39 @@ const CONTENT: Record<string, ReactNode> = {
         Kalau klaim hanya punya satu trip, cukup kirim nomor ticket-nya saja: <Cmd>#PIM-34285</Cmd>.
         Kalau trip-nya banyak, bot akan menanyakan trip yang mana.
       </P>
+      <Note>
+        <b>Nomor ticket diverifikasi ke EnvGate.</b> Kalau nomornya tidak ada di EnvGate, bot
+        menolak dan meminta dikoreksi — jadi data yang sampai ke HR pasti ticket yang benar-benar
+        ada.
+      </Note>
+
+      <H2>6. Banyak Ticket Sekaligus: <Cmd>TICKET SEMUA</Cmd></H2>
+      <P>
+        Kalau satu bulan ada banyak trip dan banyak ticket, ketik <Cmd>TICKET SEMUA</Cmd>. Bot
+        memandu <b>satu trip per satu</b> — tampilkan detail trip, Anda kirim nomor ticket-nya,
+        lanjut ke trip berikutnya. Sulit tertukar karena tidak perlu mengingat nomor trip.
+      </P>
+      <Chat
+        title="Contoh percakapan — mode TICKET SEMUA"
+        messages={[
+          { from: "user", text: "TICKET SEMUA" },
+          {
+            from: "bot",
+            text: "[Ref: W1Z4RD]\nMODE NGISI TICKET — sisa 3 trip lagi.\nKita isi SATU PER SATU supaya tidak tertukar.\n\nTrip 2 (28 Jul: Jl. Jend. Sudirman Kav.10-11... -> MID Plaza 2 ...)\nKirim nomor ticket untuk trip ini. Contoh: PIM-34285\n\nKetik LEWATI kalau trip ini tidak punya ticket.\nKetik BATAL kalau mau berhenti dulu.",
+          },
+          { from: "user", text: "PIM-34285" },
+          {
+            from: "bot",
+            text: "[Ref: N8X2KQ]\nSUDAH TERSIMPAN. Trip no 2 → #PIM-34285.\nJudul: Keyboard T14 (Cocacola - Cust. Perkom)\n\nMODE NGISI TICKET — sisa 2 trip lagi.\n\nTrip 4 (30 Jul: Palmerah ... -> MID Plaza 1 ...)\nKirim nomor ticket untuk trip ini. Contoh: PIM-34285\n\nKetik LEWATI kalau trip ini tidak punya ticket.\nKetik BATAL kalau mau berhenti dulu.",
+          },
+          { from: "user", text: "LEWATI" },
+        ]}
+      />
+      <ul className="my-3 list-disc space-y-1 pl-5 text-sm text-slate-600">
+        <li>Cukup kirim nomor ticket saja (mis. <Cmd>PIM-34285</Cmd>) — bot tahu trip yang dimaksud.</li>
+        <li><Cmd>LEWATI</Cmd> — trip ini tidak punya ticket, lanjut ke berikutnya.</li>
+        <li><Cmd>BATAL</Cmd> — berhenti dulu; kapan saja lanjut lagi dengan <Cmd>TICKET SEMUA</Cmd>.</li>
+      </ul>
 
       <H2>Hal yang Perlu Diketahui</H2>
       <ul className="my-3 list-disc space-y-1 pl-5 text-sm text-slate-600">

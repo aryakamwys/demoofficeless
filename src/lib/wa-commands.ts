@@ -15,6 +15,7 @@ export type WaCommand =
   | { type: "DONE" }
   | { type: "TICKET"; tripNo: number; ticketId: string }
   | { type: "TICKET_ID"; ticketId: string }
+  | { type: "TICKET_WIZARD" }
   | { type: "BAD_TICKET" }
   | { type: "NOTE"; text: string };
 
@@ -67,6 +68,10 @@ export function parseWaCommand(raw: string): WaCommand {
 
   // "TICKET 3 PIM-34285" — pasang bukti ticket EnvGate pada trip no 3
   if (/^TICKET(\s|$)/.test(upper)) {
+    // "TICKET SEMUA" — mode isi satu-per-satu (wizard)
+    if (/^TICKET\s+(SEMUA|ALL)$/.test(upper)) {
+      return { type: "TICKET_WIZARD" };
+    }
     const parts = input.split(/\s+/);
     const tripNo = Number(parts[1]);
     const ticketId = parts[2] ? parseTicketRef(parts.slice(2).join(" ")) : null;

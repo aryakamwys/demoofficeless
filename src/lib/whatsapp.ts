@@ -203,6 +203,7 @@ export function buildClaimMessage(params: {
     ``,
     `Punya ticket EnvGate untuk pekerjaan di trip ini? Lampirkan dengan:`,
     `TICKET <no trip> <id ticket> - contoh: TICKET 3 PIM-34285`,
+    `(atau TICKET SEMUA - diarahkan isi satu per satu untuk semua trip)`,
     ``,
     ...employeeMenuLines(),
   ].join("\n");
@@ -408,6 +409,7 @@ export function buildRevisionRequestMessage(params: {
     `   (artinya: ubah trip no 3 jadi Rp75.000)`,
     `3. Ketik TICKET <nomor trip> <id ticket> - contoh: TICKET 3 PIM-34285`,
     `   (melampirkan bukti ticket EnvGate ke trip no 3)`,
+    `   Banyak trip? Ketik TICKET SEMUA - diarahkan satu per satu.`,
     `4. Ketik SELESAI - klaim dikirim ulang ke ${roleLabel}`,
     ``,
     `Bisa juga tulis catatan untuk ${roleLabel} — langsung balas pesan ini.`,
@@ -437,6 +439,7 @@ export function buildRevisionTripListMessage(
     `Balas:`,
     `UBAH <no> <nominal> - ubah nominal, contoh: UBAH 3 75000`,
     `TICKET <no> <id> - lampirkan bukti ticket, contoh: TICKET 3 PIM-34285`,
+    `TICKET SEMUA - isi ticket satu per satu untuk semua trip`,
     `SELESAI - sudah selesai, kirim ulang ke approver`,
   ].join("\n");
 }

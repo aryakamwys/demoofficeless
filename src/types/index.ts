@@ -65,6 +65,8 @@ export interface Claim {
     old_fare: number;
     new_fare: number;
   } | null;
+  /** Mode isi ticket satu-per-satu via WA (aktif = sedang berjalan). */
+  ticket_wizard?: { queue: number[]; i: number } | null;
   created_at: string;
   updated_at: string;
 }

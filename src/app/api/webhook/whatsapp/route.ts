@@ -121,7 +121,10 @@ async function handleRevisionRequest(
   const actorName = actor?.employee_name || role;
 
   // Status stage tidak diubah ke REJECTED — tetap PENDING menunggu revisi
-  await supabase.from("claims").update({ status: "NEED_REVIEW", pending_wa_change: null }).eq("id", claim.id);
+  await supabase
+    .from("claims")
+    .update({ status: "NEED_REVIEW", pending_wa_change: null, ticket_wizard: null })
+    .eq("id", claim.id);
 
   await supabase.from("comments").insert({
     claim_id: claim.id,
@@ -158,8 +161,54 @@ async function handleRevisionRequest(
 
 // ==========================================
 // TICKET — engineer melampirkan bukti ticket EnvGate per trip via chat.
-// Dipakai di mode konfirmasi awal maupun mode revisi.
+// Validasi keras: ticket yang TIDAK ADA di EnvGate ditolak (tidak disimpan),
+// kecuali koneksi EnvGate sedang bermasalah (disimpan + ditandai).
 // ==========================================
+
+type TicketWizard = { queue: number[]; i: number };
+
+type WaTripRow = {
+  id: string;
+  trip_date: string;
+  pickup: string;
+  dropoff: string;
+  fare: number;
+  ticket_id: string | null;
+};
+
+async function fetchTrips(
+  supabase: ReturnType<typeof createServiceClient>,
+  claimId: string
+): Promise<WaTripRow[]> {
+  const { data } = await supabase
+    .from("trips")
+    .select("*")
+    .eq("claim_id", claimId)
+    .order("trip_date", { ascending: true });
+  return (data || []) as WaTripRow[];
+}
+
+function shortPlace(s: string): string {
+  const t = (s || "").trim();
+  return t.length > 24 ? t.slice(0, 24).replace(/\s+\S*$/, "") + "..." : t;
+}
+
+/** "3 dari 8 trip sudah punya ticket — sisa 5 belum." */
+function ticketProgress(trips: WaTripRow[]): string {
+  const missing = trips.filter((t) => !t.ticket_id).length;
+  if (missing === 0) return `Semua ${trips.length} trip sudah punya ticket.`;
+  return `${trips.length - missing} dari ${trips.length} trip sudah punya ticket — sisa ${missing} belum.`;
+}
+
+/** Validasi ticket ke EnvGate. apiDown=true → API tidak terjangkau (jangan tolak). */
+async function verifyInvTicket(ticketId: string) {
+  try {
+    return { inv: await getTicket(ticketId), apiDown: false };
+  } catch {
+    return { inv: null, apiDown: true };
+  }
+}
+
 async function handleTicketCommand(
   supabase: ReturnType<typeof createServiceClient>,
   claim: ClaimWithRelations,
@@ -170,26 +219,22 @@ async function handleTicketCommand(
 ) {
   if (!employeePhone) return;
   const empName = claim.employee?.employee_name || "Karyawan";
-  const { data: trips } = await supabase
-    .from("trips")
-    .select("*")
-    .eq("claim_id", claim.id)
-    .order("trip_date", { ascending: true });
+  const trips = await fetchTrips(supabase, claim.id);
 
   let no = tripNo;
   if (no == null) {
     // "#PIM-34285" telanjang: klaim 1 trip → langsung trip 1; kalau banyak, tanya nomor
-    if ((trips || []).length === 1) {
+    if (trips.length === 1) {
       no = 1;
     } else {
       await sendAndLog(
         supabase, claim.id, employeePhone,
         [
-          `Klaim ini punya ${(trips || []).length} trip — ticket-nya untuk trip yang mana?`,
+          `Klaim ini punya ${trips.length} trip — ticket-nya untuk trip yang mana?`,
           ``,
           `Ketik: TICKET <no trip> PIM-${ticketId}`,
           `Contoh: TICKET 3 PIM-${ticketId}`,
-          `Balas LIST untuk melihat nomor trip.`,
+          `Atau ketik TICKET SEMUA untuk diarahkan satu per satu.`,
         ].join("\n"),
         "TICKET_NEED_TRIP_NO"
       );
@@ -197,44 +242,220 @@ async function handleTicketCommand(
     }
   }
 
-  const trip = (trips || [])[no - 1];
+  const trip = trips[no - 1];
   if (!trip) {
     await sendAndLog(
       supabase, claim.id, employeePhone,
-      `Nomor trip ${no} tidak ditemukan (ada ${(trips || []).length} trip). Balas LIST untuk melihat daftarnya.`,
+      `Nomor trip ${no} tidak ditemukan (ada ${trips.length} trip). Balas LIST untuk melihat daftarnya.`,
       "TICKET_INVALID"
     );
     return;
   }
 
-  await supabase.from("trips").update({ ticket_id: ticketId }).eq("id", trip.id);
-
-  // Verifikasi live ke EnvGate — kasih judul ticket sebagai umpan balik
-  let title = "";
-  try {
-    const inv = await getTicket(ticketId);
-    title = inv ? ticketTitle(inv) : "";
-  } catch {
-    // API tidak terjangkau — tetap simpan, judul dikosongkan
+  const { inv, apiDown } = await verifyInvTicket(ticketId);
+  if (!apiDown && !inv) {
+    await sendAndLog(
+      supabase, claim.id, employeePhone,
+      [
+        `Ticket #PIM-${ticketId} TIDAK DITEMUKAN di EnvGate.`,
+        `Cek lagi nomornya, lalu kirim: TICKET ${no} PIM-<nomor yang benar>`,
+      ].join("\n"),
+      "TICKET_NOT_FOUND"
+    );
+    return;
   }
 
+  await supabase.from("trips").update({ ticket_id: ticketId }).eq("id", trip.id);
   await supabase.from("comments").insert({
     claim_id: claim.id,
-    message: `Trip ${no} dilampirkan ticket EnvGate #PIM-${ticketId}${title ? ` (${title})` : ""} via WhatsApp.`,
+    message: `Trip ${no} dilampirkan ticket EnvGate #PIM-${ticketId}${inv ? ` (${ticketTitle(inv)})` : ""} via WhatsApp.`,
     author_name: empName,
     author_role: "EMPLOYEE",
   });
 
+  const fresh = await fetchTrips(supabase, claim.id);
+  const stillMissing = fresh.filter((t) => !t.ticket_id).length;
   await sendAndLog(
     supabase, claim.id, employeePhone,
     [
       `SUDAH TERSIMPAN. Trip no ${no} kini punya bukti ticket #PIM-${ticketId}.`,
-      title ? `Judul ticket: ${title}` : `(Detail ticket tidak bisa diverifikasi saat ini.)`,
+      inv
+        ? `Judul ticket: ${ticketTitle(inv)}`
+        : `(Koneksi EnvGate bermasalah — ticket belum terverifikasi, HR akan cek manual.)`,
+      ``,
+      ticketProgress(fresh),
+      ...(stillMissing > 1
+        ? [`Lanjut isi sisanya satu per satu? Ketik: TICKET SEMUA`]
+        : []),
       ``,
       nextHint,
     ].join("\n"),
     "TICKET_SAVED"
   );
+}
+
+// ==========================================
+// Wizard TICKET SEMUA — isi ticket satu per satu, sulit tertukar
+// ==========================================
+
+function wizardPromptLines(trips: WaTripRow[], no: number, remaining: number): string[] {
+  const t = trips[no - 1];
+  const d = new Date(t.trip_date).toLocaleDateString("id-ID", { day: "2-digit", month: "short" });
+  return [
+    `MODE NGISI TICKET — sisa ${remaining} trip lagi.`,
+    `Kita isi SATU PER SATU supaya tidak tertukar.`,
+    ``,
+    `Trip ${no} (${d}: ${shortPlace(t.pickup)} -> ${shortPlace(t.dropoff)})`,
+    `Kirim nomor ticket untuk trip ini. Contoh: PIM-34285`,
+    ``,
+    `Ketik LEWATI kalau trip ini tidak punya ticket.`,
+    `Ketik BATAL kalau mau berhenti dulu.`,
+  ];
+}
+
+const refOf = () =>
+  `[Ref: ${Math.random().toString(36).substring(2, 8).toUpperCase()}]`;
+
+async function startTicketWizard(
+  supabase: ReturnType<typeof createServiceClient>,
+  claim: ClaimWithRelations,
+  employeePhone: string | null
+) {
+  if (!employeePhone) return;
+  const trips = await fetchTrips(supabase, claim.id);
+  const queue = trips.map((t, i) => (t.ticket_id ? -1 : i + 1)).filter((n) => n > 0);
+  if (queue.length === 0) {
+    await sendAndLog(
+      supabase, claim.id, employeePhone,
+      `Semua ${trips.length} trip sudah punya ticket. Tidak ada yang perlu diisi.`,
+      "TICKET_WIZARD_EMPTY"
+    );
+    return;
+  }
+  await supabase.from("claims").update({ ticket_wizard: { queue, i: 0 } }).eq("id", claim.id);
+  await sendAndLog(
+    supabase, claim.id, employeePhone,
+    [refOf(), ...wizardPromptLines(trips, queue[0]!, queue.length)].join("\n"),
+    "TICKET_WIZARD_START"
+  );
+}
+
+async function handleWizardTurn(
+  supabase: ReturnType<typeof createServiceClient>,
+  claim: ClaimWithRelations,
+  wiz: TicketWizard,
+  reply: string,
+  employeePhone: string | null
+) {
+  const phone = employeePhone;
+  if (!phone) return;
+  const empName = claim.employee?.employee_name || "Karyawan";
+  const upper = reply.trim().toUpperCase();
+  const trips = await fetchTrips(supabase, claim.id);
+  const cur = wiz.queue[wiz.i]!;
+
+  const sendWizard = (lines: string[], type: string) =>
+    sendAndLog(supabase, claim.id, phone, [refOf(), ...lines].join("\n"), type);
+
+  const finishHint = claim.approved_at
+    ? "Balas SELESAI untuk mengajukan ulang klaim."
+    : "Balas 1 = SETUJU kalau semua data sudah benar.";
+
+  const advance = async (prefix: string[] = []) => {
+    const nextI = wiz.i + 1;
+    if (nextI >= wiz.queue.length) {
+      await supabase.from("claims").update({ ticket_wizard: null }).eq("id", claim.id);
+      const fresh = await fetchTrips(supabase, claim.id);
+      await sendWizard(
+        [
+          ...prefix,
+          `SELESAI. Semua trip sudah diproses ticket-nya.`,
+          ticketProgress(fresh),
+          ``,
+          finishHint,
+        ],
+        "TICKET_WIZARD_DONE"
+      );
+    } else {
+      await supabase
+        .from("claims")
+        .update({ ticket_wizard: { queue: wiz.queue, i: nextI } })
+        .eq("id", claim.id);
+      await sendWizard(
+        [...prefix, ...wizardPromptLines(trips, wiz.queue[nextI]!, wiz.queue.length - nextI)],
+        "TICKET_WIZARD_NEXT"
+      );
+    }
+  };
+
+  if (upper === "BATAL" || upper === "SELESAI") {
+    await supabase.from("claims").update({ ticket_wizard: null }).eq("id", claim.id);
+    await sendWizard(
+      [
+        `Mode ticket ditutup. ${ticketProgress(trips)}`,
+        `Kapan saja bisa dilanjutkan: ketik TICKET SEMUA`,
+      ],
+      "TICKET_WIZARD_CANCELLED"
+    );
+    return;
+  }
+
+  if (upper === "LEWATI" || upper === "SKIP") {
+    await advance();
+    return;
+  }
+
+  const cmd = parseWaCommand(reply);
+  if (cmd.type === "TICKET_ID" || cmd.type === "TICKET") {
+    const no = cmd.type === "TICKET" ? cmd.tripNo : cur;
+    const trip = trips[no - 1];
+    if (!trip) {
+      await sendWizard(
+        [`Nomor trip ${no} tidak ditemukan (ada ${trips.length} trip).`],
+        "TICKET_INVALID"
+      );
+      return;
+    }
+    const { inv, apiDown } = await verifyInvTicket(cmd.ticketId);
+    if (!apiDown && !inv) {
+      await sendWizard(
+        [
+          `Ticket #PIM-${cmd.ticketId} TIDAK DITEMUKAN di EnvGate.`,
+          `Kirim nomor yang benar untuk Trip ${no} (contoh: PIM-34285), atau LEWATI.`,
+        ],
+        "TICKET_NOT_FOUND"
+      );
+      return;
+    }
+
+    await supabase.from("trips").update({ ticket_id: cmd.ticketId }).eq("id", trip.id);
+    await supabase.from("comments").insert({
+      claim_id: claim.id,
+      message: `Trip ${no} dilampirkan ticket EnvGate #PIM-${cmd.ticketId}${inv ? ` (${ticketTitle(inv)})` : ""} via WhatsApp (mode isi ticket).`,
+      author_name: empName,
+      author_role: "EMPLOYEE",
+    });
+
+    if (no === cur) {
+      await advance([
+        `SUDAH TERSIMPAN. Trip no ${no} → #PIM-${cmd.ticketId}.`,
+        inv ? `Judul: ${ticketTitle(inv)}` : "",
+      ].filter(Boolean));
+    } else {
+      // Ticket untuk trip lain — simpan, wizard tetap di trip saat ini
+      await sendWizard(
+        [
+          `SUDAH TERSIMPAN. Trip no ${no} → #PIM-${cmd.ticketId}.`,
+          ...wizardPromptLines(trips, cur, wiz.queue.length - wiz.i),
+        ],
+        "TICKET_SAVED"
+      );
+    }
+    return;
+  }
+
+  // Balasan lain — ulangi instruksi trip saat ini
+  await sendWizard(wizardPromptLines(trips, cur, wiz.queue.length - wiz.i), "TICKET_WIZARD_HELP");
 }
 
 // ==========================================
@@ -318,7 +539,10 @@ async function handleRevisionCommands(
       author_name: empName,
       author_role: "EMPLOYEE",
     });
-    await supabase.from("claims").update({ status: "SENT", pending_wa_change: null }).eq("id", claim.id);
+    await supabase
+      .from("claims")
+      .update({ status: "SENT", pending_wa_change: null, ticket_wizard: null })
+      .eq("id", claim.id);
 
     const fresh = await fetchClaimFresh(supabase, claim.id);
     if (fresh) {
@@ -359,6 +583,11 @@ async function handleRevisionCommands(
       employeePhone,
       "Balas UBAH <no> <nominal> untuk ubah nominal,\natau SELESAI untuk mengajukan ulang."
     );
+    return;
+  }
+
+  if (cmd.type === "TICKET_WIZARD") {
+    await startTicketWizard(supabase, claim, employeePhone);
     return;
   }
 
@@ -406,8 +635,13 @@ async function processWebhookReply(
     // ROLE: EMPLOYEE
     // ==========================================
     if (role === 'EMPLOYEE') {
+      // Mode isi ticket satu-per-satu aktif → tangani duluan
+      const wiz = claim.ticket_wizard as TicketWizard | null;
+      if (wiz && Array.isArray(wiz.queue) && wiz.i != null && wiz.i < wiz.queue.length) {
+        await handleWizardTurn(supabase, claim, wiz, reply, employeePhone);
+      }
       // Fase revisi: klaim sudah dikonfirmasi engineer tapi diminta revisi
-      if (claim.status === 'NEED_REVIEW' && claim.approved_at) {
+      else if (claim.status === 'NEED_REVIEW' && claim.approved_at) {
         await handleRevisionCommands(supabase, claim, reply, employeePhone);
       } else if (reply === "1") {
         const hasManager = !!claim.manager;
@@ -415,6 +649,7 @@ async function processWebhookReply(
           approved_at: new Date().toISOString(),
           manager_status: hasManager ? "PENDING" : "APPROVED",
           hr_status: "PENDING",
+          ticket_wizard: null,
         }).eq("id", claim.id);
 
         const confirmMsg = buildConfirmationMessage(hasManager ? claim.manager.employee_name : undefined);
@@ -458,7 +693,7 @@ async function processWebhookReply(
           await sendAndLog(supabase, claim.id, employeePhone, buildDetailMessage(trips, claim.total_amount), "DETAIL_MESSAGE");
         }
       } else {
-        // TICKET juga bisa dipakai sebelum konfirmasi (mode awal);
+        // TICKET/LIST juga bisa dipakai sebelum konfirmasi (mode awal);
         // selain itu teks bebas → jadi catatan (SELALU balas — test user:
         // catatan dulu tersimpan diam-diam, pengirim tidak tahu kalau berhasil).
         const cmd = parseWaCommand(reply);
@@ -469,6 +704,14 @@ async function processWebhookReply(
             cmd.ticketId,
             employeePhone,
             "Balas 1 = SETUJU kalau semua data sudah benar."
+          );
+        } else if (cmd.type === "TICKET_WIZARD") {
+          await startTicketWizard(supabase, claim, employeePhone);
+        } else if (cmd.type === "LIST" && employeePhone) {
+          await sendAndLog(
+            supabase, claim.id, employeePhone,
+            buildRevisionTripListMessage(claim.trips || [], claim.total_amount, claim.period),
+            "REVISION_LIST"
           );
         } else if (cmd.type === "BAD_TICKET") {
           if (employeePhone) {
