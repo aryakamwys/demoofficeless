@@ -857,19 +857,6 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     const supabase = createServiceClient();
 
-    // Log raw payload
-    try {
-      await supabase.from("whatsapp_logs").insert({
-        claim_id: "1aedea14-57ef-4929-8d27-f6b8b513cbe0",
-        phone_number: "SYSTEM",
-        message_type: "RAW_WEBHOOK",
-        status: "RECEIVED",
-        response: JSON.stringify(body),
-      });
-    } catch (e) {
-      console.error("Log error", e);
-    }
-
     const sender = body.sender || body.from || body.phone || "";
     let messageText = "";
 
@@ -880,6 +867,17 @@ export async function POST(request: NextRequest) {
     } else if (typeof body.text === "string") {
       messageText = body.text.trim();
     }
+
+    // Log raw payload — claim_id null: event sistem, bukan milik klaim
+    // (dulu claim_id hardcoded → FK violation diam-diam begitu klaim itu
+    // terhapus, payload masuk tidak meninggalkan jejak sama sekali).
+    const { error: rawLogErr } = await supabase.from("whatsapp_logs").insert({
+      phone_number: normalizePhone(sender) || "SYSTEM",
+      message_type: "RAW_WEBHOOK",
+      status: "RECEIVED",
+      response: JSON.stringify(body),
+    });
+    if (rawLogErr) console.error("[WA] RAW_WEBHOOK log gagal:", rawLogErr.message);
 
     if (!sender || !messageText) {
       return NextResponse.json({ success: true });
@@ -927,6 +925,30 @@ export async function POST(request: NextRequest) {
     }
 
     if (!claim || !role) {
+      // Jangan diam saja — pengirim perlu tahu pesannya tidak nyambung ke klaim
+      // aktif (klaim selesai/dihapus, atau nomor belum terdaftar). Diam membuat
+      // balasan yang hilang (device offline, klaim terhapus) tak terbedakan.
+      after(async () => {
+        const result = await sendTextMessage(
+          phoneNumber,
+          [
+            `Nomor WhatsApp ini tidak sedang terdaftar sebagai peserta klaim aktif`,
+            `(karyawan / manager / HR).`,
+            ``,
+            `Kemungkinan: klaim sudah selesai, dibatalkan, atau datanya dihapus.`,
+            `Jika ini keliru, hubungi HR Perkom.`,
+          ].join("\n")
+        );
+        const { error: logErr } = await supabase.from("whatsapp_logs").insert({
+          phone_number: phoneNumber,
+          message_type: "UNMATCHED_REPLY",
+          status: result.success ? "SENT" : "FAILED",
+          response: result.success
+            ? "nomor tidak terdaftar di klaim aktif"
+            : result.error || "Unknown error",
+        });
+        if (logErr) console.error("[WA] UNMATCHED_REPLY log gagal:", logErr.message);
+      });
       return NextResponse.json({ success: true, reason: "No matching claim/role" });
     }
 
