@@ -25,6 +25,8 @@ import {
   Bell,
   Wrench,
   Boxes,
+  Activity,
+  ShieldCheck,
 } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
@@ -52,7 +54,7 @@ function getPageTitle(pathname: string): string {
   return pageTitles[pathname] || "Perkom";
 }
 
-export function Header() {
+export function Header({ isSuperadmin }: { isSuperadmin?: boolean }) {
   const pathname = usePathname();
   const title = getPageTitle(pathname);
   const [tripsOpen, setTripsOpen] = useState(true);
@@ -158,13 +160,25 @@ export function Header() {
                 href="/services/openclaw"
                 className={cn(
                   "flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors",
-                  pathname.startsWith("/services")
+                  pathname.startsWith("/services/openclaw")
                     ? "bg-accent text-primary"
                     : "text-muted-foreground hover:bg-accent hover:text-foreground"
                 )}
               >
                 <Wrench className="h-4 w-4 shrink-0" />
-                Manage Service
+                Openclaw Ticket
+              </Link>
+              <Link
+                href="/services/envgate"
+                className={cn(
+                  "flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors",
+                  pathname === "/services/envgate"
+                    ? "bg-accent text-primary"
+                    : "text-muted-foreground hover:bg-accent hover:text-foreground"
+                )}
+              >
+                <Activity className="h-4 w-4 shrink-0" />
+                EnvGate Test
               </Link>
             </div>
 
@@ -183,6 +197,24 @@ export function Header() {
                 Inventory
               </Link>
             </div>
+
+            {/* User — hanya superadmin */}
+            {isSuperadmin && (
+              <div className="pt-2 mt-2 border-t border-slate-100">
+                <Link
+                  href="/users"
+                  className={cn(
+                    "flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors",
+                    pathname === "/users"
+                      ? "bg-accent text-primary"
+                      : "text-muted-foreground hover:bg-accent hover:text-foreground"
+                  )}
+                >
+                  <ShieldCheck className="h-4 w-4 shrink-0" />
+                  User
+                </Link>
+              </div>
+            )}
 
             {/* Settings */}
             <div className="pt-2 mt-2 border-t border-slate-100">

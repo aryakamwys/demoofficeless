@@ -25,7 +25,7 @@ export function AppShell({
       </div>
       <div className="flex flex-1 flex-col overflow-hidden print:overflow-visible">
         <div className="print:hidden">
-          <Header />
+          <Header isSuperadmin={isSuperadmin} />
         </div>
         <main className="flex-1 overflow-y-auto p-4 lg:p-6 print:overflow-visible print:p-0 print:h-auto">
           {children}

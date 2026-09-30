@@ -4,6 +4,8 @@ import { useState, type ReactNode } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { cn } from "@/lib/utils";
+import { Menu } from "lucide-react";
+import { Sheet, SheetContent, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 
 const NAV = [
   {
@@ -707,14 +709,60 @@ const CONTENT: Record<string, ReactNode> = {
 
 export default function DocsPage() {
   const [active, setActive] = useState("intro");
+  const [navOpen, setNavOpen] = useState(false);
   const idx = FLAT.findIndex((i) => i.id === active);
   const prev = FLAT[idx - 1];
   const next = FLAT[idx + 1];
+
+  // Daftar menu yang dipakai sidebar desktop & drawer mobile
+  const navList = (onSelect?: () => void) => (
+    <>
+      {NAV.map((g) => (
+        <div key={g.group} className="mb-5">
+          <p className="mb-1.5 px-3 text-[10px] font-semibold uppercase tracking-wider text-slate-400">
+            {g.group}
+          </p>
+          {g.items.map((it) => (
+            <button
+              key={it.id}
+              onClick={() => {
+                setActive(it.id);
+                onSelect?.();
+              }}
+              className={cn(
+                "mb-0.5 block w-full rounded-lg px-3 py-1.5 text-left text-sm transition-colors",
+                active === it.id
+                  ? "bg-blue-50 font-semibold text-blue-700"
+                  : "text-slate-600 hover:bg-slate-100 hover:text-slate-900"
+              )}
+            >
+              {it.title}
+            </button>
+          ))}
+        </div>
+      ))}
+    </>
+  );
 
   return (
     <div className="min-h-screen bg-slate-50">
       <header className="sticky top-0 z-10 border-b border-slate-200 bg-white">
         <div className="mx-auto flex h-14 max-w-6xl items-center gap-3 px-4">
+          {/* Menu mobile — drawer sidebar, bukan chip bulat */}
+          <Sheet open={navOpen} onOpenChange={setNavOpen}>
+            <SheetTrigger
+              className="-ml-2 rounded-lg p-2 text-slate-600 hover:bg-slate-100 lg:hidden"
+              aria-label="Buka menu dokumentasi"
+            >
+              <Menu className="h-5 w-5" />
+            </SheetTrigger>
+            <SheetContent side="left" className="w-64 overflow-y-auto p-4">
+              <SheetTitle className="mb-3 px-3 text-sm font-bold text-slate-800">
+                Dokumentasi
+              </SheetTitle>
+              {navList(() => setNavOpen(false))}
+            </SheetContent>
+          </Sheet>
           <Image src="/ogoperkom.png" alt="Perkom" width={32} height={32} className="h-8 w-8 object-contain" />
           <span className="text-sm font-bold text-slate-800">Dokumentasi Officeless Perkom</span>
           <Link href="/dashboard" className="ml-auto text-xs font-semibold text-blue-600 hover:underline">
@@ -725,46 +773,10 @@ export default function DocsPage() {
 
       <div className="mx-auto flex max-w-6xl gap-8 px-4 py-8">
         <aside className="sticky top-20 hidden h-fit w-56 shrink-0 lg:block">
-          {NAV.map((g) => (
-            <div key={g.group} className="mb-5">
-              <p className="mb-1.5 px-3 text-[10px] font-semibold uppercase tracking-wider text-slate-400">
-                {g.group}
-              </p>
-              {g.items.map((it) => (
-                <button
-                  key={it.id}
-                  onClick={() => setActive(it.id)}
-                  className={cn(
-                    "mb-0.5 block w-full rounded-lg px-3 py-1.5 text-left text-sm transition-colors",
-                    active === it.id
-                      ? "bg-blue-50 font-semibold text-blue-700"
-                      : "text-slate-600 hover:bg-slate-100 hover:text-slate-900"
-                  )}
-                >
-                  {it.title}
-                </button>
-              ))}
-            </div>
-          ))}
+          {navList()}
         </aside>
 
         <main className="min-w-0 flex-1">
-          {/* Navigasi mobile */}
-          <div className="mb-6 flex gap-2 overflow-x-auto pb-2 lg:hidden">
-            {FLAT.map((it) => (
-              <button
-                key={it.id}
-                onClick={() => setActive(it.id)}
-                className={cn(
-                  "whitespace-nowrap rounded-full px-3 py-1.5 text-xs font-medium",
-                  active === it.id ? "bg-blue-600 text-white" : "bg-white text-slate-600 border border-slate-200"
-                )}
-              >
-                {it.title}
-              </button>
-            ))}
-          </div>
-
           <article className="rounded-xl border border-slate-200 bg-white p-6 sm:p-10">
             {CONTENT[active]}
           </article>
