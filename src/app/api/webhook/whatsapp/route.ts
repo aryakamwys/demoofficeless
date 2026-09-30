@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest, NextResponse, after } from "next/server";
 import { createServiceClient } from "@/lib/supabase-server";
 import {
   sendTextMessage,
@@ -505,9 +505,10 @@ export async function POST(request: NextRequest) {
 
     const reply = messageText.trim();
 
-    // Process directly. We await it so Vercel doesn't kill the process.
-    // With maxRetries=1, 2 messages * 2s delay = ~4-5s total, well within Vercel's 10s limit.
-    await processWebhookReply(claim, role!, reply, phoneNumber);
+    // Balas Kirimi INSTAN supaya tidak timeout/retry-dobel; pesan WA dikirim
+    // di background dengan jeda anti-bot tetap. Aman di VPS (node standalone,
+    // proses tetap hidup setelah response — bukan lagi serverless Vercel).
+    after(() => processWebhookReply(claim!, role!, reply, phoneNumber));
 
     // Respond immediately to Kirimi webhook (no timeout risk)
     return NextResponse.json({ success: true });
