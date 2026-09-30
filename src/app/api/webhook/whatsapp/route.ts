@@ -880,6 +880,34 @@ export async function POST(request: NextRequest) {
     if (rawLogErr) console.error("[WA] RAW_WEBHOOK log gagal:", rawLogErr.message);
 
     if (!sender || !messageText) {
+      // Pesan non-teks (voice note/gambar) atau format tak dikenal — tetap
+      // dibalas, jangan biarkan chat menggantung seolah sistem error.
+      if (sender) {
+        const mediaPhone = normalizePhone(sender);
+        if (mediaPhone) {
+          after(async () => {
+            const result = await sendTextMessage(
+              mediaPhone,
+              [
+                `Maaf, pesan non-teks (gambar/suara/video) belum bisa diproses.`,
+                `Mohon balas dengan TEKS.`,
+                ``,
+                `1 = SETUJU`,
+                `2 = MINTA REVISI (tulis alasannya)`,
+              ].join("\n")
+            );
+            const { error: logErr } = await supabase.from("whatsapp_logs").insert({
+              phone_number: mediaPhone,
+              message_type: "MEDIA_REPLY",
+              status: result.success ? "SENT" : "FAILED",
+              response: result.success
+                ? "non-teks dibalas panduan teks"
+                : result.error || "Unknown error",
+            });
+            if (logErr) console.error("[WA] MEDIA_REPLY log gagal:", logErr.message);
+          });
+        }
+      }
       return NextResponse.json({ success: true });
     }
 
@@ -932,11 +960,11 @@ export async function POST(request: NextRequest) {
         const result = await sendTextMessage(
           phoneNumber,
           [
-            `Nomor WhatsApp ini tidak sedang terdaftar sebagai peserta klaim aktif`,
-            `(karyawan / manager / HR).`,
+            `Tidak ada klaim aktif yang sedang menunggu balasan dari nomor ini.`,
             ``,
-            `Kemungkinan: klaim sudah selesai, dibatalkan, atau datanya dihapus.`,
-            `Jika ini keliru, hubungi HR Perkom.`,
+            `Kemungkinan: klaim sudah diproses/selesai, dibatalkan, atau nomor ini`,
+            `belum terdaftar sebagai karyawan / Manager / HR di klaim manapun.`,
+            `Jika merasa ini keliru, hubungi HR Perkom.`,
           ].join("\n")
         );
         const { error: logErr } = await supabase.from("whatsapp_logs").insert({

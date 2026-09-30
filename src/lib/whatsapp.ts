@@ -59,9 +59,10 @@ export async function sendTextMessage(
   // Kirimi requires receiver format 628xxx — normalize at the root so that all callers are safe
   const normalized = normalizePhone(receiver) || receiver;
 
-  // Jeda acak 3-7 detik antar pesan — jeda tetap & pendek dari device QR
-  // adalah pemicu pembatasan paling sering (docs Kirimi: catatan praktis)
-  const delayMs = options?.delayMs ?? 3000 + Math.floor(Math.random() * 4000);
+  // Jeda acak 2-5 detik antar pesan — jeda tetap & pendek dari device QR
+  // adalah pemicu pembatasan paling sering (docs Kirimi: catatan praktis);
+  // tetap acak dan tidak rapat, tapi respons terasa lebih cepat
+  const delayMs = options?.delayMs ?? 2000 + Math.floor(Math.random() * 3000);
   if (delayMs > 0) {
     await new Promise((resolve) => setTimeout(resolve, delayMs));
   }

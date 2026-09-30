@@ -97,6 +97,7 @@ function Participant({
 function InvGateCard({
   caption,
   inv,
+  live,
   statusName,
   priorityName,
   sourceName,
@@ -105,6 +106,7 @@ function InvGateCard({
 }: {
   caption: string;
   inv: InvTicket;
+  live?: boolean;
   statusName: string;
   priorityName: string;
   sourceName: string;
@@ -178,6 +180,13 @@ function InvGateCard({
         <MetricCell label="Ticket Dibuat" value={created} />
       </div>
 
+      {!live && (
+        <p className="border-b border-slate-200 bg-amber-50 px-3 py-1.5 text-[9px] italic text-amber-700">
+          Detail live dari EnvGate tidak tersedia untuk ticket ini — nomor tetap
+          tercatat sebagai bukti.
+        </p>
+      )}
+
       {/* Kartu DESCRIPTION */}
       <div className="flex gap-2 border-b border-slate-200 px-3 py-2">
         <InvAvatar name={creator} />
@@ -243,15 +252,6 @@ export default async function ClaimReportPage({ params }: ReportPageProps) {
     .eq("claim_id", id)
     .order("trip_date", { ascending: true });
 
-  // Bukti ticket per trip (kebutuhan HR): resolve detail live via cache 5 menit
-  const tripTicketIds = [
-    ...new Set((trips || []).map((t) => (t.ticket_id || "").trim()).filter(Boolean)),
-  ];
-  const tripTickets = await Promise.all(tripTicketIds.map((tid) => getTicket(tid)));
-  const ticketById = new Map(
-    tripTickets.filter(Boolean).map((t) => [String(t!.id), t!])
-  );
-
   // Ticket managed-service yang ter-link via customer_name (pola sama dengan detail klaim)
   let ticket: { ticket_id: string; ticket_title?: string | null; customer_name?: string | null; location?: string | null; storage_path?: string | null } | null = null;
   if (claim.employee?.employee_name) {
@@ -264,12 +264,40 @@ export default async function ClaimReportPage({ params }: ReportPageProps) {
     if (tickets && tickets.length > 0) ticket = tickets[0];
   }
 
-  // Detail ticket dari API EnvGate (cache 5 menit di lib)
-  let invTicket = ticket ? await getTicket(ticket.ticket_id) : null;
+  // Normalisasi id ticket → digit murni (dipakai lookup & dedup anti-kartu-ganda)
+  const digitsOf = (s: string) => s.replace(/\D/g, "");
+  const tripTicketIds = [
+    ...new Set(
+      (trips || [])
+        .map((t) => digitsOf((t.ticket_id || "").trim()))
+        .filter(Boolean)
+    ),
+  ];
 
-  // Fallback: tidak ada link lokal → cari langsung di EnvGate by nama requester
+  // SEMUA lookup EnvGate dijalankan paralel dan anti-runtuh: gagal/tidak-ada
+  // tidak pernah membuat report error — kartu minimal tetap tampil sebagai bukti.
+  const needIds = [...new Set([...tripTicketIds, ...(ticket ? [digitsOf(ticket.ticket_id)] : [])])];
+  const settled = await Promise.allSettled(needIds.map((tid) => getTicket(tid)));
+  let envgateDown = false;
+  const ticketById = new Map<string, InvTicket>();
+  settled.forEach((r, i) => {
+    const tid = needIds[i]!;
+    if (r.status === "fulfilled" && r.value) {
+      ticketById.set(tid, r.value);
+    } else {
+      if (r.status === "rejected") envgateDown = true;
+      // Kartu minimal — bukti tetap tercatat walau detail live tidak tersedia
+      ticketById.set(tid, { id: Number(tid) });
+    }
+  });
+
+  // Detail ticket level klaim: dari link managed-service, atau fallback by nama
+  let invTicket: InvTicket | null = ticket
+    ? ticketById.get(digitsOf(ticket.ticket_id)) ?? null
+    : null;
   if (!ticket && !invTicket && claim.employee?.employee_name) {
-    invTicket = await findTicketByRequesterName(claim.employee.employee_name);
+    const found = await findTicketByRequesterName(claim.employee.employee_name);
+    if (found && !ticketById.has(String(found.id))) invTicket = found;
   }
 
   // Lampiran file ticket — signed URL (bucket private)
@@ -289,7 +317,7 @@ export default async function ClaimReportPage({ params }: ReportPageProps) {
     getLocationsMap(),
   ]);
 
-  // Kartu ticket bergaya halaman InvGate: level klaim + satu per trip
+  // Kartu ticket bergaya halaman InvGate: level klaim + satu per trip (dedup by digit)
   const namesOf = (inv: InvTicket) => ({
     statusName: inv.status_id ? resolveEntityName(statusMap, inv.status_id) : "",
     priorityName: inv.priority_id ? resolveEntityName(priorityMap, inv.priority_id) : "",
@@ -299,24 +327,31 @@ export default async function ClaimReportPage({ params }: ReportPageProps) {
       ticket?.location ||
       "",
   });
-  const invCards: Array<{ inv: InvTicket; caption: string; attachmentUrl: string | null } & ReturnType<typeof namesOf>> = [];
+  const isMinimal = (inv: InvTicket) => !inv.status_id && !inv.title && !inv.subject;
+  const invCards: Array<
+    { inv: InvTicket; caption: string; attachmentUrl: string | null; live: boolean } & ReturnType<typeof namesOf>
+  > = [];
   if (invTicket) {
     invCards.push({
       inv: invTicket,
       caption: "Referensi klaim",
       attachmentUrl,
+      live: !isMinimal(invTicket),
       ...namesOf(invTicket),
     });
   }
-  for (const [tid, inv] of ticketById) {
-    if (invCards.some((c) => String(c.inv.id) === tid)) continue;
+  for (const tid of tripTicketIds) {
+    if (invCards.some((c) => digitsOf(String(c.inv.id)) === tid)) continue;
+    const inv = ticketById.get(tid);
+    if (!inv) continue;
     const nos = (trips || [])
-      .map((t, i) => ((t.ticket_id || "").trim() === tid ? i + 1 : 0))
+      .map((t, i) => (digitsOf((t.ticket_id || "").trim()) === tid ? i + 1 : 0))
       .filter((n) => n > 0);
     invCards.push({
       inv,
       caption: nos.length ? `Bukti trip ke-${nos.join(", ")}` : "",
       attachmentUrl: null,
+      live: !isMinimal(inv),
       ...namesOf(inv),
     });
   }
@@ -353,6 +388,14 @@ export default async function ClaimReportPage({ params }: ReportPageProps) {
         </Link>
         <ReportPrintButton />
       </div>
+
+      {/* Peringatan koneksi EnvGate — report tetap tercetak dengan bukti minimal */}
+      {envgateDown && (
+        <div className="mb-4 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800 print:hidden">
+          Koneksi EnvGate terganggu — detail ticket ditampilkan terbatas (nomor ticket
+          tetap tercatat sebagai bukti). Buka ulang halaman ini setelah koneksi normal.
+        </div>
+      )}
 
       {/* Kop */}
       <div className="border-b-2 border-slate-800 pb-3 mb-6">
@@ -406,18 +449,22 @@ export default async function ClaimReportPage({ params }: ReportPageProps) {
                 {t.pickup} → {t.dropoff}
               </td>
               <td className="border border-slate-300 px-2 py-1">
-                {t.ticket_id ? (
-                  <>
-                    <span>#{t.ticket_id}</span>
-                    {ticketById.get(t.ticket_id) && (
-                      <span className="block text-[10px] text-slate-500 leading-tight">
-                        {ticketTitle(ticketById.get(t.ticket_id))}
-                      </span>
-                    )}
-                  </>
-                ) : (
-                  "—"
-                )}
+                {(() => {
+                  const tid = digitsOf((t.ticket_id || "").trim());
+                  if (!tid) return "—";
+                  const inv = ticketById.get(tid);
+                  const title = inv ? ticketTitle(inv) : "";
+                  return (
+                    <>
+                      <span>#{tid}</span>
+                      {title && (
+                        <span className="block text-[10px] text-slate-500 leading-tight">
+                          {title}
+                        </span>
+                      )}
+                    </>
+                  );
+                })()}
               </td>
               <td className="border border-slate-300 px-2 py-1 text-right">
                 {Number(t.fare).toLocaleString("id-ID")}
@@ -441,9 +488,10 @@ export default async function ClaimReportPage({ params }: ReportPageProps) {
         <div className="mb-6">
           {invCards.map((c) => (
             <InvGateCard
-              key={`${c.inv.id}-${c.caption}`}
+              key={`${digitsOf(String(c.inv.id))}-${c.caption}`}
               caption={c.caption}
               inv={c.inv}
+              live={c.live}
               statusName={c.statusName}
               priorityName={c.priorityName}
               sourceName={c.sourceName}
