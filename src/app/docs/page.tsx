@@ -474,6 +474,7 @@ const CONTENT: Record<string, ReactNode> = {
 
       <H2>Hal yang Perlu Diketahui</H2>
       <ul className="my-3 list-disc space-y-1 pl-5 text-sm text-slate-600">
+        <li><b>Tidak mau mengetik?</b> Pesan klaim menyertakan <b>tautan</b> — ketuk tautannya, lalu tekan tombol <b>SETUJU</b> atau <b>ADA YANG SALAH</b> di halaman yang terbuka. Tanpa login, tanpa mengetik angka.</li>
         <li>Huruf besar atau kecil sama saja — <Cmd>list</Cmd> = <Cmd>LIST</Cmd>.</li>
         <li>Satu pesan = satu perintah. Jangan gabung dua perintah dalam satu balasan.</li>
         <li>Bot menjawab agak lambat (3–7 detik) — itu <b>disengaja</b> agar nomor pengirim aman dari pembatasan WhatsApp. Tunggu saja, jangan kirim ulang.</li>
@@ -548,6 +549,14 @@ const CONTENT: Record<string, ReactNode> = {
         Karyawan lalu merevisi sendiri lewat chat (lihat <b>Panduan Karyawan</b>) — mengubah nominal
         dengan <Cmd>UBAH</Cmd> lalu <Cmd>SELESAI</Cmd>. Setelah itu Anda menerima lagi pesan
         klaimnya untuk keputusan berikutnya. Alur ini bisa berulang sampai Anda setuju.
+      </P>
+
+      <H2>Cara Paling Mudah: Tombol</H2>
+      <P>
+        Pesan persetujuan menyertakan <b>tautan</b> — ketuk tautannya dan halaman keputusan
+        terbuka (tanpa login): ringkasan klaim + tombol <b>✓ SETUJU</b> dan <b>✎ Minta revisi</b>
+        (revisi meminta alasan). Logikanya sama dengan membalas 1/2 di chat, tinggal pilih
+        yang paling nyaman.
       </P>
 
       <H2>Urutan Persetujuan</H2>

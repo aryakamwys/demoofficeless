@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServerClient } from "@/lib/supabase-server";
 import { sendTextMessage, buildClaimMessage, buildManagerApprovalMessage, buildHrApprovalMessage } from "@/lib/whatsapp";
+import { approveLink } from "@/lib/wa-link";
 import { errorMessage } from "@/lib/utils";
 
 // Retry rate-limit bisa total ~17 detik — kasih ruang di serverless.
@@ -55,7 +56,8 @@ export async function POST(request: NextRequest) {
       period: claim.period,
       trip_count: claim.trip_count,
       total_amount: claim.total_amount,
-      trips: claim.trips || []
+      trips: claim.trips || [],
+      action_url: approveLink(claim.id, phoneNumber.replace(/^\+/, "").replace(/^0/, "62"), "EMPLOYEE")
     });
   } else if (target === "MANAGER") {
     if (!claim.manager) {
@@ -78,7 +80,8 @@ export async function POST(request: NextRequest) {
       employee_name: claim.employee.employee_name,
       period: claim.period,
       total_amount: claim.total_amount,
-      trips: claim.trips || []
+      trips: claim.trips || [],
+      action_url: approveLink(claim.id, phoneNumber.replace(/^\+/, "").replace(/^0/, "62"), "MANAGER")
     });
   } else if (target === "HR") {
     if (!claim.hr) {
@@ -101,7 +104,8 @@ export async function POST(request: NextRequest) {
       manager_name: claim.manager?.employee_name || "Manager",
       period: claim.period,
       total_amount: claim.total_amount,
-      trips: claim.trips || []
+      trips: claim.trips || [],
+      action_url: approveLink(claim.id, phoneNumber.replace(/^\+/, "").replace(/^0/, "62"), "HR")
     });
   }
 

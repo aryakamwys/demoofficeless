@@ -178,6 +178,15 @@ function approverMenuLines(next: string): string[] {
   ];
 }
 
+/** Baris tautan tombol — hanya muncul jika NEXT_PUBLIC_APP_URL diset. */
+function tapLines(actionUrl: string, label = "untuk SETUJU / koreksi lewat tombol"): string[] {
+  return [
+    `CARA PALING GAMPANG — ketuk link ini ${label}:`,
+    actionUrl,
+    ``,
+  ];
+}
+
 /**
  * Build the claim notification message.
  */
@@ -187,6 +196,7 @@ export function buildClaimMessage(params: {
   trip_count: number;
   total_amount: number;
   trips: WaTripLine[];
+  action_url?: string;
 }): string {
   const { employee_name, period, trip_count, total_amount, trips } = params;
   return [
@@ -204,6 +214,7 @@ export function buildClaimMessage(params: {
     `TICKET <no trip> <id ticket> - contoh: TICKET 3 PIM-34285`,
     `(atau TICKET SEMUA - diarahkan isi satu per satu untuk semua trip)`,
     ``,
+    ...(params.action_url ? tapLines(params.action_url) : []),
     ...employeeMenuLines(),
   ].join("\n");
 }
@@ -274,6 +285,7 @@ export function buildManagerApprovalMessage(params: {
   total_amount: number;
   revised?: boolean;
   trips: WaTripLine[];
+  action_url?: string;
 }): string {
   const { employee_name, period, total_amount, trips } = params;
   return [
@@ -290,6 +302,7 @@ export function buildManagerApprovalMessage(params: {
     ...(params.revised
       ? [`Catatan: klaim ini pernah direvisi oleh karyawan.`, ``]
       : []),
+    ...(params.action_url ? tapLines(params.action_url, "untuk memutuskan lewat tombol") : []),
     ...approverMenuLines("klaim diteruskan ke HR"),
   ].join("\n");
 }
@@ -304,6 +317,7 @@ export function buildHrApprovalMessage(params: {
   total_amount: number;
   revised?: boolean;
   trips: WaTripLine[];
+  action_url?: string;
 }): string {
   const { employee_name, manager_name, period, total_amount, trips } = params;
   return [
@@ -320,6 +334,7 @@ export function buildHrApprovalMessage(params: {
     ...(params.revised
       ? [`Catatan: klaim ini pernah direvisi oleh karyawan.`, ``]
       : []),
+    ...(params.action_url ? tapLines(params.action_url, "untuk memutuskan lewat tombol") : []),
     ...approverMenuLines("klaim selesai disetujui"),
   ].join("\n");
 }
