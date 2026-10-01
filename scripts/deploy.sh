@@ -26,12 +26,25 @@ echo "== Deploy $TAG (sebelumnya: ${PREV_TAG:-none}) =="
 git fetch --quiet origin
 git reset --hard "$SHA"
 
+# 1.5 Tautan tombol WA butuh NEXT_PUBLIC_APP_URL (di-bake saat build, jadi
+#     harus ada SEBELUM build). Derive dari SB_DOMAIN bila belum diisi —
+#     sekali saja, tertulis ke .env supaya admin bisa meng-overridenya.
+if ! grep -q '^NEXT_PUBLIC_APP_URL=' .env && [ -n "${SB_DOMAIN:-}" ]; then
+  echo "NEXT_PUBLIC_APP_URL=https://${SB_DOMAIN}" >> .env
+  echo "== .env: NEXT_PUBLIC_APP_URL=https://${SB_DOMAIN} (otomatis) =="
+fi
+
 # 2. Build image baru (tag = sha)
 docker compose build app
 docker tag demoofficeless-app:latest "demoofficeless-app:$TAG"
 
 # 3. Pre-deploy backup (best-effort, tidak blok deploy bila gagal)
 ./scripts/backup.sh || echo "WARN: pre-deploy backup gagal — lanjut"
+
+# 3.5 Migrasi database belum tercatat (terlacak di schema_migrations,
+#     idempoten). Gagal migrasi = deploy berhenti SEBELUM app diganti —
+#     app lama tetap aman walau skema sudah berubah (migrasi additive).
+./scripts/migrate.sh
 
 # 4. Up + tunggu healthcheck (compose healthcheck, max ~60s).
 #    Dibungkus if!: tanpa ini `set -e` menghentikan skrip saat container

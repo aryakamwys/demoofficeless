@@ -295,22 +295,30 @@ Setiap push ke `main` memicu job deploy di runner `vps`, yang menjalankan
 1. `source ./.env`, `git fetch` + `git reset --hard $SHA`
 2. `docker compose build app`, lalu tag image menjadi `demoofficeless-app:git-<sha12>`
 3. Backup best-effort (`./scripts/backup.sh`)
-4. `docker compose up -d --wait app`, lalu healthcheck
+4. **Migrasi database otomatis** (`./scripts/migrate.sh`): file
+   `supabase/migrations/*.sql` yang belum tercatat di tabel
+   `schema_migrations` dijalankan berurutan sebelum app dinyalakan.
+   Gagal migrasi = deploy berhenti sebelum app diganti. DB existing
+   (migrasi 001–012 pernah dijalankan manual) di-bootstrap otomatis;
+   migrasi wajib idempoten (`IF NOT EXISTS` dkk.) karena bisa dijalankan
+   ulang dengan aman.
+5. `docker compose up -d --wait app`, lalu healthcheck
    `curl -fsS --max-time 15 http://127.0.0.1:3000/login`
    (loopback publish milik service `app` — tanpa dependensi DNS/sertifikat)
-5. Bila container/healthcheck gagal → rollback otomatis: image
+6. Bila container/healthcheck gagal → rollback otomatis: image
    `git-<sha12>` sebelumnya di-tag balik ke `latest` lalu di-force-recreate
    (tanpa rebuild)
-6. Menulis versi ke `.deploy-current` dan memangkas image lama (sisakan 5)
+7. Menulis versi ke `.deploy-current` dan memangkas image lama (sisakan 5)
 
 Catatan: deploy.sh hanya menaikkan service `app` — perubahan pada
 `deploy/Caddyfile` tambahan memerlukan `docker compose restart caddy` manual
 di VPS setelah deploy (lihat bagian 7).
 
-Cek versi yang berjalan:
+Cek versi yang berjalan dan migrasi mana saja yang sudah terpakai:
 
 ```bash
 cat /opt/demoofficeless/.deploy-current
+docker compose exec db psql -U postgres -d postgres -c "SELECT * FROM schema_migrations ORDER BY filename;"
 ```
 
 ### 5.2 Deploy manual
