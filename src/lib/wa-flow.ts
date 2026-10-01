@@ -477,7 +477,21 @@ async function handleRevisionCommands(
   const empName = claim.employee?.employee_name || "Karyawan";
   const cmd = parseWaCommand(reply);
 
-  if (cmd.type === "LIST") {
+  // Saat revisi, "1" bukan setuju lagi — klaim sudah pernah dikonfirmasi.
+  // Tanpa guard ini "1" malah tersimpan jadi catatan.
+  if (cmd.type === "APPROVE") {
+    await sendAndLog(
+      supabase, claim.id, employeePhone,
+      [
+        `Klaim ini lagi menunggu revisi Anda.`,
+        `Kalau sudah beres, ketik SELESAI — klaim dikirim ulang ke approver.`,
+      ].join("\n"),
+      "REVISION_INVALID"
+    );
+    return;
+  }
+
+  if (cmd.type === "LIST" || cmd.type === "DETAIL") {
     const { data: trips } = await supabase.from("trips").select("*").eq("claim_id", claim.id).order("trip_date", { ascending: true });
     await sendAndLog(supabase, claim.id, employeePhone, buildRevisionTripListMessage(trips || [], claim.total_amount, claim.period), "REVISION_LIST");
     return;
@@ -866,11 +880,13 @@ export async function processWebhookReply(
           await sendAndLog(
             supabase, claim.id, phoneNumber,
             [
-              `Maaf, balasan belum dikenali.`,
+              `Maaf, pesan itu belum saya mengerti.`,
               ``,
               `Ketik:`,
               `1 = SETUJU`,
               `2 = MINTA REVISI — contoh: 2 nominal trip 3 masih salah`,
+              ``,
+              `Pertanyaan lain soal klaim ini? Tanya langsung HR Perkom.`,
             ].join("\n"),
             "INVALID_REPLY"
           );
@@ -907,11 +923,13 @@ export async function processWebhookReply(
           await sendAndLog(
             supabase, claim.id, phoneNumber,
             [
-              `Maaf, balasan belum dikenali.`,
+              `Maaf, pesan itu belum saya mengerti.`,
               ``,
               `Ketik:`,
               `1 = SETUJU (klaim selesai)`,
               `2 = MINTA REVISI — contoh: 2 nominal trip 3 masih salah`,
+              ``,
+              `Pertanyaan lain soal klaim ini? Tanya langsung HR Perkom.`,
             ].join("\n"),
             "INVALID_REPLY"
           );

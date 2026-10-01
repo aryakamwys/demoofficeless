@@ -35,9 +35,29 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ success: true, stale: true, role: v.role });
   }
 
+  // Mode revisi (karyawan): klaim dikembalikan oleh Manager/HR — halaman
+  // berubah jadi daftar kerja revisi. Sertakan alasan revisi terakhir.
+  const inRevision = v.role === "EMPLOYEE" && claim.status === "NEED_REVIEW" && claim.approved_at;
+  let revision_reason: string | null = null;
+  if (inRevision) {
+    const { data: rev } = await supabase
+      .from("comments")
+      .select("message")
+      .eq("claim_id", v.claimId)
+      .in("author_role", ["MANAGER", "HR"])
+      .ilike("message", "Minta revisi%")
+      .order("created_at", { ascending: false })
+      .limit(1);
+    if (rev && rev[0]) {
+      revision_reason = String(rev[0].message).replace(/^Minta revisi:\s*/i, "");
+    }
+  }
+
   return NextResponse.json({
     success: true,
     role: v.role,
+    in_revision: inRevision,
+    revision_reason,
     claim: {
       period: claim.period,
       employee_name: claim.employee?.employee_name || "Karyawan",
@@ -67,7 +87,7 @@ export async function POST(request: NextRequest) {
 
     const action = String(body.action || "");
     const reason = String(body.reason || "").trim().slice(0, 500);
-    if (!["APPROVE", "REVISE", "NOTE"].includes(action)) {
+    if (!["APPROVE", "REVISE", "NOTE", "COMMAND"].includes(action)) {
       return NextResponse.json({ success: false, error: "Aksi tidak dikenal" }, { status: 400 });
     }
     if (action === "REVISE" && !reason) {
@@ -79,6 +99,15 @@ export async function POST(request: NextRequest) {
     // NOTE hanya untuk karyawan — Manager/HR memakai REVISE (alasan wajib).
     if (action === "NOTE" && v.role !== "EMPLOYEE") {
       return NextResponse.json({ success: false, error: "Aksi tidak tersedia untuk role ini" }, { status: 400 });
+    }
+    // COMMAND = perintah revisi (HAPUS/UBAH/TICKET/SELESAI) dari tombol web —
+    // teksnya sama persis dengan perintah chat, jalur pemrosesan pun sama.
+    if (action === "COMMAND" && v.role !== "EMPLOYEE") {
+      return NextResponse.json({ success: false, error: "Aksi tidak tersedia untuk role ini" }, { status: 400 });
+    }
+    const commandText = action === "COMMAND" ? String(body.text || "").trim().slice(0, 500) : "";
+    if (action === "COMMAND" && !commandText) {
+      return NextResponse.json({ success: false, error: "Perintah kosong" }, { status: 400 });
     }
 
     const supabase = createServiceClient();
@@ -97,7 +126,21 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const reply = action === "APPROVE" ? "1" : action === "REVISE" ? `2 ${reason}` : reason;
+    // COMMAND hanya berlaku saat klaim benar-benar dalam fase revisi.
+    if (action === "COMMAND" && (claim.status !== "NEED_REVIEW" || !claim.approved_at)) {
+      return NextResponse.json(
+        { success: false, error: "NOT_IN_REVISION", message: "Klaim ini tidak sedang dalam revisi." },
+        { status: 409 }
+      );
+    }
+
+    const reply = action === "APPROVE"
+      ? "1"
+      : action === "REVISE"
+        ? `2 ${reason}`
+        : action === "COMMAND"
+          ? commandText
+          : reason;
     await processWebhookReply(claim, v.role, reply, v.phone);
 
     return NextResponse.json({ success: true });

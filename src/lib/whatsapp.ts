@@ -179,9 +179,9 @@ function approverMenuLines(next: string): string[] {
 }
 
 /** Baris tautan tombol — hanya muncul jika NEXT_PUBLIC_APP_URL diset. */
-function tapLines(actionUrl: string, label = "untuk SETUJU / koreksi lewat tombol"): string[] {
+function tapLines(actionUrl: string, label = "untuk setuju / koreksi"): string[] {
   return [
-    `CARA PALING GAMPANG — ketuk link ini ${label}:`,
+    `Tanpa mengetik juga bisa — ketuk link ini ${label}, tinggal tekan tombolnya:`,
     actionUrl,
     ``,
   ];
@@ -302,7 +302,7 @@ export function buildManagerApprovalMessage(params: {
     ...(params.revised
       ? [`Catatan: klaim ini pernah direvisi oleh karyawan.`, ``]
       : []),
-    ...(params.action_url ? tapLines(params.action_url, "untuk memutuskan lewat tombol") : []),
+    ...(params.action_url ? tapLines(params.action_url, "untuk memutuskan") : []),
     ...approverMenuLines("klaim diteruskan ke HR"),
   ].join("\n");
 }
@@ -334,7 +334,7 @@ export function buildHrApprovalMessage(params: {
     ...(params.revised
       ? [`Catatan: klaim ini pernah direvisi oleh karyawan.`, ``]
       : []),
-    ...(params.action_url ? tapLines(params.action_url, "untuk memutuskan lewat tombol") : []),
+    ...(params.action_url ? tapLines(params.action_url, "untuk memutuskan") : []),
     ...approverMenuLines("klaim selesai disetujui"),
   ].join("\n");
 }

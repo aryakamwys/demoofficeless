@@ -58,6 +58,17 @@ type WaSession = { claimId: string; role: WaRole; at: number };
 const waSession = new Map<string, WaSession>();
 const WA_SESSION_TTL_MS = 24 * 60 * 60 * 1000;
 
+// ============================================================
+// Anti-spam kirim-ulang. Bot memang sengaja jeda 3-7 detik; pengirim
+// yang tidak sabar sering mengirim ulang balasan yang sama. Balasan
+// IDENTIK untuk klaim YANG SAMA dalam 60 detik cukup diproses sekali —
+// dibalas info singkat (sekali, pakai cooldown anti-loop). Balasan sama
+// untuk klaim BERBEDA tetap diproses (manager approve banyak klaim
+// beruntun dengan "1").
+// ============================================================
+const lastReplyAt = new Map<string, { claimId: string; text: string; at: number }>();
+const DUP_REPLY_WINDOW_MS = 60 * 1000;
+
 // ==========================================
 // POST handler — responds immediately, processes in background
 // ==========================================
@@ -223,7 +234,7 @@ export async function POST(request: NextRequest) {
             [
               `Anda terdaftar sebagai ${asHr ? "HR" : "Manager"} pada klaim ${known.employee?.employee_name || "karyawan"} periode ${known.period}.`,
               `Klaim itu ${stage} — belum ada yang perlu Anda balas di sini.`,
-              `Anda akan menerima pesan baru saat giliran Anda.`,
+              `Nanti dapat pesan lagi kalau sudah giliran Anda.`,
             ].join("\n")
           );
           const { error: logErr } = await supabase.from("whatsapp_logs").insert({
@@ -273,6 +284,44 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ success: true, reason: "No matching claim/role" });
     }
 
+    // Balasan identik untuk klaim yang sama dalam 60 detik = kirim ulang
+    // (bot kelamaan di mata pengirim) — jangan diproses dua kali.
+    const reply = messageText.trim();
+    const lastReply = lastReplyAt.get(phoneNumber);
+    if (
+      lastReply &&
+      lastReply.claimId === claim.id &&
+      lastReply.text === reply &&
+      Date.now() - lastReply.at < DUP_REPLY_WINDOW_MS
+    ) {
+      if (autoReplyAllowed(phoneNumber)) {
+        after(async () => {
+          const result = await sendTextMessage(
+            phoneNumber,
+            [
+              `Pesan Anda yang tadi masih diproses.`,
+              `Tunggu balasannya dulu (kira-kira 7 detik) — tidak perlu dikirim ulang.`,
+            ].join("\n")
+          );
+          const { error: logErr } = await supabase.from("whatsapp_logs").insert({
+            phone_number: phoneNumber,
+            message_type: "DUP_REPLY_INFO",
+            status: result.success ? "SENT" : "FAILED",
+            response: result.success ? "kirim ulang dibalas info tunggu" : result.error || "Unknown error",
+          });
+          if (logErr) console.error("[WA] DUP_REPLY_INFO log gagal:", logErr.message);
+        });
+      }
+      return NextResponse.json({ success: true, reason: "Duplicate reply (spam-guard)" });
+    }
+    lastReplyAt.set(phoneNumber, { claimId: claim.id, text: reply, at: Date.now() });
+    if (lastReplyAt.size > 500) {
+      const now = Date.now();
+      for (const [k, v] of lastReplyAt) {
+        if (now - v.at > DUP_REPLY_WINDOW_MS * 5) lastReplyAt.delete(k);
+      }
+    }
+
     // Kunci session: balasan berikutnya dari nomor ini tetap di klaim ini.
     waSession.set(phoneNumber, { claimId: claim.id, role: role!, at: Date.now() });
     if (waSession.size > 500) {
@@ -281,8 +330,6 @@ export async function POST(request: NextRequest) {
         if (now - v.at > WA_SESSION_TTL_MS) waSession.delete(k);
       }
     }
-
-    const reply = messageText.trim();
 
     // Balas Kirimi INSTAN supaya tidak timeout/retry-dobel; pesan WA dikirim
     // di background dengan jeda anti-bot tetap. Aman di VPS (node standalone,
