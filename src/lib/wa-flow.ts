@@ -19,6 +19,8 @@ import {
   buildRevisionTripListMessage,
   buildChangeConfirmMessage,
   buildChangeAppliedMessage,
+  buildDropConfirmMessage,
+  buildDropAppliedMessage,
   buildResubmittedMessage
 } from "@/lib/whatsapp";
 import { parseWaCommand } from "@/lib/wa-commands";
@@ -501,9 +503,33 @@ async function handleRevisionCommands(
   }
 
   if (cmd.type === "CONFIRM") {
-    const pending = claim.pending_wa_change;
+    const pending = claim.pending_wa_change as
+      | { kind?: string; trip_id: string; trip_no: number; old_fare: number; new_fare: number; reason?: string }
+      | null;
     if (!pending) {
-      await sendAndLog(supabase, claim.id, employeePhone, "Tidak ada perubahan yang menunggu konfirmasi.\n\nBalas:\nLIST - daftar trip\nUBAH <no> <nominal> - ubah nominal\nSELESAI - ajukan ulang", "REVISION_INVALID");
+      await sendAndLog(supabase, claim.id, employeePhone, "Tidak ada perubahan yang menunggu konfirmasi.\n\nBalas:\nLIST - daftar trip\nUBAH <no> <nominal> - ubah nominal\nHAPUS <no> <alasan> - hapus trip\nSELESAI - ajukan ulang", "REVISION_INVALID");
+      return;
+    }
+
+    // HAPUS trip — misal rute pulang ke rumah di jam kerja yang tidak boleh
+    // diklaim. Trip keluar dari klaim, total dihitung ulang, alasan tercatat.
+    if (pending.kind === "DROP_TRIP") {
+      const { error: delErr } = await supabase.from("trips").delete().eq("id", pending.trip_id);
+      if (delErr) {
+        await sendAndLog(supabase, claim.id, employeePhone, `Gagal menghapus trip: ${delErr.message}`, "REVISION_DROP_FAILED");
+        return;
+      }
+      const { data: fares } = await supabase.from("trips").select("fare").eq("claim_id", claim.id);
+      const total = (fares || []).reduce((acc, t) => acc + Number(t.fare), 0);
+      await supabase.from("claims").update({ total_amount: total, trip_count: (fares || []).length, pending_wa_change: null }).eq("id", claim.id);
+
+      await supabase.from("comments").insert({
+        claim_id: claim.id,
+        message: `Trip ${pending.trip_no} DIHAPUS dari klaim (Rp${Number(pending.old_fare).toLocaleString("id-ID")}). Alasan: ${pending.reason || "-"}`,
+        author_name: empName,
+        author_role: "EMPLOYEE",
+      });
+      await sendAndLog(supabase, claim.id, employeePhone, buildDropAppliedMessage(pending.trip_no, Number(pending.old_fare), total), "REVISION_DROP_APPLIED");
       return;
     }
     const { error: updErr } = await supabase.from("trips").update({ fare: pending.new_fare }).eq("id", pending.trip_id);
@@ -576,6 +602,50 @@ async function handleRevisionCommands(
 
   if (cmd.type === "BAD_CHANGE") {
     await sendAndLog(supabase, claim.id, employeePhone, "Format salah. Contoh yang benar: UBAH 3 75000", "REVISION_INVALID");
+    return;
+  }
+
+  if (cmd.type === "DROP") {
+    const { data: trips } = await supabase.from("trips").select("*").eq("claim_id", claim.id).order("trip_date", { ascending: true });
+    const trip = (trips || [])[cmd.tripNo - 1];
+    if (!trip) {
+      await sendAndLog(supabase, claim.id, employeePhone, `Nomor trip ${cmd.tripNo} tidak ditemukan. Balas LIST untuk melihat daftar trip.`, "REVISION_INVALID");
+      return;
+    }
+    // Klaim tanpa trip sama sekali tidak masuk akal — arahkan ke HR/catatan.
+    if ((trips || []).length === 1) {
+      await sendAndLog(
+        supabase, claim.id, employeePhone,
+        [
+          `Trip no ${cmd.tripNo} adalah SATU-SATUNYA trip di klaim ini.`,
+          `Menghapusnya mengosongkan klaim — hubungi HR, atau tulis catatan saja.`,
+        ].join("\n"),
+        "REVISION_INVALID"
+      );
+      return;
+    }
+    if (!cmd.reason) {
+      await sendAndLog(
+        supabase, claim.id, employeePhone,
+        [
+          `Hapus trip no ${cmd.tripNo} dengan alasan apa?`,
+          `(mis. pulang ke rumah di jam kantor)`,
+          ``,
+          `Ketik: HAPUS ${cmd.tripNo} <alasan singkat>`,
+        ].join("\n"),
+        "REVISION_INVALID"
+      );
+      return;
+    }
+    await supabase.from("claims").update({
+      pending_wa_change: { kind: "DROP_TRIP", trip_id: trip.id, trip_no: cmd.tripNo, old_fare: Number(trip.fare), reason: cmd.reason },
+    }).eq("id", claim.id);
+    await sendAndLog(supabase, claim.id, employeePhone, buildDropConfirmMessage(trip, cmd.tripNo, cmd.reason), "REVISION_DROP_PROMPT");
+    return;
+  }
+
+  if (cmd.type === "BAD_DROP") {
+    await sendAndLog(supabase, claim.id, employeePhone, "Format salah. Contoh yang benar: HAPUS 3 pulang ke rumah di jam kantor", "REVISION_INVALID");
     return;
   }
 
@@ -727,6 +797,17 @@ export async function processWebhookReply(
               supabase, claim.id, employeePhone,
               "Format ticket salah. Contoh yang benar: TICKET 3 PIM-34285",
               "TICKET_INVALID"
+            );
+          }
+        } else if (cmd.type === "DROP" || cmd.type === "BAD_DROP") {
+          if (employeePhone) {
+            await sendAndLog(
+              supabase, claim.id, employeePhone,
+              [
+                `Menghapus trip hanya bisa saat REVISI — setelah Manager/HR meminta revisi.`,
+                `Sekarang Anda cukup: 1 = SETUJU, 3 = lihat detail, atau tulis catatan.`,
+              ].join("\n"),
+              "INVALID_REPLY"
             );
           }
         } else if (employeePhone && reply.replace(/\s/g, "").length < 3) {

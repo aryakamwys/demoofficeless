@@ -381,8 +381,9 @@ const CONTENT: Record<string, ReactNode> = {
         tanpa buka laptop. Tiga perintahnya:
       </P>
       <ul className="my-3 list-disc space-y-1 pl-5 text-sm text-slate-600">
-        <li><Cmd>LIST</Cmd> — lihat daftar trip bernomor.</li>
+        <li><Cmd>LIST</Cmd> — lihat daftar trip bernomor (lengkap dengan jam).</li>
         <li><Cmd>UBAH 3 75000</Cmd> — ubah trip no 3 jadi Rp75.000 (contoh).</li>
+        <li><Cmd>HAPUS 3 pulang ke rumah di jam kantor</Cmd> — hapus trip yang tidak boleh diklaim (dengan alasan, ada konfirmasi YA).</li>
         <li><Cmd>TICKET 3 PIM-34285</Cmd> — lampirkan bukti ticket EnvGate ke trip no 3.</li>
         <li><Cmd>TICKET SEMUA</Cmd> — isi ticket semua trip, dipandu satu per satu.</li>
         <li><Cmd>SELESAI</Cmd> — sudah selesai, kirim ulang ke approver.</li>
@@ -547,8 +548,23 @@ const CONTENT: Record<string, ReactNode> = {
       />
       <P>
         Karyawan lalu merevisi sendiri lewat chat (lihat <b>Panduan Karyawan</b>) — mengubah nominal
-        dengan <Cmd>UBAH</Cmd> lalu <Cmd>SELESAI</Cmd>. Setelah itu Anda menerima lagi pesan
-        klaimnya untuk keputusan berikutnya. Alur ini bisa berulang sampai Anda setuju.
+        dengan <Cmd>UBAH</Cmd>, menghapus trip yang tidak boleh diklaim dengan <Cmd>HAPUS</Cmd>,
+        lalu <Cmd>SELESAI</Cmd>. Setelah itu Anda menerima lagi pesan klaimnya untuk keputusan
+        berikutnya. Alur ini bisa berulang sampai Anda setuju.
+      </P>
+
+      <H2>Trip yang Mencurigakan (contoh: pulang ke rumah di jam kerja)</H2>
+      <P>
+        Kalau ada trip yang bukan hak klaim — misalnya rute <b>pulang ke rumah</b> pada jam
+        kerja — minta klarifikasi lewat <b>2 + alasan</b>, contoh:{" "}
+        <Cmd>2 trip 5 rutenya pulang ke rumah dan jamnya masih kerja, mohon klarifikasi</Cmd>.
+        Daftar trip di pesan menampilkan <b>jam</b> perjalanan supaya mudah dinilai.
+      </P>
+      <P>
+        Kalau memang tidak seharusnya diklaim, karyawan menghapusnya sendiri dengan{" "}
+        <Cmd>HAPUS 5 &lt;alasan&gt;</Cmd> — trip keluar dari klaim, total biaya dihitung ulang,
+        dan alasannya tercatat sebagai note untuk audit. Klaim dengan trip yang sudah dihapus
+        tetap tampil rapi di Report PDF.
       </P>
 
       <H2>Cara Paling Mudah: Tombol</H2>

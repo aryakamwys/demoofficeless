@@ -29,6 +29,28 @@ test("revise: dengan dan tanpa alasan", () => {
   assert.notEqual(parseWaCommand("23").type, "REVISE");
 });
 
+test("hapus: dengan dan tanpa alasan", () => {
+  assert.deepEqual(parseWaCommand("hapus 3 pulang ke rumah di jam kantor"), {
+    type: "DROP",
+    tripNo: 3,
+    reason: "pulang ke rumah di jam kantor",
+  });
+  assert.deepEqual(parseWaCommand("HAPUS 3"), {
+    type: "DROP",
+    tripNo: 3,
+    reason: "",
+  });
+  // alias bahasa Inggris + huruf kecil
+  assert.deepEqual(parseWaCommand("drop 2 lembur di rumah"), {
+    type: "DROP",
+    tripNo: 2,
+    reason: "lembur di rumah",
+  });
+  // tanpa nomor trip → bantuan, bukan note
+  assert.equal(parseWaCommand("hapus").type, "BAD_DROP");
+  assert.equal(parseWaCommand("hapus pulang").type, "BAD_DROP");
+});
+
 test("ubah: format nominal", () => {
   assert.deepEqual(parseWaCommand("ubah 3 75000"), {
     type: "CHANGE",

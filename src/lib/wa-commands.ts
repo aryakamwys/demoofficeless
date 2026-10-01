@@ -10,6 +10,8 @@ export type WaCommand =
   | { type: "LIST" }
   | { type: "CHANGE"; tripNo: number; newFare: number }
   | { type: "BAD_CHANGE" }
+  | { type: "DROP"; tripNo: number; reason: string }
+  | { type: "BAD_DROP" }
   | { type: "CONFIRM" }
   | { type: "CANCEL" }
   | { type: "DONE" }
@@ -65,6 +67,16 @@ export function parseWaCommand(raw: string): WaCommand {
       return { type: "CHANGE", tripNo, newFare: fare };
     }
     return { type: "BAD_CHANGE" };
+  }
+
+  // "HAPUS 3 pulang ke rumah di jam kantor" — hapus trip dari klaim.
+  // Alasan opsional di parser; flow yang meminta alasannya jika kosong.
+  if (/^(HAPUS|DROP)(\s|$)/.test(upper)) {
+    const m = input.match(/^\S+\s+(\d{1,3})\b\s*(.*)$/i);
+    if (m && Number(m[1]) > 0) {
+      return { type: "DROP", tripNo: Number(m[1]), reason: (m[2] || "").trim() };
+    }
+    return { type: "BAD_DROP" };
   }
 
   // "TICKET 3 PIM-34285" — pasang bukti ticket EnvGate pada trip no 3

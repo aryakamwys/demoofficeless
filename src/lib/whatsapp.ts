@@ -379,7 +379,12 @@ function formatAmount(n: number | string): string {
 function formatTripDate(dateStr: string): string {
   const date = new Date(dateStr);
   const monthNames = ["Jan", "Feb", "Mar", "Apr", "Mei", "Jun", "Jul", "Agu", "Sep", "Okt", "Nov", "Des"];
-  return `${date.getDate().toString().padStart(2, "0")} ${monthNames[date.getMonth()]}`;
+  const day = date.getDate().toString().padStart(2, "0");
+  const base = `${day} ${monthNames[date.getMonth()]}`;
+  // Jam ditampilkan kalau ada (00:00 = data tanpa jam) — penting untuk
+  // menilai trip pulang/berangkat di luar jam kerja.
+  const hm = `${date.getHours().toString().padStart(2, "0")}:${date.getMinutes().toString().padStart(2, "0")}`;
+  return hm === "00:00" ? base : `${base} ${hm}`;
 }
 
 /**
@@ -406,7 +411,9 @@ export function buildRevisionRequestMessage(params: {
     `3. Ketik TICKET <nomor trip> <id ticket> - contoh: TICKET 3 PIM-34285`,
     `   (melampirkan bukti ticket EnvGate ke trip no 3)`,
     `   Banyak trip? Ketik TICKET SEMUA - diarahkan satu per satu.`,
-    `4. Ketik SELESAI - klaim dikirim ulang ke ${roleLabel}`,
+    `4. Ketik HAPUS <nomor trip> <alasan> - hapus trip yang tidak boleh`,
+    `   diklaim. Contoh: HAPUS 3 pulang ke rumah di jam kantor`,
+    `5. Ketik SELESAI - klaim dikirim ulang ke ${roleLabel}`,
     ``,
     `Bisa juga tulis catatan untuk ${roleLabel} — langsung balas pesan ini.`,
   ].join("\n");
@@ -432,6 +439,7 @@ export function buildRevisionTripListMessage(
     ``,
     `Balas:`,
     `UBAH <no> <nominal> - ubah nominal, contoh: UBAH 3 75000`,
+    `HAPUS <no> <alasan> - hapus trip, contoh: HAPUS 3 pulang ke rumah di jam kantor`,
     `TICKET <no> <id> - lampirkan bukti ticket, contoh: TICKET 3 PIM-34285`,
     `TICKET SEMUA - isi ticket satu per satu untuk semua trip`,
     `SELESAI - sudah selesai, kirim ulang ke approver`,
@@ -471,6 +479,42 @@ export function buildChangeAppliedMessage(
     `Total klaim sekarang: ${formatAmount(newTotal)}`,
     ``,
     `Masih ada yang mau diubah? Ketik UBAH lagi (atau LIST).`,
+    `Sudah selesai? Ketik SELESAI.`,
+  ].join("\n");
+}
+
+/**
+ * Konfirmasi sebelum trip dihapus dari klaim — jalur uang & merusak
+ * (data trip hilang), wajib YA/BATAL seperti UBAH.
+ */
+export function buildDropConfirmMessage(
+  trip: WaTripLine,
+  tripNo: number,
+  reason: string
+): string {
+  return [
+    `KONFIRMASI HAPUS TRIP - trip no ${tripNo}`,
+    `${formatTripDate(trip.trip_date)}: ${trip.pickup} -> ${trip.dropoff} (${formatAmount(trip.fare)})`,
+    `Alasan: ${reason}`,
+    ``,
+    `Trip ini akan DIHAPUS dari klaim dan tidak dihitung lagi.`,
+    `Balas YA untuk HAPUS, atau BATAL untuk membatalkan.`,
+  ].join("\n");
+}
+
+/**
+ * Setelah trip dihapus + total dihitung ulang.
+ */
+export function buildDropAppliedMessage(
+  tripNo: number,
+  fare: number,
+  newTotal: number
+): string {
+  return [
+    `SUDAH DIHAPUS. Trip no ${tripNo} (${formatAmount(fare)}) keluar dari klaim.`,
+    `Total klaim sekarang: ${formatAmount(newTotal)}`,
+    ``,
+    `Masih ada yang mau diubah/dihapus? Ketik UBAH / HAPUS (atau LIST).`,
     `Sudah selesai? Ketik SELESAI.`,
   ].join("\n");
 }
