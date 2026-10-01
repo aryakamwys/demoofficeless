@@ -274,10 +274,15 @@ export default function ApprovePage() {
                 <span className="rounded-full bg-blue-50 px-2.5 py-1 text-[11px] font-semibold text-blue-700">
                   Anda: {ROLE_LABEL[state.data.role] || state.data.role}
                 </span>
-                <span className="text-[12px] font-medium text-slate-500">Periode {state.data.claim.period}</span>
               </div>
 
-              <h1 className="mt-3 text-lg font-bold text-slate-900">{state.data.claim.employee_name}</h1>
+              <h1 className="mt-3 text-lg font-bold leading-snug text-slate-900">
+                {state.data.role === "EMPLOYEE" ? "Klaim periode" : `${state.data.claim.employee_name} — periode`}{" "}
+                <span className="text-blue-700">{state.data.claim.period}</span>
+              </h1>
+              {state.data.role === "EMPLOYEE" && (
+                <p className="mt-0.5 text-[13px] text-slate-600">Atas nama Anda sendiri.</p>
+              )}
               <p className="mt-0.5 text-[13px] leading-relaxed text-slate-600">
                 {state.data.role === "EMPLOYEE"
                   ? state.data.in_revision

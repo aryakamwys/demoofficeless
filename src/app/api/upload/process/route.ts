@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServerClient, createServiceClient } from "@/lib/supabase-server";
 import { parseGrabCSV, parseGrabPDF, groupTripsByEmployee } from "@/lib/parser";
+import { mismatchedDominantMonth } from "@/lib/upload-period";
 
 export async function POST(request: NextRequest) {
   const supabase = await createServerClient();
@@ -72,17 +73,48 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Periode pilihan vs isi file beda bulan → tolak sebelum bikin klaim.
+    const mismatch = mismatchedDominantMonth(trips, upload.period);
+    if (mismatch) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: `File ini isinya perjalanan bulan ${mismatch.actualMonth}, tapi periodenya dipilih ${mismatch.expected}. Pilih periode yang benar lalu upload ulang.`,
+        },
+        { status: 400 }
+      );
+    }
+
     // Group trips by employee
     const grouped = groupTripsByEmployee(trips);
 
+    // Cegah klaim ganda: karyawan yang SUDAH punya klaim pada periode yang
+    // sama tidak dibuatkan lagi (upload ulang statement = sumber duplikat —
+    // dua klaim aktif berarti dua pesan WA dan dua approval untuk hal yang sama).
+    const withMatch = grouped.map((group) => ({
+      group,
+      emp: employees?.find(
+        (e) => e.employee_name.toLowerCase() === group.employee_name.toLowerCase()
+      ),
+    }));
+    const matchedIds = withMatch.filter((x) => x.emp).map((x) => x.emp!.id);
+    const existing = new Set<string>();
+    if (matchedIds.length > 0) {
+      const { data: dupeClaims } = await supabase
+        .from("claims")
+        .select("employee_id")
+        .eq("period", upload.period)
+        .in("employee_id", matchedIds);
+      for (const c of dupeClaims || []) if (c.employee_id) existing.add(c.employee_id);
+    }
+    const fresh = withMatch.filter((x) => !x.emp || !existing.has(x.emp.id));
+    const skippedDuplicate = withMatch
+      .filter((x) => x.emp && existing.has(x.emp.id))
+      .map((x) => x.group.employee_name);
+
     // Batch: satu insert untuk semua claim + satu insert untuk semua trip.
     // (Sebelumnya 2 round-trip per employee berurutan — sumber lambatnya proses upload.)
-    const claimRows = grouped.map((group) => {
-      const matchedEmployee = employees?.find(
-        (emp) =>
-          emp.employee_name.toLowerCase() ===
-          group.employee_name.toLowerCase()
-      );
+    const claimRows = fresh.map(({ group, emp: matchedEmployee }) => {
       return {
         employee_id: matchedEmployee?.id || null,
         upload_id: upload.id,
@@ -95,12 +127,36 @@ export async function POST(request: NextRequest) {
       };
     });
 
+    // Semua karyawan di file sudah punya klaim periode ini → tidak ada yang baru.
+    if (claimRows.length === 0) {
+      await supabase
+        .from("uploads")
+        .update({ status: "PROCESSED" })
+        .eq("id", upload_id);
+      return NextResponse.json({
+        success: true,
+        data: { claims_created: 0, skipped_duplicate: skippedDuplicate },
+      });
+    }
+
     const { data: claims, error: claimsError } = await supabase
       .from("claims")
       .insert(claimRows)
       .select("id");
 
     if (claimsError || !claims) {
+      // Race dua upload bersamaan bisa kena unique index (017) — jangan
+      // gagal total, laporkan saja sebagai dilewati.
+      if (claimsError?.code === "23505") {
+        await supabase
+          .from("uploads")
+          .update({ status: "PROCESSED" })
+          .eq("id", upload_id);
+        return NextResponse.json({
+          success: true,
+          data: { claims_created: 0, skipped_duplicate: skippedDuplicate },
+        });
+      }
       return NextResponse.json(
         { success: false, error: "Gagal membuat claim: " + claimsError?.message },
         { status: 500 }
@@ -109,7 +165,7 @@ export async function POST(request: NextRequest) {
 
     // ponytail: cocokkan trip ke claim via urutan hasil insert (perilaku
     // Postgres multi-VALUES) — employee_id bisa null/duplikat, tak bisa jadi kunci.
-    const tripRecords = grouped.flatMap((group, i) =>
+    const tripRecords = fresh.flatMap(({ group }, i) =>
       group.trips.map((t) => ({
         claim_id: claims[i].id,
         trip_date: t.trip_date
@@ -141,7 +197,7 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({
       success: true,
-      data: { claims_created: claims.length },
+      data: { claims_created: claims.length, skipped_duplicate: skippedDuplicate },
     });
   } catch (error) {
     const message =

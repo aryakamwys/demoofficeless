@@ -103,7 +103,7 @@ async function proceedToHrOrFinalize(
     if (employeePhone) {
       await sendAndLog(
         supabase, claim.id, employeePhone,
-        buildEmployeeStatusUpdateMessage("FINALIZED", "Sistem", "HR"),
+        buildEmployeeStatusUpdateMessage("FINALIZED", "Sistem", "HR", claim.period),
         "EMPLOYEE_STATUS_UPDATE"
       );
     }
@@ -743,7 +743,7 @@ export async function processWebhookReply(
           ticket_wizard: null,
         }).eq("id", claim.id);
 
-        const confirmMsg = buildConfirmationMessage(hasManager ? claim.manager.employee_name : undefined);
+        const confirmMsg = buildConfirmationMessage(hasManager ? claim.manager.employee_name : undefined, claim.period);
         if (employeePhone) {
           await sendAndLog(supabase, claim.id, employeePhone, confirmMsg, "EMPLOYEE_CONFIRMATION");
         }
@@ -853,7 +853,7 @@ export async function processWebhookReply(
         await sendAndLog(
           supabase, claim.id, phoneNumber,
           [
-            `TERIMA KASIH. Klaim atas nama ${claim.employee?.employee_name || "karyawan"} sudah Anda SETUJUI.`,
+            `TERIMA KASIH. Klaim atas nama ${claim.employee?.employee_name || "karyawan"} periode ${claim.period} sudah Anda SETUJUI.`,
             `Klaim diteruskan ke HR untuk persetujuan terakhir.`,
           ].join("\n"),
           "MANAGER_CONFIRMED"
@@ -862,7 +862,7 @@ export async function processWebhookReply(
         if (employeePhone) {
           await sendAndLog(
             supabase, claim.id, employeePhone,
-            buildEmployeeStatusUpdateMessage("APPROVED", claim.manager?.employee_name || "Manager", "MANAGER"),
+            buildEmployeeStatusUpdateMessage("APPROVED", claim.manager?.employee_name || "Manager", "MANAGER", claim.period),
             "EMPLOYEE_STATUS_UPDATE"
           );
         }
@@ -903,7 +903,7 @@ export async function processWebhookReply(
         await sendAndLog(
           supabase, claim.id, phoneNumber,
           [
-            `TERIMA KASIH. Klaim atas nama ${claim.employee?.employee_name || "karyawan"} SELESAI —`,
+            `TERIMA KASIH. Klaim atas nama ${claim.employee?.employee_name || "karyawan"} periode ${claim.period} SELESAI —`,
             `disetujui Manager dan HR. Karyawan sudah dinotifikasi.`,
           ].join("\n"),
           "HR_CONFIRMED"
@@ -911,7 +911,7 @@ export async function processWebhookReply(
         if (employeePhone) {
           await sendAndLog(
             supabase, claim.id, employeePhone,
-            buildEmployeeStatusUpdateMessage("FINALIZED", claim.hr?.employee_name || "HR", "HR"),
+            buildEmployeeStatusUpdateMessage("FINALIZED", claim.hr?.employee_name || "HR", "HR", claim.period),
             "EMPLOYEE_STATUS_UPDATE"
           );
         }

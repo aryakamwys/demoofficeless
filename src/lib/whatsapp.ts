@@ -240,9 +240,10 @@ export function buildDetailMessage(
 /**
  * Build the confirmation message (after employee replies "1").
  */
-export function buildConfirmationMessage(managerName?: string): string {
+export function buildConfirmationMessage(managerName?: string, period?: string): string {
+  const p = period ? ` periode ${period}` : "";
   return [
-    `TERIMA KASIH. Data klaim Anda sudah SETUJU.`,
+    `TERIMA KASIH. Data klaim Anda${p} sudah SETUJU.`,
     ``,
     managerName
       ? `Sekarang menunggu persetujuan Manager Anda (${managerName}).`
@@ -342,14 +343,15 @@ export function buildHrApprovalMessage(params: {
 /**
  * Build the Employee Notification message (Status Update).
  */
-export function buildEmployeeStatusUpdateMessage(status: string, actorName: string, role: 'MANAGER' | 'HR'): string {
-  let msg = `Status klaim Anda: ${status}`;
+export function buildEmployeeStatusUpdateMessage(status: string, actorName: string, role: 'MANAGER' | 'HR', period?: string): string {
+  const p = period ? ` periode ${period}` : "";
+  let msg = `Status klaim Anda${p}: ${status}`;
   if (status === 'APPROVED') {
-    msg = `KABAR BAIK: klaim Anda sudah disetujui Manager (${actorName}). Sekarang menunggu persetujuan HR.`;
+    msg = `KABAR BAIK: klaim Anda${p} sudah disetujui Manager (${actorName}). Sekarang menunggu persetujuan HR.`;
   } else if (status === 'REJECTED') {
-    msg = `Mohon maaf, klaim Anda ditolak oleh ${role} (${actorName}). Hubungi HR untuk info lebih lanjut.`;
+    msg = `Mohon maaf, klaim Anda${p} ditolak oleh ${role} (${actorName}). Hubungi HR untuk info lebih lanjut.`;
   } else if (status === 'FINALIZED') {
-    msg = `SELESAI: klaim Anda sudah disetujui penuh oleh Manager dan HR (${actorName}). Terima kasih.`;
+    msg = `SELESAI: klaim Anda${p} sudah disetujui penuh oleh Manager dan HR (${actorName}). Terima kasih.`;
   }
 
   return [

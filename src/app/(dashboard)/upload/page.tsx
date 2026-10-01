@@ -113,8 +113,12 @@ export default function UploadPage() {
       const processResult = await processRes.json();
 
       if (processResult.success) {
+        const skipped: string[] = processResult.data?.skipped_duplicate || [];
+        const skippedNote = skipped.length
+          ? ` (${skipped.length} dilewati — sudah ada klaim periode ini: ${skipped.slice(0, 5).join(", ")}${skipped.length > 5 ? ", dst." : ""})`
+          : "";
         toast.success(
-          `${processResult.data.claims_created} claims berhasil dibuat`
+          `${processResult.data.claims_created} claims berhasil dibuat${skippedNote}`
         );
       } else {
         toast.error(processResult.error || "Gagal memproses file");
