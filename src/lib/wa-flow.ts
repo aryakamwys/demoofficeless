@@ -70,6 +70,37 @@ async function sendAndLog(
   return result.success;
 }
 
+/** Update klaim yang wajib berhasil — error dilempar supaya pengirim dibalas
+ *  "gagal" alih-alih diberi kabar bohong "tersimpan" (update DB bisa gagal
+ *  karena blip jaringan/koneksi DB, dan selama ini error-nya ditelan diam). */
+async function mustUpdateClaim(
+  supabase: ReturnType<typeof createServiceClient>,
+  claimId: string,
+  patch: Record<string, unknown>
+) {
+  const { error } = await supabase.from("claims").update(patch).eq("id", claimId);
+  if (error) throw new Error(`Gagal update klaim: ${error.message}`);
+}
+
+/** Catat masalah alur sebagai komentar klaim — HR melihatnya di timeline
+ *  dan bisa ambil tindakan (mis. kirim ulang pesan dari halaman klaim). */
+async function flowAlert(
+  supabase: ReturnType<typeof createServiceClient>,
+  claimId: string,
+  message: string
+) {
+  try {
+    await supabase.from("comments").insert({
+      claim_id: claimId,
+      message: `[PERINGATAN SISTEM] ${message}`,
+      author_name: "Sistem",
+      author_role: "SYSTEM",
+    });
+  } catch (e) {
+    console.error("[FLOW] flowAlert gagal ditulis:", e);
+  }
+}
+
 // Helper: proceed to HR approval or auto-finalize
 async function proceedToHrOrFinalize(
   supabase: ReturnType<typeof createServiceClient>,
@@ -93,9 +124,11 @@ async function proceedToHrOrFinalize(
       );
       if (!sent) {
         console.error(`[FLOW] STUCK: Failed to send HR approval to ${hrPhone} for claim ${claim.id}`);
+        await flowAlert(supabase, claim.id, "Pesan approval ke HR gagal terkirim (device offline/terbatas). Kirim ulang dari halaman klaim setelah device normal.");
       }
     } else {
       console.error(`[FLOW] STUCK: HR has no phone number for claim ${claim.id}`);
+      await flowAlert(supabase, claim.id, "HR klaim ini tidak punya nomor WhatsApp — approval macet. Lengkapi nomor HR di data karyawan.");
     }
   } else {
     // No HR → auto finalize
@@ -129,10 +162,11 @@ async function handleRevisionRequest(
   const actorName = actor?.employee_name || role;
 
   // Status stage tidak diubah ke REJECTED — tetap PENDING menunggu revisi
-  await supabase
-    .from("claims")
-    .update({ status: "NEED_REVIEW", pending_wa_change: null, ticket_wizard: null })
-    .eq("id", claim.id);
+  await mustUpdateClaim(supabase, claim.id, {
+    status: "NEED_REVIEW",
+    pending_wa_change: null,
+    ticket_wizard: null,
+  });
 
   await supabase.from("comments").insert({
     claim_id: claim.id,
@@ -153,7 +187,7 @@ async function handleRevisionRequest(
   );
 
   if (employeePhone) {
-    await sendAndLog(
+    const sent = await sendAndLog(
       supabase, claim.id, employeePhone,
       buildRevisionRequestMessage({
         employee_name: claim.employee?.employee_name || "Karyawan",
@@ -164,6 +198,9 @@ async function handleRevisionRequest(
       }),
       "REVISION_REQUEST"
     );
+    if (!sent) {
+      await flowAlert(supabase, claim.id, `Permintaan revisi gagal terkirim ke karyawan (${claim.employee?.employee_name || "-"}). Kirim ulang / hubungi karyawan setelah device normal.`);
+    }
   }
 }
 
@@ -535,7 +572,11 @@ async function handleRevisionCommands(
       }
       const { data: fares } = await supabase.from("trips").select("fare").eq("claim_id", claim.id);
       const total = (fares || []).reduce((acc, t) => acc + Number(t.fare), 0);
-      await supabase.from("claims").update({ total_amount: total, trip_count: (fares || []).length, pending_wa_change: null }).eq("id", claim.id);
+      await mustUpdateClaim(supabase, claim.id, {
+        total_amount: total,
+        trip_count: (fares || []).length,
+        pending_wa_change: null,
+      });
 
       await supabase.from("comments").insert({
         claim_id: claim.id,
@@ -553,7 +594,7 @@ async function handleRevisionCommands(
     }
     const { data: fares } = await supabase.from("trips").select("fare").eq("claim_id", claim.id);
     const total = (fares || []).reduce((acc, t) => acc + Number(t.fare), 0);
-    await supabase.from("claims").update({ total_amount: total, pending_wa_change: null }).eq("id", claim.id);
+    await mustUpdateClaim(supabase, claim.id, { total_amount: total, pending_wa_change: null });
 
     await supabase.from("comments").insert({
       claim_id: claim.id,
@@ -582,10 +623,11 @@ async function handleRevisionCommands(
       author_name: empName,
       author_role: "EMPLOYEE",
     });
-    await supabase
-      .from("claims")
-      .update({ status: "SENT", pending_wa_change: null, ticket_wizard: null })
-      .eq("id", claim.id);
+    await mustUpdateClaim(supabase, claim.id, {
+      status: "SENT",
+      pending_wa_change: null,
+      ticket_wizard: null,
+    });
 
     const fresh = await fetchClaimFresh(supabase, claim.id);
     if (fresh) {
@@ -690,12 +732,13 @@ async function handleRevisionCommands(
 
   // NOTE / lainnya → catatan pada klaim (dengan umpan balik jelas)
   const noteText = cmd.type === "NOTE" ? cmd.text : reply;
-  await supabase.from("comments").insert({
+  const { error: noteErr } = await supabase.from("comments").insert({
     claim_id: claim.id,
     message: noteText,
     author_name: empName,
     author_role: "EMPLOYEE",
   });
+  if (noteErr) throw new Error(`Catatan gagal tersimpan: ${noteErr.message}`);
   await sendAndLog(
     supabase, claim.id, employeePhone,
     buildNoteSavedMessage(
@@ -719,6 +762,10 @@ export async function processWebhookReply(
   phoneNumber: string,
 ) {
   const supabase = createServiceClient();
+  // Kondisi TERBARU: klaim yang dibawa webhook bisa snapshot detik-detik lalu
+  // (race dua balasan hampir bersamaan) — keputusan diambil dari data terkini.
+  const freshClaim = await fetchClaimFresh(supabase, claim.id);
+  if (freshClaim) claim = freshClaim;
   const employeePhone = normalizePhone(claim.employee?.phone_number);
 
   try {
@@ -736,12 +783,12 @@ export async function processWebhookReply(
         await handleRevisionCommands(supabase, claim, reply, employeePhone);
       } else if (reply === "1") {
         const hasManager = !!claim.manager;
-        await supabase.from("claims").update({
+        await mustUpdateClaim(supabase, claim.id, {
           approved_at: new Date().toISOString(),
           manager_status: hasManager ? "PENDING" : "APPROVED",
           hr_status: "PENDING",
           ticket_wizard: null,
-        }).eq("id", claim.id);
+        });
 
         const confirmMsg = buildConfirmationMessage(hasManager ? claim.manager.employee_name : undefined, claim.period);
         if (employeePhone) {
@@ -764,6 +811,7 @@ export async function processWebhookReply(
             );
             if (!sent) {
               console.error(`[FLOW] STUCK: Failed to send manager approval to ${mgrPhone} for claim ${claim.id}`);
+              await flowAlert(supabase, claim.id, "Pesan approval ke Manager gagal terkirim (device offline/terbatas). Kirim ulang dari halaman klaim setelah device normal.");
             }
           }
         } else {
@@ -775,7 +823,7 @@ export async function processWebhookReply(
         }
 
       } else if (reply === "2") {
-        await supabase.from("claims").update({ status: "NEED_REVIEW" }).eq("id", claim.id);
+        await mustUpdateClaim(supabase, claim.id, { status: "NEED_REVIEW" });
         if (employeePhone) {
           await sendAndLog(supabase, claim.id, employeePhone, buildCorrectionPrompt(), "CORRECTION_PROMPT");
         }
@@ -828,9 +876,10 @@ export async function processWebhookReply(
           // "eh", "?", "y" — bukan catatan, arahkan ke menu
           await sendAndLog(supabase, claim.id, employeePhone, buildEmployeeHelpMessage(), "INVALID_REPLY");
         } else if (employeePhone) {
-          await supabase.from("comments").insert({ claim_id: claim.id, message: reply });
+          const { error: noteErr } = await supabase.from("comments").insert({ claim_id: claim.id, message: reply });
+          if (noteErr) throw new Error(`Catatan gagal tersimpan: ${noteErr.message}`);
           if (claim.status !== "NEED_REVIEW") {
-            await supabase.from("claims").update({ status: "NEED_REVIEW" }).eq("id", claim.id);
+            await mustUpdateClaim(supabase, claim.id, { status: "NEED_REVIEW" });
           }
           await sendAndLog(
             supabase, claim.id, employeePhone,
@@ -849,7 +898,7 @@ export async function processWebhookReply(
     // ==========================================
     else if (role === 'MANAGER') {
       if (reply === "1") {
-        await supabase.from("claims").update({ manager_status: "APPROVED" }).eq("id", claim.id);
+        await mustUpdateClaim(supabase, claim.id, { manager_status: "APPROVED" });
         await sendAndLog(
           supabase, claim.id, phoneNumber,
           [
@@ -899,7 +948,7 @@ export async function processWebhookReply(
     // ==========================================
     else if (role === 'HR') {
       if (reply === "1") {
-        await supabase.from("claims").update({ hr_status: "APPROVED", status: "APPROVED" }).eq("id", claim.id);
+        await mustUpdateClaim(supabase, claim.id, { hr_status: "APPROVED", status: "APPROVED" });
         await sendAndLog(
           supabase, claim.id, phoneNumber,
           [
@@ -948,5 +997,25 @@ export async function processWebhookReply(
 
   } catch (error) {
     console.error(`[FLOW] Error processing ${role} reply for claim ${claim.id}:`, error);
+    // Jangan diam — tanpa kabar ini, pengirim mengira aksinya berhasil
+    // padahal tidak tersimpan apa-apa.
+    try {
+      await sendTextMessage(
+        phoneNumber,
+        [
+          `Maaf, ada kendala sistem — pesan Anda BELUM tercatat.`,
+          `Coba kirim ulang sebentar lagi. Kalau tetap gagal, hubungi HR Perkom.`,
+        ].join("\n")
+      );
+      await supabase.from("whatsapp_logs").insert({
+        claim_id: claim.id,
+        phone_number: phoneNumber,
+        message_type: "FLOW_ERROR",
+        status: "SENT",
+        response: String(error instanceof Error ? error.message : error).slice(0, 200),
+      });
+    } catch (e) {
+      console.error("[FLOW] Gagal memberi kabar error ke pengirim:", e);
+    }
   }
 }
