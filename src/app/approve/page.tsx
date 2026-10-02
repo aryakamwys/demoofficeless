@@ -5,7 +5,7 @@
 // Untuk karyawan yang diminta revisi, halaman ini jadi daftar kerja:
 // hapus trip, ubah nominal, pasang ticket — logikanya sama dengan
 // perintah chat (HAPUS/UBAH/TICKET/SELESAI).
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Image from "next/image";
 import { cn } from "@/lib/utils";
 
@@ -88,7 +88,9 @@ function shortPlace(s: string): string {
 
 export default function ApprovePage() {
   const [state, setState] = useState<Phase>({ phase: "loading" });
-  const [token, setToken] = useState("");
+  // Token dibaca sekali dari URL — ref, bukan state, supaya tidak memicu
+  // render berantai dari dalam effect (react-hooks/set-state-in-effect).
+  const tokenRef = useRef("");
   const [error, setError] = useState("");
   const [confirming, setConfirming] = useState(false);
   const [showReject, setShowReject] = useState(false);
@@ -124,9 +126,13 @@ export default function ApprovePage() {
 
   useEffect(() => {
     const t = new URLSearchParams(window.location.search).get("t") || "";
-    setToken(t);
+    tokenRef.current = t;
     if (!t) {
-      setState({ phase: "error", message: "Link-nya kurang lengkap. Buka ulang dari pesan WhatsApp." });
+      // Di luar jalur sinkron effect — hindari render berantai
+      // (react-hooks/set-state-in-effect).
+      queueMicrotask(() =>
+        setState({ phase: "error", message: "Link-nya kurang lengkap. Buka ulang dari pesan WhatsApp." })
+      );
       return;
     }
     load(t);
@@ -136,7 +142,7 @@ export default function ApprovePage() {
     fetch("/api/wa/action", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ token, ...payload }),
+      body: JSON.stringify({ token: tokenRef.current, ...payload }),
     }).then(async (res) => {
       const body = await res.json();
       if (!res.ok || !body.success) throw new Error(body.message || body.error || "Gagal memproses. Coba lagi.");
@@ -177,7 +183,7 @@ export default function ApprovePage() {
       if (after) {
         after();
       } else {
-        await load(token); // tampilkan kondisi terbaru (±7 detik; sabar ya)
+        await load(tokenRef.current); // tampilkan kondisi terbaru (±7 detik; sabar ya)
       }
     } catch (e) {
       setError(e instanceof Error ? e.message : "Gagal memproses. Coba lagi.");
