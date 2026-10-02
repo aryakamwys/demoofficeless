@@ -1,19 +1,18 @@
-# Reverse proxy utama — TLS Let's Encrypt otomatis.
-# SATU domain untuk semuanya: aplikasi + API Supabase self-host
-# (NEXT_PUBLIC_SUPABASE_URL mengarah ke domain yang sama).
+# Reverse proxy DI BELAKANG Cloudflare Tunnel.
+#
+# Topologi: browser --https--> Cloudflare edge --tunnel--> cloudflared
+#           --http://caddy:80--> Caddy ini.
+# Enkripsi browser<->Cloudflare ditangani Cloudflare. Upgrade http->https
+# harus di EDGE (Cloudflare: Always Use HTTPS), BUKAN di sini — permintaan
+# dari tunnel selalu http, redirect https di sini = loop tanpa akhir.
 
 {
-	email admin@perkom.co.id	# email akun ACME
+	auto_https off		# tanpa TLS lokal: origin plain HTTP di belakang tunnel
+	email admin@perkom.co.id
 }
 
-# HTTP → HTTPS eksplisit. Pernah terjadi: http://domain lolos sampai ke app
-# tanpa di-upgrade — cookie login (Secure) tidak pernah terpasang, sehingga
-# pengguna seolah "selalu dilempar ke login".
-http://{$APP_DOMAIN} {
-	redir https://{$APP_DOMAIN}{uri} permanent
-}
-
-{$APP_DOMAIN} {
+# Kedua hostname (app + subdomain Supabase) melayani kombinasi route yang sama.
+http://{$APP_DOMAIN}, http://{$SB_DOMAIN} {
 	encode gzip
 	request_body {
 		max_size 25MB		# upload PDF klaim
