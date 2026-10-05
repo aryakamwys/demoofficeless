@@ -23,7 +23,9 @@ export async function GET(request: NextRequest) {
 
   let query = supabase
     .from("claims")
-    .select("*, employee:employees!claims_employee_id_fkey(*)")
+    // Kolom employee dibatasi ke yang dipakai UI (nama) + pencarian (NIP) —
+    // dulu join full row: payload 500 klaim membawa semua field karyawan
+    .select("*, employee:employees!claims_employee_id_fkey(id, employee_name, employee_number)")
     .order("updated_at", { ascending: false })
     // ponytail: pengaman pertumbuhan data — dataset klaim internal jauh di
     // bawah ini; ganti ke pagination server kalau sudah mendekati

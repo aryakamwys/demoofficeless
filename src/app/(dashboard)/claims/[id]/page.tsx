@@ -13,98 +13,78 @@ export default async function ClaimDetailPage({ params }: ClaimDetailPageProps) 
   const supabase = await createServerClient();
   const serviceClient = createServiceClient();
 
-  // Fetch claim with employee
-  const { data: claim, error } = await supabase
-    .from("claims")
-    .select("*, employee:employees!claims_employee_id_fkey(*)")
-    .eq("id", id)
-    .single();
+  // Gelombang 1 — empat query independen berjalan paralel (dulu berurutan:
+  // 8 round trip database per render, dan halaman ini di-refresh otomatis
+  // tiap 10 detik oleh AutoRefresh).
+  const [claimRes, tripsRes, commentsRes, refundsRes] = await Promise.all([
+    supabase
+      .from("claims")
+      .select("*, employee:employees!claims_employee_id_fkey(*)")
+      .eq("id", id)
+      .single(),
+    supabase
+      .from("trips")
+      .select("*")
+      .eq("claim_id", id)
+      .order("trip_date", { ascending: true }),
+    supabase
+      .from("comments")
+      .select("*")
+      .eq("claim_id", id)
+      .order("created_at", { ascending: true }),
+    // Penggantian trip "tidak sesuai" — aktif + riwayat (CONFIRMED) untuk audit
+    serviceClient
+      .from("trip_refunds")
+      .select("*")
+      .eq("claim_id", id)
+      .neq("status", "CANCELLED")
+      .order("requested_at", { ascending: true }),
+  ]);
 
-  if (error || !claim) {
+  const claim = claimRes.data;
+  if (claimRes.error || !claim) {
     notFound();
   }
-
-  // Fetch trips
-  const { data: trips } = await supabase
-    .from("trips")
-    .select("*")
-    .eq("claim_id", id)
-    .order("trip_date", { ascending: true });
-
-  // Fetch comments
-  const { data: comments } = await supabase
-    .from("comments")
-    .select("*")
-    .eq("claim_id", id)
-    .order("created_at", { ascending: true });
-
-  // Penggantian trip "tidak sesuai" — aktif + riwayat (CONFIRMED) untuk audit
-  const { data: refunds } = await serviceClient
-    .from("trip_refunds")
-    .select("*")
-    .eq("claim_id", id)
-    .neq("status", "CANCELLED")
-    .order("requested_at", { ascending: true });
-
-  let ticket = null;
-  if (claim.employee?.employee_name) {
-    const { data: tickets } = await supabase
-      .from("managed_service_claims")
-      .select("*")
-      .ilike("customer_name", claim.employee.employee_name)
-      .order("created_at", { ascending: false })
-      .limit(1);
-    
-    if (tickets && tickets.length > 0) {
-      ticket = tickets[0];
-    }
-  }
+  const trips = tripsRes.data;
+  const comments = commentsRes.data;
+  const refunds = refundsRes.data;
 
   const employeeIdToUse = claim.employee_id;
   const managerIdToUse = claim.manager_id || claim.employee?.manager_id;
   const hrIdToUse = claim.hr_id || claim.employee?.hr_id;
 
-  // Fetch employee signature
-  let employee_signature = null;
-  if (employeeIdToUse) {
-    const { data: empSig } = await serviceClient
-      .from("signatures")
-      .select("signature")
-      .eq("employee_id", employeeIdToUse)
-      .single();
-    if (empSig) employee_signature = empSig.signature;
-  }
+  // Gelombang 2 — dua query yang butuh data klaim (nama employee, id approver)
+  const sigIds = [employeeIdToUse, managerIdToUse, hrIdToUse].filter(Boolean) as string[];
+  const [ticketRes, sigsRes] = await Promise.all([
+    claim.employee?.employee_name
+      ? supabase
+          .from("managed_service_claims")
+          .select("ticket_id, ticket_title, customer_name, location, storage_path")
+          .ilike("customer_name", claim.employee.employee_name)
+          .order("created_at", { ascending: false })
+          .limit(1)
+      : Promise.resolve({ data: null }),
+    // Tiga query tanda tangan (employee/manager/HR) digabung satu `.in()`
+    sigIds.length
+      ? serviceClient
+          .from("signatures")
+          .select("employee_id, signature")
+          .in("employee_id", sigIds)
+      : Promise.resolve({ data: null }),
+  ]);
 
-  // Fetch manager signature
-  let manager_signature = null;
-  if (managerIdToUse) {
-    const { data: managerSig } = await serviceClient
-      .from("signatures")
-      .select("signature")
-      .eq("employee_id", managerIdToUse)
-      .single();
-    if (managerSig) manager_signature = managerSig.signature;
-  }
-
-  // Fetch HR signature
-  let hr_signature = null;
-  if (hrIdToUse) {
-    const { data: hrSig } = await serviceClient
-      .from("signatures")
-      .select("signature")
-      .eq("employee_id", hrIdToUse)
-      .single();
-    if (hrSig) hr_signature = hrSig.signature;
-  }
+  const ticket = ticketRes.data?.[0] ?? null;
+  const sigOf = (empId: string | null | undefined) =>
+    (sigsRes.data || []).find((s: { employee_id: string }) => s.employee_id === empId)?.signature ?? null;
 
   const claimDetail: ClaimDetail = {
     ...claim,
     trips: trips || [],
     comments: comments || [],
     ticket,
-    manager_signature,
-    hr_signature,
-    employee_signature,
+    manager_signature: sigOf(managerIdToUse),
+    hr_signature: sigOf(hrIdToUse),
+    employee_signature: sigOf(employeeIdToUse),
     refunds: refunds || []
   };
 

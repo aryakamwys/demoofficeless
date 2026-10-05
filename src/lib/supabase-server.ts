@@ -1,6 +1,6 @@
 import { createServerClient as createServerSupabaseClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
-import { createClient } from "@supabase/supabase-js";
+import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 
 export async function createServerClient() {
   const cookieStore = await cookies();
@@ -27,15 +27,23 @@ export async function createServerClient() {
   );
 }
 
+// Client service-role bersifat stateless (fetch, tanpa session) — dibuat
+// sekali per proses, bukan per request, supaya tidak ada alokasi objek
+// berulang di setiap route yang memakainya.
+let serviceClientSingleton: SupabaseClient | null = null;
+
 export function createServiceClient() {
-  return createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!,
-    {
-      auth: {
-        autoRefreshToken: false,
-        persistSession: false,
-      },
-    }
-  );
+  if (!serviceClientSingleton) {
+    serviceClientSingleton = createClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.SUPABASE_SERVICE_ROLE_KEY!,
+      {
+        auth: {
+          autoRefreshToken: false,
+          persistSession: false,
+        },
+      }
+    );
+  }
+  return serviceClientSingleton;
 }

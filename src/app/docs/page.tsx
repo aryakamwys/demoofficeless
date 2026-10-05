@@ -136,7 +136,7 @@ function Shot({ src, caption }: { src: string; caption: string }) {
   return (
     <figure className="my-5">
       {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img src={src} alt={caption} onError={() => setFailed(true)} className="w-full rounded-lg border border-slate-200 shadow-sm" />
+      <img src={src} alt={caption} onError={() => setFailed(true)} loading="lazy" decoding="async" className="w-full rounded-lg border border-slate-200 shadow-sm" />
       <figcaption className="mt-2 text-xs text-slate-500">{caption}</figcaption>
     </figure>
   );

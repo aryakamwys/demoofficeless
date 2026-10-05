@@ -9,7 +9,7 @@
 }
 
 http://{$APP_DOMAIN} {
-	encode gzip
+	encode zstd gzip
 	request_body {
 		max_size 25MB
 	}

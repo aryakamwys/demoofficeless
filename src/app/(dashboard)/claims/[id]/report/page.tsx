@@ -211,7 +211,10 @@ export default async function ClaimReportPage({ params }: ReportPageProps) {
 
   // SEMUA lookup EnvGate dijalankan paralel dan anti-runtuh: gagal/tidak-ada
   // tidak pernah membuat report error — kartu minimal tetap tampil sebagai bukti.
+  // Entity map (cache 24 jam) dilarung bersamaan dengan detail ticket supaya
+  // hanya ada satu gelombang tunggu, bukan dua berurutan.
   const needIds = [...new Set([...tripTicketIds, ...(ticket ? [digitsOf(ticket.ticket_id)] : [])])];
+  const mapsPromise = Promise.all([getPriorityMap(), getSourceMap(), getLocationsMap()]);
   const settled = await Promise.allSettled(needIds.map((tid) => getTicket(tid)));
   let envgateDown = false;
   const ticketById = new Map<string, InvTicket>();
@@ -242,12 +245,9 @@ export default async function ClaimReportPage({ params }: ReportPageProps) {
     attachmentUrl = signed?.signedUrl ?? null;
   }
 
-  // Nama priority/source/lokasi dari entity EnvGate (cache 24 jam)
-  const [priorityMap, sourceMap, locationsMap] = await Promise.all([
-    getPriorityMap(),
-    getSourceMap(),
-    getLocationsMap(),
-  ]);
+  // Nama priority/source/lokasi dari entity EnvGate (cache 24 jam) — sudah
+  // dilarung sejak awal bersama detail ticket, tinggal ditunggu di sini
+  const [priorityMap, sourceMap, locationsMap] = await mapsPromise;
 
   // Kartu ticket bergaya panel header InvGate: level klaim + satu per trip (dedup by digit)
   const namesOf = (inv: InvTicket) => ({
