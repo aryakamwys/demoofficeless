@@ -174,3 +174,10 @@ test("refund: kalimat biasa tidak terserap jadi perintah penggantian", () => {
   assert.equal(parseWaCommand("1").type, "APPROVE");
   assert.equal(parseWaCommand("SELESAI").type, "DONE");
 });
+
+test("info: INFO/STATUS dikenali, kalimat lain tidak", () => {
+  assert.equal(parseWaCommand("INFO").type, "INFO");
+  assert.equal(parseWaCommand("info").type, "INFO");
+  assert.equal(parseWaCommand("STATUS").type, "INFO");
+  assert.equal(parseWaCommand("info dong bulan apa").type, "NOTE");
+});

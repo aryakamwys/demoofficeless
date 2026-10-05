@@ -1,5 +1,6 @@
 import { createServerClient } from "@/lib/supabase-server";
 import { SummaryCards } from "@/components/dashboard/summary-cards";
+import { AutoRefresh } from "@/components/auto-refresh";
 import { DashboardSummary } from "@/types";
 
 async function getDashboardData() {
@@ -43,6 +44,7 @@ export default async function DashboardPage() {
 
   return (
     <div className="space-y-6">
+      <AutoRefresh />
       <SummaryCards summary={summary} />
     </div>
   );

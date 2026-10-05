@@ -17,6 +17,7 @@ import {
 } from "@/components/ui/select";
 import { Upload as UploadIcon, Loader2, FileText, Trash2 } from "lucide-react";
 import { toast } from "sonner";
+import { confirmAction } from "@/components/confirm-dialog";
 import { Upload } from "@/types";
 import dayjs from "dayjs";
 
@@ -60,9 +61,13 @@ export default function UploadPage() {
   // Hard delete: file di storage + baris upload (claims/trips ikut cascade)
   const handleDeleteUpload = async (id: string, filename: string) => {
     if (
-      !confirm(
-        `Hapus "${filename}"?\n\nFile di server storage dan SEMUA claim dari statement ini ikut terhapus permanen.`
-      )
+      !(await confirmAction({
+        title: `Hapus "${filename}"?`,
+        description:
+          "File di server storage dan SEMUA claim dari statement ini ikut terhapus permanen.",
+        confirmText: "Hapus Permanen",
+        danger: true,
+      }))
     )
       return;
 

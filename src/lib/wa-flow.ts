@@ -26,11 +26,11 @@ import {
   buildRefundClaimedMessage,
   buildRefundClaimedHrMessage,
   buildRefundUnclaimedMessage,
+  buildClaimInfoMessage,
   type CompanyBank,
 } from "@/lib/whatsapp";
 import { parseWaCommand } from "@/lib/wa-commands";
 import { getTicket, ticketTitle } from "@/lib/envgate";
-import { approveLink } from "@/lib/wa-link";
 
 // Helper: fetch a fresh claim with all relations
 export async function fetchClaimFresh(supabase: ReturnType<typeof createServiceClient>, claimId: string) {
@@ -308,6 +308,85 @@ async function handleRefundChat(
   }
 }
 
+/** INFO — ringkasan status klaim dalam satu balasan (tanpa scroll chat):
+ *  periode, progres ticket, penggantian, dan perintah yang relevan. */
+async function sendClaimInfo(
+  supabase: ReturnType<typeof createServiceClient>,
+  claim: ClaimWithRelations,
+  role: "EMPLOYEE" | "MANAGER" | "HR",
+  phone: string | null,
+  refunds: RefundRow[]
+) {
+  if (!phone) return;
+  const trips = await fetchTrips(supabase, claim.id);
+  const missingNos = trips.map((t, i) => (t.ticket_id ? null : i + 1)).filter((n) => n != null) as number[];
+  const empName = claim.employee?.employee_name || "Karyawan";
+
+  let stage = "";
+  let hints: string[] = [];
+  if (claim.status === "APPROVED") {
+    stage = "SELESAI — disetujui Manager & HR.";
+    hints = ["Tidak ada yang perlu dilakukan lagi."];
+  } else if (refunds.length > 0) {
+    stage = "DITAHAN — masih ada penggantian yang belum selesai.";
+    hints = ["SUDAH TF - nyatakan sudah transfer", "NOREK - lihat nominal & rekening kantor"];
+  } else if (claim.status === "NEED_REVIEW" && claim.approved_at) {
+    if (role === "EMPLOYEE") {
+      stage = "MENUNGGU REVISI ANDA (diminta oleh approver).";
+      hints = [
+        "LIST - daftar trip bernomor",
+        "UBAH <no> <nominal> - contoh: UBAH 3 75000",
+        "HAPUS <no> <alasan> - contoh: HAPUS 3 pulang ke rumah",
+        "TICKET <no> <id> - contoh: TICKET 3 PIM-34285",
+        "SELESAI - kirim ulang ke approver",
+      ];
+    } else {
+      stage = `MENUNGGU REVISI KARYAWAN (${empName}).`;
+      hints = [`Tunggu karyawan mengetik SELESAI, lalu Anda menerima pesan klaimnya lagi.`];
+    }
+  } else if (role === "MANAGER") {
+    stage = "MENUNGGU KEPUTUSAN ANDA (Manager).";
+    hints = [
+      "1 = SETUJU - teruskan ke HR",
+      "2 <alasan> = MINTA REVISI - contoh: 2 nominal trip 3 kurang tepat",
+    ];
+  } else if (role === "HR") {
+    stage = "MENUNGGU KEPUTUSAN ANDA (HR — persetujuan terakhir).";
+    hints = [
+      "1 = SETUJU - klaim selesai",
+      "2 <alasan> = MINTA REVISI - contoh: 2 nominal trip 3 kurang tepat",
+    ];
+  } else {
+    stage =
+      claim.status === "NEED_REVIEW"
+        ? "Menunggu pemeriksaan Anda (ada catatan dari Anda)."
+        : "MENUNGGU KONFIRMASI ANDA.";
+    hints = [
+      "1 = SETUJU - semua data benar",
+      "3 = lihat detail alamat lengkap",
+      "TICKET <no> <id> - lampirkan ticket EnvGate, contoh: TICKET 3 PIM-34285",
+      "atau balas tulisan bebas — jadi catatan untuk HR",
+    ];
+  }
+
+  await sendAndLog(
+    supabase, claim.id, phone,
+    buildClaimInfoMessage({
+      viewer_role: role,
+      employee_name: empName,
+      period: claim.period,
+      trip_count: trips.length,
+      total_amount: claim.total_amount,
+      stage,
+      ticket_count: trips.length - missingNos.length,
+      tickets_missing: missingNos,
+      refunds: refunds.map((r) => ({ no: r.trip_no, amount: Number(r.amount), status: r.status })),
+      hints,
+    }),
+    "CLAIM_INFO"
+  );
+}
+
 // Helper: proceed to HR approval or auto-finalize
 async function proceedToHrOrFinalize(
   supabase: ReturnType<typeof createServiceClient>,
@@ -325,7 +404,6 @@ async function proceedToHrOrFinalize(
           period: claim.period,
           total_amount: claim.total_amount,
           trips: claim.trips || [],
-          action_url: approveLink(claim.id, hrPhone, "HR"),
         }),
         "HR_APPROVAL_PROMPT"
       );
@@ -794,7 +872,7 @@ async function handleRevisionCommands(
       | { kind?: string; trip_id: string; trip_no: number; old_fare: number; new_fare: number; reason?: string }
       | null;
     if (!pending) {
-      await sendAndLog(supabase, claim.id, employeePhone, "Tidak ada perubahan yang menunggu konfirmasi.\n\nBalas:\nLIST - daftar trip\nUBAH <no> <nominal> - ubah nominal\nHAPUS <no> <alasan> - hapus trip\nSELESAI - ajukan ulang", "REVISION_INVALID");
+      await sendAndLog(supabase, claim.id, employeePhone, "Tidak ada perubahan yang menunggu konfirmasi.\n\nBalas:\n- LIST - daftar trip\n- UBAH <no> <nominal> - ubah nominal\n- HAPUS <no> <alasan> - hapus trip\n- SELESAI - ajukan ulang", "REVISION_INVALID");
       return;
     }
 
@@ -883,7 +961,6 @@ async function handleRevisionCommands(
               total_amount: fresh.total_amount,
               trips: fresh.trips || [],
               revised: true,
-              action_url: approveLink(claim.id, mgrPhone, "MANAGER"),
             }),
             "MANAGER_APPROVAL_PROMPT"
           );
@@ -1039,11 +1116,15 @@ export async function processWebhookReply(
       const wizActive =
         wiz != null && Array.isArray(wiz.queue) && wiz.i != null && wiz.i < wiz.queue.length
         && claim.status !== "APPROVED"; // klaim selesai = mode ticket hangus
+      const parsedCmd = parseWaCommand(reply);
       const isDecision = new Set([
         "APPROVE", "REVISE", "DROP", "CHANGE", "CONFIRM",
         "REFUND_CLAIM", "REFUND_UNCLAIM", "REFUND_INFO",
-      ]).has(parseWaCommand(reply).type);
-      if (wizActive && wiz && !isDecision) {
+      ]).has(parsedCmd.type);
+      // INFO: ringkasan status — selalu tersedia, bahkan di tengah mode ticket
+      if (parsedCmd.type === "INFO") {
+        await sendClaimInfo(supabase, claim, "EMPLOYEE", employeePhone, refunds);
+      } else if (wizActive && wiz && !isDecision) {
         await handleWizardTurn(supabase, claim, wiz, reply, employeePhone);
       } else {
       // Keputusan menang atas mode isi ticket: tutup wizard dulu, lalu proses
@@ -1089,7 +1170,6 @@ export async function processWebhookReply(
                 period: claim.period,
                 total_amount: claim.total_amount,
                 trips: claim.trips || [],
-                action_url: approveLink(claim.id, mgrPhone, "MANAGER"),
               }),
               "MANAGER_APPROVAL_PROMPT"
             );
@@ -1186,7 +1266,9 @@ export async function processWebhookReply(
     // ROLE: MANAGER
     // ==========================================
     else if (role === 'MANAGER') {
-      if (reply === "1" && refunds.length > 0) {
+      if (parseWaCommand(reply).type === "INFO") {
+        await sendClaimInfo(supabase, claim, "MANAGER", phoneNumber, refunds);
+      } else if (reply === "1" && refunds.length > 0) {
         // Penggantian belum selesai — approval ditahan
         await sendAndLog(supabase, claim.id, phoneNumber, refundHoldMessage(refunds), "REFUND_HOLD");
       } else if (reply === "1") {
@@ -1241,7 +1323,9 @@ export async function processWebhookReply(
     // ROLE: HR
     // ==========================================
     else if (role === 'HR') {
-      if (reply === "1" && refunds.length > 0) {
+      if (parseWaCommand(reply).type === "INFO") {
+        await sendClaimInfo(supabase, claim, "HR", phoneNumber, refunds);
+      } else if (reply === "1" && refunds.length > 0) {
         // Penggantian belum selesai — approval ditahan
         await sendAndLog(supabase, claim.id, phoneNumber, refundHoldMessage(refunds), "REFUND_HOLD");
       } else if (reply === "1") {

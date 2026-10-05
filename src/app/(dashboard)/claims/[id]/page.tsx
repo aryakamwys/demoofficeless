@@ -2,6 +2,7 @@ import { createServerClient, createServiceClient } from "@/lib/supabase-server";
 import { notFound } from "next/navigation";
 import { ClaimDetail } from "@/types";
 import { ClaimDetailView } from "@/components/claims/claim-detail";
+import { AutoRefresh } from "@/components/auto-refresh";
 
 interface ClaimDetailPageProps {
   params: Promise<{ id: string }>;
@@ -107,5 +108,10 @@ export default async function ClaimDetailPage({ params }: ClaimDetailPageProps) 
     refunds: refunds || []
   };
 
-  return <ClaimDetailView claim={claimDetail} />;
+  return (
+    <>
+      <AutoRefresh />
+      <ClaimDetailView claim={claimDetail} />
+    </>
+  );
 }

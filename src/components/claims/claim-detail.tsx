@@ -11,6 +11,7 @@ import dayjs from "dayjs";
 import { useRouter } from "next/navigation";
 import { SendWADialog } from "@/components/claims/send-wa-dialog";
 import { SignaturePadDialog } from "@/components/claims/signature-pad-dialog";
+import { confirmAction } from "@/components/confirm-dialog";
 import { Trip } from "@/types";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -130,7 +131,15 @@ export function ClaimDetailView({ claim }: ClaimDetailViewProps) {
   };
 
   const handleDeleteTrip = async (trip: Trip) => {
-    if (!confirm(`Hapus trip "${trip.pickup} -> ${trip.dropoff}"?`)) return;
+    if (
+      !(await confirmAction({
+        title: "Hapus trip ini?",
+        description: `${trip.pickup} -> ${trip.dropoff}`,
+        confirmText: "Hapus",
+        danger: true,
+      }))
+    )
+      return;
     const res = await fetch(`/api/trips/${trip.id}`, { method: "DELETE" });
     const result = await res.json();
     if (result.success) {
@@ -145,12 +154,13 @@ export function ClaimDetailView({ claim }: ClaimDetailViewProps) {
   // konfirmasi karyawan via WA, approval Manager & HR direset.
   const handleCancelApproval = async () => {
     if (
-      !confirm(
-        "Batalkan approval klaim ini?\n\n" +
-          "Klaim dikembalikan ke menunggu konfirmasi karyawan (balas 1 di WhatsApp).\n" +
-          "Status approval Manager & HR direset ulang.\n" +
-          "Data trip dan ticket tidak berubah."
-      )
+      !(await confirmAction({
+        title: "Batalkan approval klaim ini?",
+        description:
+          "Klaim dikembalikan ke menunggu konfirmasi karyawan (balas 1 di WhatsApp).\nStatus approval Manager & HR direset ulang.\nData trip dan ticket tidak berubah.",
+        confirmText: "Ya, Batalkan",
+        danger: true,
+      }))
     )
       return;
     setCancelling(true);
@@ -235,13 +245,13 @@ export function ClaimDetailView({ claim }: ClaimDetailViewProps) {
     }
   };
 
-  const confirmRefund = (r: TripRefund) => {
+  const confirmRefund = async (r: TripRefund) => {
     if (
-      !confirm(
-        `Konfirmasi pembayaran diterima?\n\n` +
-          `Trip ${r.trip_no} — Rp${Number(r.amount).toLocaleString("id-ID")}\n` +
-          `Trip akan DIHAPUS dari klaim dan total dihitung ulang.`
-      )
+      !(await confirmAction({
+        title: "Konfirmasi pembayaran diterima?",
+        description: `Trip ${r.trip_no} — Rp${Number(r.amount).toLocaleString("id-ID")}\nTrip akan DIHAPUS dari klaim dan total dihitung ulang.`,
+        confirmText: "Ya, Terima",
+      }))
     )
       return;
     refundAction({ action: "confirm", refund_id: r.id }, "Pembayaran diterima — trip keluar dari klaim");
@@ -681,8 +691,16 @@ export function ClaimDetailView({ claim }: ClaimDetailViewProps) {
                           variant="outline"
                           className="border-red-200 text-red-600 hover:bg-red-50"
                           disabled={refundBusy === r.id}
-                          onClick={() => {
-                            if (confirm("Batalkan tanda tidak sesuai? Trip tetap di klaim, karyawan tidak perlu mengganti.")) {
+                          onClick={async () => {
+                            if (
+                              await confirmAction({
+                                title: "Batalkan tanda tidak sesuai?",
+                                description:
+                                  "Trip tetap di klaim, karyawan tidak perlu mengganti.",
+                                confirmText: "Ya, Batalkan",
+                                danger: true,
+                              })
+                            ) {
                               refundAction({ action: "cancel", refund_id: r.id }, "Tanda dibatalkan — trip tetap di klaim");
                             }
                           }}

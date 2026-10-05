@@ -23,6 +23,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { KeyRound, Loader2, Plus, RotateCcw, Trash2 } from "lucide-react";
+import { confirmAction } from "@/components/confirm-dialog";
 import { toast } from "sonner";
 import dayjs from "dayjs";
 
@@ -114,7 +115,15 @@ export function UserTable() {
   };
 
   const handleDelete = async (user: LoginUser) => {
-    if (!confirm(`Yakin ingin menghapus user ${user.email}?`)) return;
+    if (
+      !(await confirmAction({
+        title: "Hapus user ini?",
+        description: user.email,
+        confirmText: "Hapus",
+        danger: true,
+      }))
+    )
+      return;
 
     const res = await fetch(`/api/admin/users/${user.id}`, {
       method: "DELETE",

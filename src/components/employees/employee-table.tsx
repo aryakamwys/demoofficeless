@@ -19,6 +19,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { MoreHorizontal, Pencil, Trash2 } from "lucide-react";
 import { toast } from "sonner";
+import { confirmAction } from "@/components/confirm-dialog";
 
 interface EmployeeTableProps {
   employees: Employee[];
@@ -32,7 +33,15 @@ export function EmployeeTable({
   onRefresh,
 }: EmployeeTableProps) {
   const handleDelete = async (id: string) => {
-    if (!confirm("Yakin ingin menghapus karyawan ini?")) return;
+    if (
+      !(await confirmAction({
+        title: "Hapus karyawan ini?",
+        description: "Data karyawan yang dihapus tidak bisa dikembalikan.",
+        confirmText: "Hapus",
+        danger: true,
+      }))
+    )
+      return;
 
     const res = await fetch(`/api/employees/${id}`, { method: "DELETE" });
     const result = await res.json();

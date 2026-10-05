@@ -91,6 +91,15 @@ export default function ClaimsPage() {
     fetchClaims();
   }, [fetchClaims]);
 
+  // Update otomatis tiap 10 detik saat tab terlihat — status klaim berubah via
+  // WhatsApp langsung kelihatan tanpa refresh browser.
+  useEffect(() => {
+    const id = setInterval(() => {
+      if (document.visibilityState === "visible") fetchClaims();
+    }, 10000);
+    return () => clearInterval(id);
+  }, [fetchClaims]);
+
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     fetchPeriods();

@@ -158,6 +158,7 @@ function employeeMenuLines(): string[] {
     "1 = SETUJU - semua data benar, langsung diteruskan ke Manager",
     "2 = ADA YANG SALAH - ceritakan apa yang salah",
     "3 = LIHAT DETAIL - alamat lengkap tiap perjalanan",
+    "INFO = STATUS KLAIM - periode bulan apa, progres ticket, apa yang harus dilakukan",
     "",
     "Contoh: ketik 1 lalu kirim.",
   ];
@@ -170,15 +171,7 @@ function approverMenuLines(next: string): string[] {
     `1 = SETUJU - ${next}`,
     "2 = MINTA REVISI - ketik 2 lalu tulis alasannya",
     "   Contoh: 2 nominal trip 3 masih kurang tepat",
-  ];
-}
-
-/** Baris tautan tombol — hanya muncul jika NEXT_PUBLIC_APP_URL diset. */
-function tapLines(actionUrl: string, label = "untuk setuju / koreksi"): string[] {
-  return [
-    `Tanpa mengetik juga bisa — ketuk link ini ${label}, tinggal tekan tombolnya:`,
-    actionUrl,
-    ``,
+    "INFO = STATUS - ringkasan klaim tanpa scroll chat",
   ];
 }
 
@@ -191,7 +184,6 @@ export function buildClaimMessage(params: {
   trip_count: number;
   total_amount: number;
   trips: WaTripLine[];
-  action_url?: string;
 }): string {
   const { employee_name, period, trip_count, total_amount, trips } = params;
   return [
@@ -209,7 +201,6 @@ export function buildClaimMessage(params: {
     `TICKET <no trip> <id ticket> - contoh: TICKET 3 PIM-34285`,
     `(atau TICKET SEMUA - diarahkan isi satu per satu untuk semua trip)`,
     ``,
-    ...(params.action_url ? tapLines(params.action_url) : []),
     ...employeeMenuLines(),
   ].join("\n");
 }
@@ -281,7 +272,6 @@ export function buildManagerApprovalMessage(params: {
   total_amount: number;
   revised?: boolean;
   trips: WaTripLine[];
-  action_url?: string;
 }): string {
   const { employee_name, period, total_amount, trips } = params;
   return [
@@ -298,7 +288,6 @@ export function buildManagerApprovalMessage(params: {
     ...(params.revised
       ? [`Catatan: klaim ini pernah direvisi oleh karyawan.`, ``]
       : []),
-    ...(params.action_url ? tapLines(params.action_url, "untuk memutuskan") : []),
     ...approverMenuLines("klaim diteruskan ke HR"),
   ].join("\n");
 }
@@ -313,7 +302,6 @@ export function buildHrApprovalMessage(params: {
   total_amount: number;
   revised?: boolean;
   trips: WaTripLine[];
-  action_url?: string;
 }): string {
   const { employee_name, manager_name, period, total_amount, trips } = params;
   return [
@@ -330,7 +318,6 @@ export function buildHrApprovalMessage(params: {
     ...(params.revised
       ? [`Catatan: klaim ini pernah direvisi oleh karyawan.`, ``]
       : []),
-    ...(params.action_url ? tapLines(params.action_url, "untuk memutuskan") : []),
     ...approverMenuLines("klaim selesai disetujui"),
   ].join("\n");
 }
@@ -516,6 +503,53 @@ export function buildRefundCancelledMessage(trip_no: number, period: string): st
   ].join("\n");
 }
 
+/**
+ * INFO — ringkasan status klaim dalam satu pesan: periode (bulan apa),
+ * progres ticket, penggantian, dan perintah yang relevan saat itu.
+ * Jawaban untuk "harus scroll chat untuk cari pengajuan bulan apa".
+ */
+export function buildClaimInfoMessage(params: {
+  viewer_role: "EMPLOYEE" | "MANAGER" | "HR";
+  employee_name: string;
+  period: string;
+  trip_count: number;
+  total_amount: number;
+  stage: string;
+  ticket_count: number;
+  tickets_missing: number[];
+  refunds: Array<{ no: number; amount: number; status: string }>;
+  hints: string[];
+}): string {
+  const p = params;
+  const ownerLine =
+    p.viewer_role === "EMPLOYEE" ? `Atas nama Anda` : `Atas nama: ${p.employee_name}`;
+  return [
+    `INFO KLAIM — periode ${p.period}`,
+    `${ownerLine} · ${p.trip_count} perjalanan · Total ${formatAmount(p.total_amount)}`,
+    ``,
+    `Status: ${p.stage}`,
+    ``,
+    `Ticket EnvGate: ${p.ticket_count} dari ${p.trip_count} trip sudah ada${
+      p.tickets_missing.length > 0 ? ` — belum: trip no ${p.tickets_missing.join(", ")}` : ``
+    }`,
+    ...(p.refunds.length > 0
+      ? [
+          `Penggantian: ${p.refunds
+            .map(
+              (r) =>
+                `trip ${r.no} ${formatAmount(r.amount)}${
+                  r.status === "CLAIMED" ? " (menunggu cek HR)" : " (belum transfer)"
+                }`
+            )
+            .join("; ")}`,
+        ]
+      : []),
+    ``,
+    `YANG BISA ANDA LAKUKAN SEKARANG:`,
+    ...p.hints.map((h) => `- ${h}`),
+  ].join("\n");
+}
+
 function formatTripDate(dateStr: string): string {
   const date = new Date(dateStr);
   const monthNames = ["Jan", "Feb", "Mar", "Apr", "Mei", "Jun", "Jul", "Agu", "Sep", "Okt", "Nov", "Des"];
@@ -556,6 +590,7 @@ export function buildRevisionRequestMessage(params: {
     `5. Ketik SELESAI - klaim dikirim ulang ke ${roleLabel}`,
     ``,
     `Bisa juga tulis catatan untuk ${roleLabel} — langsung balas pesan ini.`,
+    `Ketik INFO kapan saja untuk melihat status klaim & progres ticket.`,
   ].join("\n");
 }
 
@@ -578,11 +613,12 @@ export function buildRevisionTripListMessage(
     `Total: ${formatAmount(total_amount)}`,
     ``,
     `Balas:`,
-    `UBAH <no> <nominal> - ubah nominal, contoh: UBAH 3 75000`,
-    `HAPUS <no> <alasan> - hapus trip, contoh: HAPUS 3 pulang ke rumah di jam kantor`,
-    `TICKET <no> <id> - lampirkan bukti ticket, contoh: TICKET 3 PIM-34285`,
-    `TICKET SEMUA - isi ticket satu per satu untuk semua trip`,
-    `SELESAI - sudah selesai, kirim ulang ke approver`,
+    `- UBAH <no> <nominal> - ubah nominal, contoh: UBAH 3 75000`,
+    `- HAPUS <no> <alasan> - hapus trip, contoh: HAPUS 3 pulang ke rumah di jam kantor`,
+    `- TICKET <no> <id> - lampirkan bukti ticket, contoh: TICKET 3 PIM-34285`,
+    `- TICKET SEMUA - isi ticket satu per satu untuk semua trip`,
+    `- SELESAI - sudah selesai, kirim ulang ke approver`,
+    `- INFO - status klaim & progres ticket (tanpa scroll)`,
   ].join("\n");
 }
 

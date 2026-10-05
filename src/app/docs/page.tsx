@@ -336,8 +336,8 @@ const CONTENT: Record<string, ReactNode> = {
       <P>
         Semua persetujuan klaim lewat satu bot WhatsApp. Identitas pengirim adalah
         <b> nomor WhatsApp</b> yang terdaftar di data karyawan — bot mencocokkannya dengan klaim
-        yang sedang berjalan. Ada dua cara memberi keputusan: <b>balas chat</b> (angka/perintah)
-        atau <b>ketuk link</b> di pesan lalu tekan tombolnya — keduanya menjalani pemeriksaan yang sama.
+        yang sedang berjalan. Keputusan diberikan dengan <b>membalas chat</b> (angka atau perintah);
+        setiap balasan diperiksa peran dan tahap klaimnya sebelum dijalankan.
       </P>
 
       <H2>Peta Alur Klaim</H2>
@@ -509,8 +509,7 @@ const CONTENT: Record<string, ReactNode> = {
 
       <Note>
         <b>Kenapa aman:</b> nomor WhatsApp adalah identitas — pesan dari nomor asing tidak
-        dikenali. Link tombol di pesan bertanda tangan rahasia dan hangus 7 hari; peran
-        dan tahap klaim dicek ulang setiap aksi. Semua keputusan tercatat di
+        dikenali. Peran dan tahap klaim dicek ulang setiap aksi. Semua keputusan tercatat di
         <span className="font-mono text-[11px]"> comments</span> dan
         <span className="font-mono text-[11px]"> whatsapp_logs</span> — siapa, kapan, apa.
       </Note>
@@ -604,6 +603,7 @@ const CONTENT: Record<string, ReactNode> = {
         <li><Cmd>TICKET 3 PIM-34285</Cmd> — lampirkan bukti ticket EnvGate ke trip no 3.</li>
         <li><Cmd>TICKET SEMUA</Cmd> — isi ticket semua trip, dipandu satu per satu.</li>
         <li><Cmd>SELESAI</Cmd> — sudah selesai, kirim ulang ke approver.</li>
+        <li><Cmd>INFO</Cmd> — ringkasan dalam satu balasan: periode (bulan apa), progres ticket (trip mana yang belum), penggantian, dan perintah yang bisa dipakai — tanpa perlu scroll chat.</li>
       </ul>
 
       <H2>4a. Trip ditandai &quot;tidak sesuai&quot; — ganti ke rekening kantor</H2>
@@ -710,7 +710,6 @@ const CONTENT: Record<string, ReactNode> = {
 
       <H2>Hal yang Perlu Diketahui</H2>
       <ul className="my-3 list-disc space-y-1 pl-5 text-sm text-slate-600">
-        <li><b>Tidak mau mengetik?</b> Pesan klaim menyertakan <b>tautan</b> — ketuk tautannya, lalu tekan tombol <b>SETUJU</b> atau <b>ADA YANG SALAH</b> di halaman yang terbuka. Tanpa login, tanpa mengetik angka.</li>
         <li>Huruf besar atau kecil sama saja — <Cmd>list</Cmd> = <Cmd>LIST</Cmd>.</li>
         <li>Satu pesan = satu perintah. Jangan gabung dua perintah dalam satu balasan.</li>
         <li>Bot menjawab agak lambat (3–7 detik) — itu <b>disengaja</b> agar nomor pengirim aman dari pembatasan WhatsApp. Tunggu saja, jangan kirim ulang.</li>
@@ -804,9 +803,8 @@ const CONTENT: Record<string, ReactNode> = {
 
       <H2>Cara Paling Mudah: Tombol</H2>
       <P>
-        Pesan persetujuan menyertakan <b>tautan</b> — ketuk tautannya dan halaman keputusan
-        terbuka (tanpa login): ringkasan klaim + tombol <b>✓ SETUJU</b> dan <b>✎ Minta revisi</b>
-        (revisi meminta alasan). Logikanya sama dengan membalas 1/2 di chat, tinggal pilih
+        HR juga bisa memutuskan dari halaman detail klaim di web (tombol keputusan tersedia
+        untuk klaim di tahap Anda). Logikanya sama dengan membalas 1/2 di chat — tinggal pilih
         yang paling nyaman.
       </P>
 

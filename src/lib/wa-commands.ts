@@ -19,6 +19,7 @@ export type WaCommand =
   | { type: "TICKET_ID"; ticketId: string }
   | { type: "TICKET_WIZARD" }
   | { type: "BAD_TICKET" }
+  | { type: "INFO" }
   | { type: "REFUND_CLAIM"; note: string }
   | { type: "REFUND_UNCLAIM" }
   | { type: "REFUND_INFO" }
@@ -56,6 +57,7 @@ export function parseWaCommand(raw: string): WaCommand {
 
   const upper = input.toUpperCase();
   if (upper === "LIST") return { type: "LIST" };
+  if (upper === "INFO" || upper === "STATUS") return { type: "INFO" };
   if (upper === "SELESAI") return { type: "DONE" };
   if (upper === "YA") return { type: "CONFIRM" };
   if (upper === "BATAL") return { type: "CANCEL" };
