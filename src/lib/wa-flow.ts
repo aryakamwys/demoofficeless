@@ -166,6 +166,8 @@ export async function getCompanyBank(
 function refundHoldMessage(refunds: RefundRow[]): string {
   const total = refunds.reduce((a, r) => a + Number(r.amount), 0);
   return [
+    `*Klaim Ditahan*`,
+    ``,
     `Sepertinya masih ada penggantian yang belum selesai, jadi klaimnya belum bisa lanjut dulu ya.`,
     ``,
     ...refunds.map(
@@ -175,11 +177,11 @@ function refundHoldMessage(refunds: RefundRow[]): string {
         }`
     ),
     ``,
-    `Totalnya ${rupiah(total)}.`,
+    `Totalnya *${rupiah(total)}*.`,
     ``,
-    `Transfer ke rekening kantor lalu balas SUDAH TF.`,
+    `Transfer ke rekening kantor lalu balas *SUDAH TF*.`,
     ``,
-    `Mau lihat nominal dan rekeningnya? Balas NOREK.`,
+    `Mau lihat nominal dan rekeningnya? Balas *NOREK*.`,
   ].join("\n");
 }
 
@@ -202,7 +204,7 @@ async function handleRefundChat(
     if (refunds.length === 0) {
       await sendAndLog(
         supabase, claim.id, employeePhone,
-        [`Belum ada penggantian yang menunggu untuk klaim ini.`, ``, `Ketik LIST kalau mau melihat daftar perjalanan.`].join("\n"),
+        [`*Tidak Ada Penggantian*`, ``, `Belum ada penggantian yang menunggu untuk klaim ini.`, ``, `Ketik LIST kalau mau melihat daftar perjalanan.`].join("\n"),
         "REFUND_NONE"
       );
       return;
@@ -226,9 +228,11 @@ async function handleRefundChat(
       await sendAndLog(
         supabase, claim.id, employeePhone,
         [
+          `*Sudah Tercatat*`,
+          ``,
           `Sudah kami catat ya, pada ${at}. HR sedang mencocokkannya dengan mutasi rekening.`,
           ``,
-          `Kalau itu keliru, balas BELUM TF.`,
+          `Kalau itu keliru, balas *BELUM TF*.`,
         ].join("\n"),
         "REFUND_ALREADY_CLAIMED"
       );
@@ -237,7 +241,7 @@ async function handleRefundChat(
     if (requested.length === 0) {
       await sendAndLog(
         supabase, claim.id, employeePhone,
-        [`Belum ada penggantian yang menunggu untuk klaim ini.`, ``, `Ketik LIST kalau mau melihat daftar perjalanan.`].join("\n"),
+        [`*Tidak Ada Penggantian*`, ``, `Belum ada penggantian yang menunggu untuk klaim ini.`, ``, `Ketik LIST kalau mau melihat daftar perjalanan.`].join("\n"),
         "REFUND_NONE"
       );
       return;
@@ -286,7 +290,7 @@ async function handleRefundChat(
   if (claimed.length === 0) {
     await sendAndLog(
       supabase, claim.id, employeePhone,
-      `Tidak ada status sudah transfer yang perlu dibatalkan.`,
+      `*Tidak Ada Pencatatan*\n\nTidak ada status sudah transfer yang perlu dibatalkan.`,
       "REFUND_NONE"
     );
     return;
@@ -308,7 +312,7 @@ async function handleRefundChat(
   if (hrPhone) {
     await sendAndLog(
       supabase, claim.id, hrPhone,
-      `${claim.employee?.employee_name || "Karyawan"} membatalkan pernyataan sudah transfer untuk perjalanan nomor ${claimed
+      `*Pembayaran Dibatalkan*\n\n${claim.employee?.employee_name || "Karyawan"} membatalkan pernyataan sudah transfer untuk perjalanan nomor ${claimed
         .map((r) => r.trip_no)
         .join(", ")}. Penggantiannya kembali menunggu transfer.`,
       "REFUND_UNCLAIMED_HR"
@@ -471,6 +475,8 @@ async function handleRevisionRequest(
   await sendAndLog(
     supabase, claim.id, approverPhone,
     [
+      `*Permintaan Revisi*`,
+      ``,
       `Terima kasih, permintaan revisinya sudah dicatat dan diteruskan ke ${claim.employee?.employee_name || "karyawan"} lewat WhatsApp.`,
       ``,
       `Alasannya: ${reason || "tidak disertakan"}`,
@@ -567,6 +573,8 @@ async function handleTicketCommand(
       await sendAndLog(
         supabase, claim.id, employeePhone,
         [
+          `*Perlu Nomor Perjalanan*`,
+          ``,
           `Klaim ini punya ${trips.length} perjalanan. Ticket-nya untuk perjalanan nomor berapa?`,
           ``,
           `Ketik TICKET lalu nomor perjalanan dan nomor ticketnya.`,
@@ -584,7 +592,7 @@ async function handleTicketCommand(
   if (!trip) {
     await sendAndLog(
       supabase, claim.id, employeePhone,
-      `Nomor perjalanan ${no} tidak ada, yang ada ${trips.length} perjalanan. Ketik LIST untuk melihat daftarnya ya.`,
+      `*Nomor Tidak Ada*\n\nNomor perjalanan ${no} tidak ada, yang ada ${trips.length} perjalanan. Ketik LIST untuk melihat daftarnya ya.`,
       "TICKET_INVALID"
     );
     return;
@@ -595,6 +603,8 @@ async function handleTicketCommand(
     await sendAndLog(
       supabase, claim.id, employeePhone,
       [
+        `*Ticket Tidak Ditemukan*`,
+        ``,
         `Ticket PIM-${ticketId} tidak ditemukan di EnvGate.`,
         `Boleh cek lagi nomornya, lalu kirim ulang TICKET ${no} PIM-<nomor yang benar>.`,
       ].join("\n"),
@@ -616,6 +626,8 @@ async function handleTicketCommand(
   await sendAndLog(
     supabase, claim.id, employeePhone,
     [
+      `*Ticket Tersimpan*`,
+      ``,
       `Sudah tersimpan. Perjalanan nomor ${no} sekarang punya ticket PIM-${ticketId}.`,
       inv
         ? `Judul ticketnya: ${ticketTitle(inv)}`
@@ -623,7 +635,7 @@ async function handleTicketCommand(
       ``,
       ticketProgress(fresh),
       ...(stillMissing > 1
-        ? [`Mau lanjut isi sisanya satu per satu? Ketik TICKET SEMUA.`]
+        ? [`Mau lanjut isi sisanya satu per satu? Ketik *TICKET SEMUA*.`]
         : []),
       ``,
       nextHint,
@@ -640,13 +652,15 @@ function wizardPromptLines(trips: WaTripRow[], no: number, remaining: number): s
   const t = trips[no - 1];
   const d = new Date(t.trip_date).toLocaleDateString("id-ID", { day: "2-digit", month: "short" });
   return [
+    `*Isi Ticket*`,
+    ``,
     `Kita isi ticket-nya satu per satu ya, supaya tidak tertukar. Sisa ${remaining} perjalanan lagi.`,
     ``,
     `Perjalanan nomor ${no}, ${d}, dari ${shortPlace(t.pickup)} ke ${shortPlace(t.dropoff)}.`,
     `Kirim nomor ticket untuk perjalanan ini. Contoh: PIM-34285`,
     ``,
-    `Ketik LEWATI kalau perjalanan ini tidak punya ticket.`,
-    `Ketik BATAL kalau mau berhenti dulu.`,
+    `Ketik *LEWATI* kalau perjalanan ini tidak punya ticket.`,
+    `Ketik *BATAL* kalau mau berhenti dulu.`,
   ];
 }
 
@@ -661,7 +675,7 @@ async function startTicketWizard(
   if (queue.length === 0) {
     await sendAndLog(
       supabase, claim.id, employeePhone,
-      `Semua ${trips.length} perjalanan sudah punya ticket. Tidak ada yang perlu diisi.`,
+      `*Semua Ticket Terisi*\n\nSemua ${trips.length} perjalanan sudah punya ticket. Tidak ada yang perlu diisi.`,
       "TICKET_WIZARD_EMPTY"
     );
     return;
@@ -703,7 +717,9 @@ async function handleWizardTurn(
       await sendWizard(
         [
           ...prefix,
-          `Selesai, semua perjalanan sudah diproses ticket-nya.`,
+          `*Ticket Selesai*`,
+          ``,
+          `Semua perjalanan sudah diproses ticket-nya.`,
           ticketProgress(fresh),
           ``,
           finishHint,
@@ -726,15 +742,17 @@ async function handleWizardTurn(
     await supabase.from("claims").update({ ticket_wizard: null }).eq("id", claim.id);
     await sendWizard(
       [
+        `*Mode Ticket Ditutup*`,
+        ``,
         `Baik, mode isi ticket-nya ditutup dulu. ${ticketProgress(trips)}`,
-        `Kapan saja bisa dilanjutkan lagi dengan ketik TICKET SEMUA.`,
+        `Kapan saja bisa dilanjutkan lagi dengan ketik *TICKET SEMUA*.`,
         // SELESAI di sini hanya menutup mode ticket — tanpa catatan ini
         // karyawan mengira klaimnya sudah diajukan ulang (padahal belum).
         ...(upper === "SELESAI"
           ? [
               ``,
               `Oh iya, SELESAI barusan hanya menutup mode isi ticket. Klaimnya belum diajukan ulang ya.`,
-              `Kalau maksudnya mengajukan ulang, ketik SELESAI sekali lagi.`,
+              `Kalau maksudnya mengajukan ulang, ketik *SELESAI* sekali lagi.`,
             ]
           : []),
       ],
@@ -754,7 +772,7 @@ async function handleWizardTurn(
     const trip = trips[no - 1];
     if (!trip) {
       await sendWizard(
-        [`Nomor perjalanan ${no} tidak ada, yang ada ${trips.length} perjalanan.`],
+        [`*Nomor Tidak Ada*`, ``, `Nomor perjalanan ${no} tidak ada, yang ada ${trips.length} perjalanan.`],
         "TICKET_INVALID"
       );
       return;
@@ -763,8 +781,10 @@ async function handleWizardTurn(
     if (!apiDown && !inv) {
       await sendWizard(
         [
+          `*Ticket Tidak Ditemukan*`,
+          ``,
           `Ticket PIM-${cmd.ticketId} tidak ditemukan di EnvGate.`,
-          `Kirim nomor yang benar untuk perjalanan ${no}, contohnya PIM-34285. Atau ketik LEWATI.`,
+          `Kirim nomor yang benar untuk perjalanan ${no}, contohnya PIM-34285. Atau ketik *LEWATI*.`,
         ],
         "TICKET_NOT_FOUND"
       );
@@ -781,6 +801,8 @@ async function handleWizardTurn(
 
     if (no === cur) {
       await advance([
+        `*Ticket Tersimpan*`,
+        ``,
         `Sudah tersimpan. Perjalanan nomor ${no} sekarang punya ticket PIM-${cmd.ticketId}.`,
         inv ? `Judul ticketnya: ${ticketTitle(inv)}` : "",
       ].filter(Boolean));
@@ -788,6 +810,8 @@ async function handleWizardTurn(
       // Ticket untuk trip lain — simpan, wizard tetap di trip saat ini
       await sendWizard(
         [
+          `*Ticket Tersimpan*`,
+          ``,
           `Sudah tersimpan. Perjalanan nomor ${no} sekarang punya ticket PIM-${cmd.ticketId}.`,
           ...wizardPromptLines(trips, cur, wiz.queue.length - wiz.i),
         ],
@@ -822,8 +846,10 @@ async function handleRevisionCommands(
     await sendAndLog(
       supabase, claim.id, employeePhone,
       [
+        `*Sedang Masa Revisi*`,
+        ``,
         `Klaim ini sedang menunggu revisi dari Anda ya.`,
-        `Kalau sudah beres, ketik SELESAI supaya klaimnya dikirim ulang ke approver.`,
+        `Kalau sudah beres, ketik *SELESAI* supaya klaimnya dikirim ulang ke approver.`,
       ].join("\n"),
       "REVISION_INVALID"
     );
@@ -846,7 +872,7 @@ async function handleRevisionCommands(
     const { data: trips } = await supabase.from("trips").select("*").eq("claim_id", claim.id).order("trip_date", { ascending: true });
     const trip = (trips || [])[cmd.tripNo - 1];
     if (!trip) {
-      await sendAndLog(supabase, claim.id, employeePhone, `Nomor perjalanan ${cmd.tripNo} tidak ada. Ketik LIST untuk melihat daftarnya ya.`, "REVISION_INVALID");
+      await sendAndLog(supabase, claim.id, employeePhone, `*Nomor Tidak Ada*\n\nNomor perjalanan ${cmd.tripNo} tidak ada. Ketik LIST untuk melihat daftarnya ya.`, "REVISION_INVALID");
       return;
     }
     // Trip yang ditandai "tidak sesuai" tidak boleh diubah nominalnya —
@@ -855,8 +881,10 @@ async function handleRevisionCommands(
       await sendAndLog(
         supabase, claim.id, employeePhone,
         [
+          `*Nominal Terkunci*`,
+          ``,
           `Perjalanan nomor ${cmd.tripNo} sedang menunggu penggantian, jadi nominalnya belum boleh diubah dulu ya.`,
-          `Selesaikan dulu penggantiannya: transfer ke rekening kantor lalu balas SUDAH TF.`,
+          `Selesaikan dulu penggantiannya: transfer ke rekening kantor lalu balas *SUDAH TF*.`,
         ].join("\n"),
         "REVISION_INVALID"
       );
@@ -864,7 +892,7 @@ async function handleRevisionCommands(
     }
     const oldFare = Number(trip.fare);
     if (cmd.newFare === oldFare) {
-      await sendAndLog(supabase, claim.id, employeePhone, `Nominal barunya sama dengan yang sekarang, jadi tidak ada perubahan.`, "REVISION_INVALID");
+      await sendAndLog(supabase, claim.id, employeePhone, `*Tidak Ada Perubahan*\n\nNominal barunya sama dengan yang sekarang, jadi tidak ada perubahan.`, "REVISION_INVALID");
       return;
     }
     await supabase.from("claims").update({
@@ -882,6 +910,8 @@ async function handleRevisionCommands(
       await sendAndLog(
         supabase, claim.id, employeePhone,
         [
+          `*Tidak Ada Perubahan*`,
+          ``,
           `Tidak ada perubahan yang menunggu konfirmasi.`,
           ``,
           `Ketik LIST untuk melihat daftar perjalanan, UBAH atau HAPUS untuk mengubah, atau SELESAI untuk mengajukan ulang.`,
@@ -896,7 +926,7 @@ async function handleRevisionCommands(
     if (pending.kind === "DROP_TRIP") {
       const { error: delErr } = await supabase.from("trips").delete().eq("id", pending.trip_id);
       if (delErr) {
-        await sendAndLog(supabase, claim.id, employeePhone, `Maaf, gagal menghapus perjalanan. Coba lagi sebentar lagi ya. (${delErr.message})`, "REVISION_DROP_FAILED");
+        await sendAndLog(supabase, claim.id, employeePhone, `*Gagal Memproses*\n\nMaaf, gagal menghapus perjalanan. Coba lagi sebentar lagi ya. (${delErr.message})`, "REVISION_DROP_FAILED");
         return;
       }
       const { data: fares } = await supabase.from("trips").select("fare").eq("claim_id", claim.id);
@@ -918,7 +948,7 @@ async function handleRevisionCommands(
     }
     const { error: updErr } = await supabase.from("trips").update({ fare: pending.new_fare }).eq("id", pending.trip_id);
     if (updErr) {
-      await sendAndLog(supabase, claim.id, employeePhone, `Maaf, gagal menyimpan perubahan. Coba lagi sebentar lagi ya. (${updErr.message})`, "REVISION_CHANGE_FAILED");
+      await sendAndLog(supabase, claim.id, employeePhone, `*Gagal Memproses*\n\nMaaf, gagal menyimpan perubahan. Coba lagi sebentar lagi ya. (${updErr.message})`, "REVISION_CHANGE_FAILED");
       return;
     }
     const { data: fares } = await supabase.from("trips").select("fare").eq("claim_id", claim.id);
@@ -939,7 +969,7 @@ async function handleRevisionCommands(
     if (claim.pending_wa_change) {
       await supabase.from("claims").update({ pending_wa_change: null }).eq("id", claim.id);
     }
-    await sendAndLog(supabase, claim.id, employeePhone, "Baik, perubahannya dibatalkan.", "REVISION_CANCELLED");
+    await sendAndLog(supabase, claim.id, employeePhone, "*Perubahan Dibatalkan*\n\nBaik, perubahannya dibatalkan.", "REVISION_CANCELLED");
     return;
   }
 
@@ -990,7 +1020,7 @@ async function handleRevisionCommands(
   }
 
   if (cmd.type === "BAD_CHANGE") {
-    await sendAndLog(supabase, claim.id, employeePhone, "Formatnya belum tepat. Contoh yang benar: UBAH 3 75000", "REVISION_INVALID");
+    await sendAndLog(supabase, claim.id, employeePhone, "*Format Salah*\n\nFormatnya belum tepat. Contoh yang benar: UBAH 3 75000", "REVISION_INVALID");
     return;
   }
 
@@ -998,7 +1028,7 @@ async function handleRevisionCommands(
     const { data: trips } = await supabase.from("trips").select("*").eq("claim_id", claim.id).order("trip_date", { ascending: true });
     const trip = (trips || [])[cmd.tripNo - 1];
     if (!trip) {
-      await sendAndLog(supabase, claim.id, employeePhone, `Nomor perjalanan ${cmd.tripNo} tidak ada. Ketik LIST untuk melihat daftarnya ya.`, "REVISION_INVALID");
+      await sendAndLog(supabase, claim.id, employeePhone, `*Nomor Tidak Ada*\n\nNomor perjalanan ${cmd.tripNo} tidak ada. Ketik LIST untuk melihat daftarnya ya.`, "REVISION_INVALID");
       return;
     }
     // Trip bertanda "tidak sesuai" hanya keluar lewat penggantian —
@@ -1007,11 +1037,13 @@ async function handleRevisionCommands(
       await sendAndLog(
         supabase, claim.id, employeePhone,
         [
+          `*Tidak Bisa Dihapus*`,
+          ``,
           `Perjalanan nomor ${cmd.tripNo} ditandai tidak sesuai oleh HR, jadi tidak bisa dihapus sendiri.`,
-          `Biayanya harus diganti: transfer ke rekening kantor lalu balas SUDAH TF.`,
+          `Biayanya harus diganti: transfer ke rekening kantor lalu balas *SUDAH TF*.`,
           `Setelah uangnya diterima HR, perjalanan ini otomatis keluar dari klaim.`,
           ``,
-          `Mau lihat nominal dan rekeningnya? Balas NOREK.`,
+          `Mau lihat nominal dan rekeningnya? Balas *NOREK*.`,
         ].join("\n"),
         "REVISION_INVALID"
       );
@@ -1022,6 +1054,8 @@ async function handleRevisionCommands(
       await sendAndLog(
         supabase, claim.id, employeePhone,
         [
+          `*Tidak Bisa Dihapus*`,
+          ``,
           `Perjalanan nomor ${cmd.tripNo} satu satunya di klaim ini.`,
           `Kalau dihapus, klaimnya jadi kosong. Lebih baik hubungi HR atau tulis catatan saja ya.`,
         ].join("\n"),
@@ -1033,6 +1067,8 @@ async function handleRevisionCommands(
       await sendAndLog(
         supabase, claim.id, employeePhone,
         [
+          `*Perlu Alasan*`,
+          ``,
           `Hapus perjalanan nomor ${cmd.tripNo} dengan alasan apa? Misalnya pulang ke rumah di jam kantor.`,
           ``,
           `Ketik HAPUS ${cmd.tripNo} lalu alasannya.`,
@@ -1049,7 +1085,7 @@ async function handleRevisionCommands(
   }
 
   if (cmd.type === "BAD_DROP") {
-    await sendAndLog(supabase, claim.id, employeePhone, "Formatnya belum tepat. Contoh yang benar: HAPUS 3 pulang ke rumah di jam kantor", "REVISION_INVALID");
+    await sendAndLog(supabase, claim.id, employeePhone, "*Format Salah*\n\nFormatnya belum tepat. Contoh yang benar: HAPUS 3 pulang ke rumah di jam kantor", "REVISION_INVALID");
     return;
   }
 
@@ -1072,7 +1108,7 @@ async function handleRevisionCommands(
   if (cmd.type === "BAD_TICKET") {
     await sendAndLog(
       supabase, claim.id, employeePhone,
-      "Format ticketnya belum tepat. Contoh yang benar: TICKET 3 PIM-34285",
+      "*Format Salah*\n\nFormat ticketnya belum tepat. Contoh yang benar: TICKET 3 PIM-34285",
       "TICKET_INVALID"
     );
     return;
@@ -1148,7 +1184,7 @@ export async function processWebhookReply(
         if (employeePhone) {
           await sendAndLog(
             supabase, claim.id, employeePhone,
-            `Oh iya, mode isi ticket-nya kami tutup dulu karena Anda mengirim perintah lain. Nanti bisa dilanjutkan lagi dengan ketik TICKET SEMUA.`,
+            `*Mode Ticket Ditutup*\n\nOh iya, mode isi ticket-nya kami tutup dulu karena Anda mengirim perintah lain. Nanti bisa dilanjutkan lagi dengan ketik *TICKET SEMUA*.`,
             "TICKET_WIZARD_AUTOCLOSE"
           );
         }
@@ -1236,7 +1272,7 @@ export async function processWebhookReply(
           if (employeePhone) {
             await sendAndLog(
               supabase, claim.id, employeePhone,
-              "Format ticketnya belum tepat. Contoh yang benar: TICKET 3 PIM-34285",
+              "*Format Salah*\n\nFormat ticketnya belum tepat. Contoh yang benar: TICKET 3 PIM-34285",
               "TICKET_INVALID"
             );
           }
@@ -1245,8 +1281,10 @@ export async function processWebhookReply(
             await sendAndLog(
               supabase, claim.id, employeePhone,
               [
+                `*Hanya Saat Revisi*`,
+                ``,
                 `Menghapus perjalanan hanya bisa saat masa revisi, setelah Manager atau HR meminta revisi.`,
-                `Sekarang cukup ketik 1 untuk setuju, 3 untuk lihat detail, atau tulis catatan.`,
+                `Sekarang cukup ketik *1* untuk setuju, *3* untuk lihat detail, atau tulis catatan.`,
               ].join("\n"),
               "INVALID_REPLY"
             );
@@ -1293,6 +1331,8 @@ export async function processWebhookReply(
         await sendAndLog(
           supabase, claim.id, phoneNumber,
           [
+            `*Klaim Disetujui*`,
+            ``,
             `Terima kasih. Klaim atas nama ${claim.employee?.employee_name || "karyawan"} periode ${claim.period} sudah Anda setujui.`,
             ``,
             `Sekarang diteruskan ke HR untuk persetujuan terakhir.`,
@@ -1321,10 +1361,12 @@ export async function processWebhookReply(
           await sendAndLog(
             supabase, claim.id, phoneNumber,
             [
+              `*Bantuan*`,
+              ``,
               `Maaf, pesannya belum saya paham.`,
               ``,
-              `Ketik 1 untuk menyetujui klaim ini.`,
-              `Ketik 2 diikuti alasan untuk meminta revisi. Contoh: 2 nominal perjalanan nomor 3 masih salah.`,
+              `Ketik *1* untuk menyetujui klaim ini.`,
+              `Ketik *2* diikuti alasan untuk meminta revisi. Contoh: 2 nominal perjalanan nomor 3 masih salah.`,
               ``,
               `Ada pertanyaan lain soal klaim ini? Tanyakan langsung ke HR Perkom ya.`,
             ].join("\n"),
@@ -1348,6 +1390,8 @@ export async function processWebhookReply(
         await sendAndLog(
           supabase, claim.id, phoneNumber,
           [
+            `*Klaim Selesai*`,
+            ``,
             `Terima kasih. Klaim atas nama ${claim.employee?.employee_name || "karyawan"} periode ${claim.period} selesai, sudah disetujui Manager dan HR.`,
             ``,
             `Karyawannya sudah kami kabari.`,
@@ -1369,10 +1413,12 @@ export async function processWebhookReply(
           await sendAndLog(
             supabase, claim.id, phoneNumber,
             [
+              `*Bantuan*`,
+              ``,
               `Maaf, pesannya belum saya paham.`,
               ``,
-              `Ketik 1 untuk menyetujui, klaimnya selesai.`,
-              `Ketik 2 diikuti alasan untuk meminta revisi. Contoh: 2 nominal perjalanan nomor 3 masih salah.`,
+              `Ketik *1* untuk menyetujui, klaimnya selesai.`,
+              `Ketik *2* diikuti alasan untuk meminta revisi. Contoh: 2 nominal perjalanan nomor 3 masih salah.`,
               ``,
               `Ada pertanyaan lain soal klaim ini? Tanyakan langsung ke HR Perkom ya.`,
             ].join("\n"),
@@ -1399,6 +1445,8 @@ export async function processWebhookReply(
       await sendTextMessage(
         phoneNumber,
         [
+          `*Kendala Sistem*`,
+          ``,
           `Maaf, ada kendala sistem sehingga pesan Anda belum tercatat.`,
           `Coba kirim ulang sebentar lagi ya. Kalau tetap gagal, hubungi HR Perkom.`,
         ].join("\n")
