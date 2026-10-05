@@ -37,6 +37,14 @@ export default async function ClaimDetailPage({ params }: ClaimDetailPageProps) 
     .eq("claim_id", id)
     .order("created_at", { ascending: true });
 
+  // Penggantian trip "tidak sesuai" — aktif + riwayat (CONFIRMED) untuk audit
+  const { data: refunds } = await serviceClient
+    .from("trip_refunds")
+    .select("*")
+    .eq("claim_id", id)
+    .neq("status", "CANCELLED")
+    .order("requested_at", { ascending: true });
+
   let ticket = null;
   if (claim.employee?.employee_name) {
     const { data: tickets } = await supabase
@@ -95,7 +103,8 @@ export default async function ClaimDetailPage({ params }: ClaimDetailPageProps) 
     ticket,
     manager_signature,
     hr_signature,
-    employee_signature
+    employee_signature,
+    refunds: refunds || []
   };
 
   return <ClaimDetailView claim={claimDetail} />;

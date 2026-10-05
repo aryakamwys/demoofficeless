@@ -32,6 +32,7 @@ type Data = {
   role: string;
   in_revision: boolean;
   revision_reason: string | null;
+  refunds: { no: number; amount: number; reason: string; status: string }[];
   claim: ClaimInfo;
 };
 
@@ -61,6 +62,22 @@ const DROP_REASONS = [
   "Bukan perjalanan tugas",
   "Trip ini bukan milik saya",
 ];
+
+/** Badge penggantian untuk trip yang ditandai HR "tidak sesuai". */
+function RefundBadge({ status, amount }: { status: string; amount: number }) {
+  if (status === "CLAIMED") {
+    return (
+      <span className="mt-1 inline-block rounded bg-blue-50 px-1.5 py-0.5 text-[10px] font-semibold text-blue-700">
+        ✓ sudah TF {rupiah(amount)} — menunggu cek HR
+      </span>
+    );
+  }
+  return (
+    <span className="mt-1 inline-block rounded bg-amber-50 px-1.5 py-0.5 text-[10px] font-semibold text-amber-700">
+      ⚠ ganti {rupiah(amount)} ke rekening kantor
+    </span>
+  );
+}
 
 function rupiah(n: number | string): string {
   return `Rp${Number(n || 0).toLocaleString("id-ID")}`;
@@ -312,7 +329,9 @@ export default function ApprovePage() {
                 Daftar perjalanan
               </p>
               <ul className="mt-1.5 space-y-2.5">
-                {state.data.claim.trips.map((t) => (
+                {state.data.claim.trips.map((t) => {
+                  const rf = state.data.refunds?.find((x) => x.no === t.no);
+                  return (
                   <li key={t.no} className="border-b border-slate-100 pb-2.5 last:border-0 last:pb-0">
                     <div className="flex items-start justify-between gap-3">
                       <div className="min-w-0">
@@ -320,6 +339,7 @@ export default function ApprovePage() {
                           <span className="text-slate-400">{t.no}.</span> {dateTimeLabel(t.date)} · {shortPlace(t.pickup)} → {shortPlace(t.dropoff)}
                         </p>
                         <p className="mt-0.5 text-[13px] font-semibold text-slate-800">{rupiah(t.fare)}</p>
+                        {rf && <RefundBadge status={rf.status} amount={rf.amount} />}
                         {t.ticket_id ? (
                           <span className="mt-1 inline-block rounded bg-blue-50 px-1.5 py-0.5 text-[10px] font-semibold text-blue-700">
                             ✓ Ticket #PIM-{t.ticket_id}
@@ -329,37 +349,62 @@ export default function ApprovePage() {
                             belum ada ticket
                           </span>
                         ) : null}
+                        {state.data.role === "EMPLOYEE" && rf && rf.status === "REQUESTED" && (
+                          <p className="mt-1 text-[11px] leading-relaxed text-amber-700">
+                            Transfer ke rekening kantor, lalu tekan tombol Sudah TF.
+                          </p>
+                        )}
                       </div>
-                      {state.data.in_revision && !state.busy && (
-                        <div className="flex shrink-0 flex-col gap-1">
+                      <div className="flex shrink-0 flex-col gap-1">
+                        {state.data.in_revision && !state.busy && (
+                          <>
+                            <button
+                              type="button"
+                              disabled={state.data.claim.trips.length <= 1 || !!rf}
+                              title={
+                                rf
+                                  ? "Trip ini menunggu penggantian — selesaikan lewat transfer"
+                                  : state.data.claim.trips.length <= 1
+                                    ? "Satu-satunya trip tidak boleh dihapus"
+                                    : ""
+                              }
+                              onClick={() => setDialog({ kind: "drop", no: t.no, reason: "" })}
+                              className="rounded-lg border border-red-200 bg-red-50 px-2.5 py-1 text-[11px] font-bold text-red-700 transition-colors hover:bg-red-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-red-500 disabled:opacity-40"
+                            >
+                              Hapus
+                            </button>
+                            <button
+                              type="button"
+                              disabled={!!rf}
+                              title={rf ? "Nominal terkunci sampai penggantian selesai" : ""}
+                              onClick={() => setDialog({ kind: "fare", no: t.no, fare: String(t.fare) })}
+                              className="rounded-lg border border-slate-300 bg-white px-2.5 py-1 text-[11px] font-bold text-slate-700 transition-colors hover:border-blue-600 hover:text-blue-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 disabled:opacity-40"
+                            >
+                              Ubah Rp
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setDialog({ kind: "ticket", no: t.no, ticket: "" })}
+                              className="rounded-lg border border-slate-300 bg-white px-2.5 py-1 text-[11px] font-bold text-slate-700 transition-colors hover:border-blue-600 hover:text-blue-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-600"
+                            >
+                              Ticket
+                            </button>
+                          </>
+                        )}
+                        {state.data.role === "EMPLOYEE" && rf && rf.status === "REQUESTED" && !state.busy && (
                           <button
                             type="button"
-                            disabled={state.data.claim.trips.length <= 1}
-                            title={state.data.claim.trips.length <= 1 ? "Satu-satunya trip tidak boleh dihapus" : ""}
-                            onClick={() => setDialog({ kind: "drop", no: t.no, reason: "" })}
-                            className="rounded-lg border border-red-200 bg-red-50 px-2.5 py-1 text-[11px] font-bold text-red-700 transition-colors hover:bg-red-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-red-500 disabled:opacity-40"
+                            onClick={() => runCommand(["SUDAH TF"], "Mencatat penggantian…")}
+                            className="rounded-lg border border-emerald-300 bg-emerald-50 px-2.5 py-1.5 text-[11px] font-bold text-emerald-700 transition-colors hover:bg-emerald-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-600"
                           >
-                            Hapus
+                            Sudah TF ✓
                           </button>
-                          <button
-                            type="button"
-                            onClick={() => setDialog({ kind: "fare", no: t.no, fare: String(t.fare) })}
-                            className="rounded-lg border border-slate-300 bg-white px-2.5 py-1 text-[11px] font-bold text-slate-700 transition-colors hover:border-blue-600 hover:text-blue-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-600"
-                          >
-                            Ubah Rp
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => setDialog({ kind: "ticket", no: t.no, ticket: "" })}
-                            className="rounded-lg border border-slate-300 bg-white px-2.5 py-1 text-[11px] font-bold text-slate-700 transition-colors hover:border-blue-600 hover:text-blue-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-600"
-                          >
-                            Ticket
-                          </button>
-                        </div>
-                      )}
+                        )}
+                      </div>
                     </div>
                   </li>
-                ))}
+                  );
+                })}
               </ul>
             </div>
 

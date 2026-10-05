@@ -140,3 +140,37 @@ test("ticket: id telanjang dengan penanda #/PIM dikenali, angka biasa tetap note
   // angka tanpa penanda tetap note
   assert.equal(parseWaCommand("34285").type, "NOTE");
 });
+
+// ===== Penggantian trip "tidak sesuai" (SUDAH TF / BELUM TF / NOREK) =====
+// Fokus jalur uang: varian "sudah transfer" harus dikenali semua, dan
+// kalimat biasa tidak boleh ikut terserap jadi perintah.
+
+test("refund: varian SUDAH TF dikenali sebagai REFUND_CLAIM", () => {
+  for (const s of ["SUDAH TF", "sudah tf", "UDAH TF", "UDAH TRANSFER", "TF", "SUDAH BAYAR", "tf bca jam 14.30"]) {
+    assert.equal(parseWaCommand(s).type, "REFUND_CLAIM", `gagal pada: ${s}`);
+  }
+});
+
+test("refund: keterangan setelah SUDAH TF ikut tersimpan sebagai note", () => {
+  assert.deepEqual(parseWaCommand("SUDAH TF bca jam 14.30"), {
+    type: "REFUND_CLAIM",
+    note: "bca jam 14.30",
+  });
+});
+
+test("refund: BELUM TF membatalkan klaim penggantian", () => {
+  assert.equal(parseWaCommand("belum tf salah kirim").type, "REFUND_UNCLAIM");
+  assert.equal(parseWaCommand("BLM TRANSFER").type, "REFUND_UNCLAIM");
+});
+
+test("refund: NOREK minta info rekening", () => {
+  assert.equal(parseWaCommand("NOREK").type, "REFUND_INFO");
+  assert.equal(parseWaCommand("norek dong").type, "REFUND_INFO");
+});
+
+test("refund: kalimat biasa tidak terserap jadi perintah penggantian", () => {
+  assert.equal(parseWaCommand("sudah saya cek semua benar").type, "NOTE");
+  assert.equal(parseWaCommand("nanti dibayarin").type, "NOTE");
+  assert.equal(parseWaCommand("1").type, "APPROVE");
+  assert.equal(parseWaCommand("SELESAI").type, "DONE");
+});

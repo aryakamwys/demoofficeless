@@ -21,7 +21,12 @@ import {
   buildChangeAppliedMessage,
   buildDropConfirmMessage,
   buildDropAppliedMessage,
-  buildResubmittedMessage
+  buildResubmittedMessage,
+  buildRefundInfoMessage,
+  buildRefundClaimedMessage,
+  buildRefundClaimedHrMessage,
+  buildRefundUnclaimedMessage,
+  type CompanyBank,
 } from "@/lib/whatsapp";
 import { parseWaCommand } from "@/lib/wa-commands";
 import { getTicket, ticketTitle } from "@/lib/envgate";
@@ -46,7 +51,7 @@ export async function fetchClaimFresh(supabase: ReturnType<typeof createServiceC
 }
 
 // Helper: send WA and log result
-async function sendAndLog(
+export async function sendAndLog(
   supabase: ReturnType<typeof createServiceClient>,
   claimId: string,
   phone: string,
@@ -84,7 +89,7 @@ async function mustUpdateClaim(
 
 /** Catat masalah alur sebagai komentar klaim — HR melihatnya di timeline
  *  dan bisa ambil tindakan (mis. kirim ulang pesan dari halaman klaim). */
-async function flowAlert(
+export async function flowAlert(
   supabase: ReturnType<typeof createServiceClient>,
   claimId: string,
   message: string
@@ -98,6 +103,208 @@ async function flowAlert(
     });
   } catch (e) {
     console.error("[FLOW] flowAlert gagal ditulis:", e);
+  }
+}
+
+// ==========================================
+// Penggantian trip "tidak sesuai" — karyawan transfer biaya trip ke
+// rekening kantor; trip keluar dari klaim setelah HR konfirmasi uang masuk.
+// ==========================================
+
+export type RefundRow = {
+  id: string;
+  trip_id: string | null;
+  trip_no: number;
+  trip_date: string | null;
+  pickup: string | null;
+  dropoff: string | null;
+  amount: number;
+  reason: string;
+  status: string; // REQUESTED | CLAIMED | CONFIRMED | CANCELLED
+  employee_note: string | null;
+  claimed_at: string | null;
+};
+
+function rupiah(n: number | string): string {
+  return `Rp${Number(n || 0).toLocaleString("id-ID")}`;
+}
+
+/** Penggantian yang masih berjalan (belum dikonfirmasi / dibatalkan HR). */
+export async function activeRefunds(
+  supabase: ReturnType<typeof createServiceClient>,
+  claimId: string
+): Promise<RefundRow[]> {
+  const { data, error } = await supabase
+    .from("trip_refunds")
+    .select("*")
+    .eq("claim_id", claimId)
+    .in("status", ["REQUESTED", "CLAIMED"]);
+  if (error) throw new Error(`Gagal membaca data penggantian: ${error.message}`);
+  return (data || []) as RefundRow[];
+}
+
+/** Rekening kantor dari app_settings — null kalau HR belum mengisinya. */
+export async function getCompanyBank(
+  supabase: ReturnType<typeof createServiceClient>
+): Promise<CompanyBank | null> {
+  const { data } = await supabase
+    .from("app_settings")
+    .select("key, value")
+    .in("key", ["company_bank_name", "company_account_number", "company_account_name"]);
+  const m = Object.fromEntries(
+    (data || []).map((r: { key: string; value: string }) => [r.key, r.value])
+  );
+  const bank: CompanyBank = {
+    bank_name: m.company_bank_name || "",
+    account_number: m.company_account_number || "",
+    account_name: m.company_account_name || "",
+  };
+  return bank.account_number ? bank : null;
+}
+
+/** Pesan penahan: klaim tidak boleh maju selama penggantian belum selesai. */
+function refundHoldMessage(refunds: RefundRow[]): string {
+  const total = refunds.reduce((a, r) => a + Number(r.amount), 0);
+  return [
+    `BELUM BISA — masih ada ${refunds.length} trip yang menunggu penggantian (${rupiah(total)}):`,
+    ...refunds.map(
+      (r) => `- Trip no ${r.trip_no}: ${rupiah(r.amount)}${r.status === "CLAIMED" ? " (menunggu cek HR)" : ""}`
+    ),
+    ``,
+    `Transfer ke rekening kantor lalu balas: SUDAH TF`,
+    `Mau lihat nominal & rekeningnya? Balas: NOREK`,
+  ].join("\n");
+}
+
+/** Perintah chat penggantian (SUDAH TF / BELUM TF / NOREK). Status dibaca
+ *  dari data sebenarnya — jalan baik di fase awal maupun fase revisi. */
+async function handleRefundChat(
+  supabase: ReturnType<typeof createServiceClient>,
+  claim: ClaimWithRelations,
+  cmd:
+    | { type: "REFUND_CLAIM"; note: string }
+    | { type: "REFUND_UNCLAIM" }
+    | { type: "REFUND_INFO" },
+  employeePhone: string | null
+) {
+  if (!employeePhone) return;
+  const refunds = await activeRefunds(supabase, claim.id);
+  const hrPhone = normalizePhone(claim.hr?.phone_number);
+
+  if (cmd.type === "REFUND_INFO") {
+    if (refunds.length === 0) {
+      await sendAndLog(
+        supabase, claim.id, employeePhone,
+        [`Tidak ada penggantian yang menunggu untuk klaim ini.`, ``, `Balas LIST untuk melihat daftar trip.`].join("\n"),
+        "REFUND_NONE"
+      );
+      return;
+    }
+    const bank = await getCompanyBank(supabase);
+    await sendAndLog(
+      supabase, claim.id, employeePhone,
+      buildRefundInfoMessage({ period: claim.period, refunds, bank }),
+      "REFUND_INFO"
+    );
+    return;
+  }
+
+  if (cmd.type === "REFUND_CLAIM") {
+    const claimed = refunds.filter((r) => r.status === "CLAIMED");
+    const requested = refunds.filter((r) => r.status === "REQUESTED");
+    if (claimed.length > 0 && requested.length === 0) {
+      const at = claimed[0]!.claimed_at
+        ? new Date(claimed[0]!.claimed_at!).toLocaleString("id-ID", { dateStyle: "short", timeStyle: "short" })
+        : "-";
+      await sendAndLog(
+        supabase, claim.id, employeePhone,
+        [
+          `Sudah tercatat pada ${at} — sedang menunggu HR mencocokkan mutasi rekening.`,
+          `Kalau itu keliru, balas: BELUM TF`,
+        ].join("\n"),
+        "REFUND_ALREADY_CLAIMED"
+      );
+      return;
+    }
+    if (requested.length === 0) {
+      await sendAndLog(
+        supabase, claim.id, employeePhone,
+        [`Tidak ada penggantian yang menunggu untuk klaim ini.`, ``, `Balas LIST untuk melihat daftar trip.`].join("\n"),
+        "REFUND_NONE"
+      );
+      return;
+    }
+    const total = requested.reduce((a, r) => a + Number(r.amount), 0);
+    const { error } = await supabase
+      .from("trip_refunds")
+      .update({ status: "CLAIMED", claimed_at: new Date().toISOString(), employee_note: cmd.note || null })
+      .in("id", requested.map((r) => r.id));
+    if (error) throw new Error(`Gagal mencatat penggantian: ${error.message}`);
+
+    await supabase.from("comments").insert({
+      claim_id: claim.id,
+      message: `Karyawan menyatakan SUDAH TRANSFER penggantian ${rupiah(total)} untuk trip no ${requested
+        .map((r) => r.trip_no)
+        .join(", ")}${cmd.note ? ` (${cmd.note})` : ""}. Menunggu pengecekan HR.`,
+      author_name: claim.employee?.employee_name || "Karyawan",
+      author_role: "EMPLOYEE",
+    });
+    await sendAndLog(
+      supabase, claim.id, employeePhone,
+      buildRefundClaimedMessage(total, requested.length),
+      "REFUND_CLAIMED"
+    );
+    if (hrPhone) {
+      const sent = await sendAndLog(
+        supabase, claim.id, hrPhone,
+        buildRefundClaimedHrMessage({
+          employee_name: claim.employee?.employee_name || "Karyawan",
+          period: claim.period,
+          total,
+          trip_nos: requested.map((r) => r.trip_no),
+          note: cmd.note,
+        }),
+        "REFUND_CLAIMED_HR"
+      );
+      if (!sent) {
+        await flowAlert(supabase, claim.id, `Notifikasi "sudah transfer" gagal terkirim ke HR — cek penggantian klaim ini secara manual.`);
+      }
+    }
+    return;
+  }
+
+  // REFUND_UNCLAIM — karyawan salah kirim / ternyata belum transfer
+  const claimed = refunds.filter((r) => r.status === "CLAIMED");
+  if (claimed.length === 0) {
+    await sendAndLog(
+      supabase, claim.id, employeePhone,
+      `Tidak ada status "sudah transfer" yang perlu dibatalkan.`,
+      "REFUND_NONE"
+    );
+    return;
+  }
+  const { error } = await supabase
+    .from("trip_refunds")
+    .update({ status: "REQUESTED", claimed_at: null })
+    .in("id", claimed.map((r) => r.id));
+  if (error) throw new Error(`Gagal membatalkan penggantian: ${error.message}`);
+  await supabase.from("comments").insert({
+    claim_id: claim.id,
+    message: `Karyawan MEMBATALKAN pernyataan sudah transfer (trip no ${claimed
+      .map((r) => r.trip_no)
+      .join(", ")}) — kembali menunggu transfer.`,
+    author_name: claim.employee?.employee_name || "Karyawan",
+    author_role: "EMPLOYEE",
+  });
+  await sendAndLog(supabase, claim.id, employeePhone, buildRefundUnclaimedMessage(), "REFUND_UNCLAIMED");
+  if (hrPhone) {
+    await sendAndLog(
+      supabase, claim.id, hrPhone,
+      `${claim.employee?.employee_name || "Karyawan"} membatalkan pernyataan sudah transfer (trip no ${claimed
+        .map((r) => r.trip_no)
+        .join(", ")}) — penggantian kembali menunggu.`,
+      "REFUND_UNCLAIMED_HR"
+    );
   }
 }
 
@@ -508,7 +715,8 @@ async function handleRevisionCommands(
   supabase: ReturnType<typeof createServiceClient>,
   claim: ClaimWithRelations,
   reply: string,
-  employeePhone: string | null
+  employeePhone: string | null,
+  refunds: RefundRow[]
 ) {
   if (!employeePhone) return;
   const empName = claim.employee?.employee_name || "Karyawan";
@@ -528,6 +736,12 @@ async function handleRevisionCommands(
     return;
   }
 
+  // Perintah penggantian trip "tidak sesuai" (SUDAH TF / BELUM TF / NOREK)
+  if (cmd.type === "REFUND_CLAIM" || cmd.type === "REFUND_UNCLAIM" || cmd.type === "REFUND_INFO") {
+    await handleRefundChat(supabase, claim, cmd, employeePhone);
+    return;
+  }
+
   if (cmd.type === "LIST" || cmd.type === "DETAIL") {
     const { data: trips } = await supabase.from("trips").select("*").eq("claim_id", claim.id).order("trip_date", { ascending: true });
     await sendAndLog(supabase, claim.id, employeePhone, buildRevisionTripListMessage(trips || [], claim.total_amount, claim.period), "REVISION_LIST");
@@ -539,6 +753,19 @@ async function handleRevisionCommands(
     const trip = (trips || [])[cmd.tripNo - 1];
     if (!trip) {
       await sendAndLog(supabase, claim.id, employeePhone, `Nomor trip ${cmd.tripNo} tidak ditemukan. Balas LIST untuk melihat daftar trip.`, "REVISION_INVALID");
+      return;
+    }
+    // Trip yang ditandai "tidak sesuai" tidak boleh diubah nominalnya —
+    // nominal penggantian sudah terkunci di trip_refunds.
+    if (refunds.some((r) => r.trip_id === trip.id)) {
+      await sendAndLog(
+        supabase, claim.id, employeePhone,
+        [
+          `Trip no ${cmd.tripNo} sedang menunggu penggantian — nominalnya tidak boleh diubah dulu.`,
+          `Selesaikan penggantiannya: transfer lalu balas SUDAH TF.`,
+        ].join("\n"),
+        "REVISION_INVALID"
+      );
       return;
     }
     const oldFare = Number(trip.fare);
@@ -615,6 +842,11 @@ async function handleRevisionCommands(
   }
 
   if (cmd.type === "DONE") {
+    // Penggantian belum selesai — klaim ditahan (tidak boleh diajukan ulang)
+    if (refunds.length > 0) {
+      await sendAndLog(supabase, claim.id, employeePhone, refundHoldMessage(refunds), "REFUND_HOLD");
+      return;
+    }
     // Manager sudah approved → kembali ke HR; belum → kembali ke Manager
     const targetRole: "MANAGER" | "HR" = claim.manager_status === "APPROVED" ? "HR" : "MANAGER";
     await supabase.from("comments").insert({
@@ -666,6 +898,21 @@ async function handleRevisionCommands(
     const trip = (trips || [])[cmd.tripNo - 1];
     if (!trip) {
       await sendAndLog(supabase, claim.id, employeePhone, `Nomor trip ${cmd.tripNo} tidak ditemukan. Balas LIST untuk melihat daftar trip.`, "REVISION_INVALID");
+      return;
+    }
+    // Trip bertanda "tidak sesuai" hanya keluar lewat penggantian —
+    // HAPUS sendiri akan mem-bypass pembayaran ke kantor.
+    if (refunds.some((r) => r.trip_id === trip.id)) {
+      await sendAndLog(
+        supabase, claim.id, employeePhone,
+        [
+          `Trip no ${cmd.tripNo} ditandai HR "tidak sesuai" — tidak bisa dihapus sendiri.`,
+          `Biayanya harus diganti: transfer ke rekening kantor lalu balas SUDAH TF.`,
+          `Setelah uang diterima HR, trip ini keluar otomatis dari klaim.`,
+          `Mau lihat nominal & rekeningnya? Balas: NOREK`,
+        ].join("\n"),
+        "REVISION_INVALID"
+      );
       return;
     }
     // Klaim tanpa trip sama sekali tidak masuk akal — arahkan ke HR/catatan.
@@ -767,6 +1014,8 @@ export async function processWebhookReply(
   const freshClaim = await fetchClaimFresh(supabase, claim.id);
   if (freshClaim) claim = freshClaim;
   const employeePhone = normalizePhone(claim.employee?.phone_number);
+  // Penggantian aktif menahan klaim — dibaca sekali, dipakai semua guard
+  const refunds = await activeRefunds(supabase, claim.id);
 
   try {
     // ==========================================
@@ -780,7 +1029,12 @@ export async function processWebhookReply(
       }
       // Fase revisi: klaim sudah dikonfirmasi engineer tapi diminta revisi
       else if (claim.status === 'NEED_REVIEW' && claim.approved_at) {
-        await handleRevisionCommands(supabase, claim, reply, employeePhone);
+        await handleRevisionCommands(supabase, claim, reply, employeePhone, refunds);
+      } else if (reply === "1" && refunds.length > 0) {
+        // Ada penggantian belum selesai — konfirmasi ditahan
+        if (employeePhone) {
+          await sendAndLog(supabase, claim.id, employeePhone, refundHoldMessage(refunds), "REFUND_HOLD");
+        }
       } else if (reply === "1") {
         const hasManager = !!claim.manager;
         await mustUpdateClaim(supabase, claim.id, {
@@ -872,6 +1126,10 @@ export async function processWebhookReply(
               "INVALID_REPLY"
             );
           }
+        } else if (cmd.type === "REFUND_CLAIM" || cmd.type === "REFUND_UNCLAIM" || cmd.type === "REFUND_INFO") {
+          // Penggantian bisa terjadi di fase mana pun (HR bisa menandai trip
+          // sebelum karyawan konfirmasi) — status dibaca dari data sebenarnya.
+          await handleRefundChat(supabase, claim, cmd, employeePhone);
         } else if (employeePhone && reply.replace(/\s/g, "").length < 3) {
           // "eh", "?", "y" — bukan catatan, arahkan ke menu
           await sendAndLog(supabase, claim.id, employeePhone, buildEmployeeHelpMessage(), "INVALID_REPLY");
@@ -897,7 +1155,10 @@ export async function processWebhookReply(
     // ROLE: MANAGER
     // ==========================================
     else if (role === 'MANAGER') {
-      if (reply === "1") {
+      if (reply === "1" && refunds.length > 0) {
+        // Penggantian belum selesai — approval ditahan
+        await sendAndLog(supabase, claim.id, phoneNumber, refundHoldMessage(refunds), "REFUND_HOLD");
+      } else if (reply === "1") {
         await mustUpdateClaim(supabase, claim.id, { manager_status: "APPROVED" });
         await sendAndLog(
           supabase, claim.id, phoneNumber,
@@ -947,7 +1208,10 @@ export async function processWebhookReply(
     // ROLE: HR
     // ==========================================
     else if (role === 'HR') {
-      if (reply === "1") {
+      if (reply === "1" && refunds.length > 0) {
+        // Penggantian belum selesai — approval ditahan
+        await sendAndLog(supabase, claim.id, phoneNumber, refundHoldMessage(refunds), "REFUND_HOLD");
+      } else if (reply === "1") {
         await mustUpdateClaim(supabase, claim.id, { hr_status: "APPROVED", status: "APPROVED" });
         await sendAndLog(
           supabase, claim.id, phoneNumber,

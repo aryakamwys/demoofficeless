@@ -19,6 +19,9 @@ export type WaCommand =
   | { type: "TICKET_ID"; ticketId: string }
   | { type: "TICKET_WIZARD" }
   | { type: "BAD_TICKET" }
+  | { type: "REFUND_CLAIM"; note: string }
+  | { type: "REFUND_UNCLAIM" }
+  | { type: "REFUND_INFO" }
   | { type: "NOTE"; text: string };
 
 // Batas wajar nominal trip (Rp100 juta) — penjaga typo di jalur uang
@@ -98,6 +101,21 @@ export function parseWaCommand(raw: string): WaCommand {
   // (angka biasa seperti "21" tetap NOTE, bukan ticket)
   if (/^(?:#?\s*pim\s*[-:]?\s*\d{2,10}|#\s*\d{2,10})$/i.test(input)) {
     return { type: "TICKET_ID", ticketId: parseTicketRef(input)! };
+  }
+
+  // Penggantian trip "tidak sesuai" (jalur uang — wajib command tegas):
+  // "SUDAH TF", "UDAH TRANSFER", "TF bca jam 14.30", "SUDAH BAYAR", "BELUM TF", "NOREK"
+  if (/^(?:(?:sudah|udah|udh|dah)\s+)?(?:tf|tfr|transfer|bayar)(?:\s|$)/i.test(input)) {
+    const note = input
+      .replace(/^\s*(?:(?:sudah|udah|udh|dah)\s+)?(?:tf|tfr|transfer|bayar)\s*/i, "")
+      .trim();
+    return { type: "REFUND_CLAIM", note };
+  }
+  if (/^(?:belum|blm)\s+(?:tf|tfr|transfer|bayar|sudah)/i.test(input)) {
+    return { type: "REFUND_UNCLAIM" };
+  }
+  if (/^NOREK\b/i.test(input)) {
+    return { type: "REFUND_INFO" };
   }
 
   return { type: "NOTE", text: input };

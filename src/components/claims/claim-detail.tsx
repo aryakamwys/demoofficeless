@@ -1,11 +1,11 @@
 "use client";
 
 import { useState } from "react";
-import { ClaimDetail } from "@/types";
+import { ClaimDetail, TripRefund } from "@/types";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { StatusBadge } from "@/components/claims/status-badge";
-import { Send, Info, UserCheck, ChevronRight, Loader2, Printer, Pencil, Trash2, FileText, Undo2 } from "lucide-react";
+import { Send, Info, UserCheck, ChevronRight, Loader2, Printer, Pencil, Trash2, FileText, Undo2, Flag } from "lucide-react";
 import { toast } from "sonner";
 import dayjs from "dayjs";
 import { useRouter } from "next/navigation";
@@ -32,6 +32,28 @@ interface ClaimDetailViewProps {
   claim: ClaimDetail;
 }
 
+// Alasan sering dipakai saat menandai trip tidak sesuai — bisa diedit.
+const REFUND_REASONS = [
+  "Arah pulang ke rumah di jam kantor",
+  "Dipakai urusan pribadi di jam kantor",
+  "Bukan perjalanan tugas",
+];
+
+function refundChip(r: TripRefund) {
+  if (r.status === "CLAIMED") {
+    return (
+      <span className="inline-block rounded-full bg-blue-50 px-2 py-0.5 text-[11px] font-semibold text-blue-700">
+        Sudah TF — menunggu cek HR
+      </span>
+    );
+  }
+  return (
+    <span className="inline-block rounded-full bg-amber-50 px-2 py-0.5 text-[11px] font-semibold text-amber-700">
+      Ganti ke rekening kantor
+    </span>
+  );
+}
+
 export function ClaimDetailView({ claim }: ClaimDetailViewProps) {
   const router = useRouter();
   const [sendWADialogOpen, setSendWADialogOpen] = useState(false);
@@ -47,6 +69,15 @@ export function ClaimDetailView({ claim }: ClaimDetailViewProps) {
   const [editSaving, setEditSaving] = useState(false);
   const [cancelling, setCancelling] = useState(false);
   const [ticketOptions, setTicketOptions] = useState<{ id: number; title: string }[]>([]);
+  const [markRefundTrip, setMarkRefundTrip] = useState<Trip | null>(null);
+  const [markReason, setMarkReason] = useState("");
+  const [markAmount, setMarkAmount] = useState("");
+  const [markSaving, setMarkSaving] = useState(false);
+  const [refundBusy, setRefundBusy] = useState<string | null>(null);
+
+  const refunds = claim.refunds || [];
+  const activeRefunds = refunds.filter((r) => r.status === "REQUESTED" || r.status === "CLAIMED");
+  const refundByTripId = new Map(activeRefunds.filter((r) => r.trip_id).map((r) => [r.trip_id as string, r]));
 
   const editable = claim.status !== "APPROVED";
 
@@ -143,6 +174,77 @@ export function ClaimDetailView({ claim }: ClaimDetailViewProps) {
 
   const handleSendWA = () => {
     setSendWADialogOpen(true);
+  };
+
+  // ==== Penggantian trip "tidak sesuai" ====
+
+  const openMarkRefund = (trip: Trip) => {
+    setMarkRefundTrip(trip);
+    setMarkReason("");
+    setMarkAmount(String(trip.fare));
+  };
+
+  const refundAction = async (body: Record<string, unknown>, okMsg: string) => {
+    setRefundBusy(String(body.refund_id || body.action));
+    try {
+      const res = await fetch(`/api/claims/${claim.id}/refund`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      const result = await res.json();
+      if (result.success) {
+        toast.success(okMsg);
+        router.refresh();
+      } else {
+        toast.error(result.message || result.error || "Gagal memproses");
+      }
+    } catch {
+      toast.error("Terjadi kesalahan sistem.");
+    } finally {
+      setRefundBusy(null);
+    }
+  };
+
+  const submitMarkRefund = async () => {
+    if (!markRefundTrip) return;
+    setMarkSaving(true);
+    try {
+      const res = await fetch(`/api/claims/${claim.id}/refund`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "mark",
+          trip_id: markRefundTrip.id,
+          reason: markReason.trim(),
+          amount: Number(markAmount),
+        }),
+      });
+      const result = await res.json();
+      if (result.success) {
+        toast.success("Trip ditandai — karyawan diminta mengganti ke rekening kantor");
+        setMarkRefundTrip(null);
+        router.refresh();
+      } else {
+        toast.error(result.message || result.error || "Gagal menandai trip");
+      }
+    } catch {
+      toast.error("Terjadi kesalahan sistem.");
+    } finally {
+      setMarkSaving(false);
+    }
+  };
+
+  const confirmRefund = (r: TripRefund) => {
+    if (
+      !confirm(
+        `Konfirmasi pembayaran diterima?\n\n` +
+          `Trip ${r.trip_no} — Rp${Number(r.amount).toLocaleString("id-ID")}\n` +
+          `Trip akan DIHAPUS dari klaim dan total dihitung ulang.`
+      )
+    )
+      return;
+    refundAction({ action: "confirm", refund_id: r.id }, "Pembayaran diterima — trip keluar dari klaim");
   };
 
   const handleApprove = async (signatureData: string, overrideRole?: "MANAGER" | "HR") => {
@@ -451,6 +553,9 @@ export function ClaimDetailView({ claim }: ClaimDetailViewProps) {
                     </td>
                     <td className="border border-slate-200 px-3 py-3 text-right align-top font-medium text-slate-800 whitespace-nowrap print:py-1 print:px-1">
                       IDR {trip.fare.toLocaleString("id-ID")}
+                      {refundByTripId.get(trip.id) && (
+                        <span className="mt-1 block print:hidden">{refundChip(refundByTripId.get(trip.id)!)}</span>
+                      )}
                     </td>
                     <td className="border border-slate-200 px-3 py-3 align-top text-slate-600 print:py-1 print:px-1">
                       {trip.payment_method || "Corporate Billing"}
@@ -488,6 +593,20 @@ export function ClaimDetailView({ claim }: ClaimDetailViewProps) {
                           >
                             <Trash2 className="h-4 w-4" />
                           </Button>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-7 w-7 text-slate-500 hover:text-amber-600"
+                            title={
+                              refundByTripId.get(trip.id)
+                                ? "Trip ini sudah ditandai"
+                                : "Tandai tidak sesuai — karyawan ganti biayanya ke rekening kantor"
+                            }
+                            disabled={!!refundByTripId.get(trip.id)}
+                            onClick={() => openMarkRefund(trip)}
+                          >
+                            <Flag className="h-4 w-4" />
+                          </Button>
                         </div>
                       </td>
                     )}
@@ -499,6 +618,107 @@ export function ClaimDetailView({ claim }: ClaimDetailViewProps) {
         </CardContent>
       </Card>
       
+      {/* Penggantian trip "tidak sesuai" — karyawan transfer ke rekening
+          kantor, HR konfirmasi uang masuk, trip keluar dari klaim. */}
+      {refunds.length > 0 && (
+        <Card className="shadow-sm border-slate-200 print:hidden">
+          <CardHeader className="bg-slate-50/50 border-b pb-4">
+            <CardTitle className="flex items-center justify-between text-base font-semibold text-slate-800">
+              <span>Penggantian Trip Tidak Sesuai</span>
+              {activeRefunds.length > 0 && (
+                <span className="rounded-full bg-amber-50 px-2.5 py-1 text-xs font-semibold text-amber-700">
+                  {activeRefunds.length} menunggu — klaim ditahan
+                </span>
+              )}
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3 pt-4">
+            <p className="text-sm text-slate-500">
+              Trip bertanda tidak sesuai keluar dari klaim otomatis setelah pembayaran karyawan
+              dikonfirmasi diterima. Total klaim ikut dihitung ulang.
+            </p>
+            {refunds.map((r) => (
+              <div key={r.id} className="rounded-lg border border-slate-200 p-3">
+                <div className="flex flex-wrap items-start justify-between gap-2">
+                  <div className="min-w-0">
+                    <p className="text-sm font-medium text-slate-800">
+                      Trip {r.trip_no}
+                      {r.trip_date && ` · ${dayjs(r.trip_date).format("DD MMM YYYY HH:mm")}`} — Rp
+                      {Number(r.amount).toLocaleString("id-ID")}
+                    </p>
+                    <p className="text-xs text-slate-500">
+                      {r.pickup || "—"} → {r.dropoff || "—"}
+                    </p>
+                    <p className="mt-1 text-xs text-slate-600">
+                      Alasan: {r.reason}
+                      {r.employee_note && r.status === "CLAIMED" ? ` · keterangan karyawan: ${r.employee_note}` : ""}
+                    </p>
+                  </div>
+                  <div className="flex flex-col items-end gap-1">
+                    {r.status !== "CONFIRMED" && refundChip(r)}
+                    {r.status === "CONFIRMED" && (
+                      <span className="inline-block rounded-full bg-emerald-50 px-2 py-0.5 text-[11px] font-semibold text-emerald-700">
+                        Diterima {r.confirmed_at ? dayjs(r.confirmed_at).format("DD MMM HH:mm") : ""}
+                        {r.confirmed_by ? ` oleh ${r.confirmed_by}` : ""}
+                      </span>
+                    )}
+                  </div>
+                </div>
+                {r.status !== "CONFIRMED" && (
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    {r.status === "REQUESTED" && (
+                      <>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          disabled={refundBusy === r.id}
+                          onClick={() => refundAction({ action: "send_norek", refund_id: r.id }, "Nominal & rekening kantor dikirim ke karyawan")}
+                        >
+                          {refundBusy === r.id && <Loader2 className="mr-1 h-3 w-3 animate-spin" />} Kirim Norek Kantor
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="border-red-200 text-red-600 hover:bg-red-50"
+                          disabled={refundBusy === r.id}
+                          onClick={() => {
+                            if (confirm("Batalkan tanda tidak sesuai? Trip tetap di klaim, karyawan tidak perlu mengganti.")) {
+                              refundAction({ action: "cancel", refund_id: r.id }, "Tanda dibatalkan — trip tetap di klaim");
+                            }
+                          }}
+                        >
+                          Batalkan Tanda
+                        </Button>
+                      </>
+                    )}
+                    {r.status === "CLAIMED" && (
+                      <>
+                        <Button
+                          size="sm"
+                          className="bg-emerald-600 hover:bg-emerald-700 text-white"
+                          disabled={refundBusy === r.id}
+                          onClick={() => confirmRefund(r)}
+                        >
+                          {refundBusy === r.id && <Loader2 className="mr-1 h-3 w-3 animate-spin" />} Pembayaran Diterima ✓
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          disabled={refundBusy === r.id}
+                          onClick={() => refundAction({ action: "ask_again", refund_id: r.id }, "Karyawan diminta cek/ulangi transfer")}
+                        >
+                          Belum Masuk — Minta Ulang
+                        </Button>
+                      </>
+                    )}
+                  </div>
+                )}
+              </div>
+            ))}
+          </CardContent>
+        </Card>
+      )}
+
       {/* Tiket managed-service terhubung — hanya data nyata dari DB.
           Tampilan lengkap + data live EnvGate ada di halaman Report PDF. */}
       {claim.ticket && (
@@ -675,6 +895,66 @@ export function ClaimDetailView({ claim }: ClaimDetailViewProps) {
               disabled={editSaving || !editFare || Number(editFare) <= 0}
             >
               {editSaving && <Loader2 className="h-4 w-4 animate-spin" />} Simpan
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Dialog tandai trip tidak sesuai (minta penggantian ke rekening kantor) */}
+      <Dialog open={!!markRefundTrip} onOpenChange={(open) => !open && setMarkRefundTrip(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Tandai Trip Tidak Sesuai</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <p className="text-sm text-slate-600">
+              Trip {markRefundTrip
+                ? `${dayjs(markRefundTrip.trip_date).format("DD MMM HH:mm")} — ${markRefundTrip.pickup} → ${markRefundTrip.dropoff}`
+                : ""}
+              . Karyawan diminta mengganti biayanya ke rekening kantor; trip keluar
+              dari klaim setelah pembayaran Anda konfirmasi.
+            </p>
+            <div className="space-y-2">
+              <Label>Alasan (pilih atau tulis sendiri)</Label>
+              <div className="flex flex-wrap gap-1.5">
+                {REFUND_REASONS.map((r) => (
+                  <button
+                    key={r}
+                    type="button"
+                    onClick={() => setMarkReason(r)}
+                    className="rounded-full border border-slate-300 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 transition-colors hover:border-blue-600 hover:text-blue-700"
+                  >
+                    {r}
+                  </button>
+                ))}
+              </div>
+              <Input
+                value={markReason}
+                onChange={(e) => setMarkReason(e.target.value)}
+                placeholder="Alasan singkat…"
+                maxLength={300}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="refund-amount">Nominal penggantian (IDR)</Label>
+              <Input
+                id="refund-amount"
+                type="number"
+                min={0}
+                value={markAmount}
+                onChange={(e) => setMarkAmount(e.target.value)}
+              />
+              <p className="text-xs text-slate-400">Default = biaya trip. Boleh diubah (mis. dibulatkan).</p>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setMarkRefundTrip(null)}>Batal</Button>
+            <Button
+              onClick={submitMarkRefund}
+              disabled={markSaving || markReason.trim().length < 4 || !Number(markAmount)}
+              className="bg-amber-600 hover:bg-amber-700 text-white"
+            >
+              {markSaving && <Loader2 className="h-4 w-4 animate-spin" />} Tandai & Minta Penggantian
             </Button>
           </DialogFooter>
         </DialogContent>

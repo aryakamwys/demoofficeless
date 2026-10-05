@@ -388,6 +388,24 @@ const CONTENT: Record<string, ReactNode> = {
         <li><Cmd>TICKET SEMUA</Cmd> — isi ticket semua trip, dipandu satu per satu.</li>
         <li><Cmd>SELESAI</Cmd> — sudah selesai, kirim ulang ke approver.</li>
       </ul>
+
+      <H2>4a. Trip ditandai &quot;tidak sesuai&quot; — ganti ke rekening kantor</H2>
+      <P>
+        Kalau HR menandai ada trip yang tidak sesuai (misalnya arah pulang di jam kantor),
+        biaya trip itu diganti karyawan ke rekening kantor. Nominal dan rekening dikirim
+        lewat WhatsApp. Selama penggantian belum selesai, klaim ditahan — tidak bisa
+        disetujui atau dikirim ulang.
+      </P>
+      <ul className="my-3 list-disc space-y-1 pl-5 text-sm text-slate-600">
+        <li><Cmd>SUDAH TF</Cmd> — nyatakan sudah transfer (boleh ditambah keterangan: <Cmd>SUDAH TF bca jam 14.30</Cmd>). HR mencocokkan mutasi rekening.</li>
+        <li><Cmd>BELUM TF</Cmd> — batalkan kalau salah kirim &quot;sudah transfer&quot;.</li>
+        <li><Cmd>NOREK</Cmd> — minta ulang nominal &amp; rekening kantor.</li>
+      </ul>
+      <P>
+        Setelah HR menekan <b>Pembayaran Diterima</b> di halaman klaim, trip itu keluar
+        dari klaim otomatis dan total dihitung ulang. Trip bertanda tidak sesuai tidak
+        bisa dihapus sendiri lewat <Cmd>HAPUS</Cmd> — harus lewat penggantian ini.
+      </P>
       <Chat
         title="Contoh percakapan — REVISI"
         messages={[

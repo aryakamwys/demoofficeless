@@ -139,6 +139,30 @@ export interface ClaimDetail extends ClaimWithEmployee {
   manager_signature?: string | null;
   hr_signature?: string | null;
   employee_signature?: string | null;
+  /** Penggantian trip "tidak sesuai" (aktif + riwayat yang sudah selesai) */
+  refunds?: TripRefund[];
+}
+
+/** Baris trip_refunds — karyawan transfer biaya trip ke rekening kantor. */
+export interface TripRefund {
+  id: string;
+  claim_id: string;
+  trip_id: string | null;
+  trip_no: number;
+  trip_date: string | null;
+  pickup: string | null;
+  dropoff: string | null;
+  amount: number;
+  reason: string;
+  /** REQUESTED | CLAIMED | CONFIRMED | CANCELLED */
+  status: string;
+  employee_note?: string | null;
+  requested_by?: string | null;
+  requested_at: string;
+  claimed_at?: string | null;
+  confirmed_by?: string | null;
+  confirmed_at?: string | null;
+  cancelled_at?: string | null;
 }
 
 // ------- Form / Input Types -------

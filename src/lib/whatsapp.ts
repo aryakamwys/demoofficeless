@@ -378,6 +378,149 @@ function formatAmount(n: number | string): string {
   return `Rp${num.toLocaleString("id-ID")}`;
 }
 
+// ============================================================
+// Penggantian trip "tidak sesuai" — karyawan transfer biaya trip
+// ke rekening kantor, HR konfirmasi uang masuk, trip keluar klaim.
+// ============================================================
+
+export interface CompanyBank {
+  bank_name: string;
+  account_number: string;
+  account_name?: string;
+}
+
+function bankLines(bank: CompanyBank): string[] {
+  return [
+    `Transfer ke rekening kantor:`,
+    `Bank: ${bank.bank_name}`,
+    `No. rekening: ${bank.account_number}`,
+    ...(bank.account_name ? [`Atas nama: ${bank.account_name}`] : []),
+  ];
+}
+
+/** HR menandai trip tidak sesuai → karyawan diminta mengganti uangnya. */
+export function buildRefundRequestMessage(params: {
+  employee_name: string;
+  period: string;
+  trip_no: number;
+  trip: WaTripLine;
+  amount: number;
+  reason: string;
+  bank: CompanyBank;
+}): string {
+  const t = params.trip;
+  return [
+    `Halo ${params.employee_name},`,
+    ``,
+    `Trip no ${params.trip_no} di klaim periode ${params.period} ditandai TIDAK SESUAI oleh HR.`,
+    `- ${formatTripDate(t.trip_date)}: ${t.pickup} -> ${t.dropoff} (${formatAmount(t.fare)})`,
+    `Alasan: ${params.reason}`,
+    ``,
+    `Biaya trip ini perlu Anda GANTI sebesar ${formatAmount(params.amount)}.`,
+    ``,
+    ...bankLines(params.bank),
+    ``,
+    `Setelah transfer, balas pesan ini: SUDAH TF`,
+    `(boleh ditambah keterangan — contoh: SUDAH TF bca jam 14.30)`,
+    ``,
+    `Setelah uangnya dicek HR, trip ini otomatis keluar dari klaim Anda.`,
+    `Mau tanya-tanya dulu? Balas saja — pesan Anda jadi catatan untuk HR.`,
+  ].join("\n");
+}
+
+/** Info nominal + rekening kantor (perintah NOREK / kirim ulang dari web). */
+export function buildRefundInfoMessage(params: {
+  period: string;
+  refunds: { trip_no: number; amount: number; status: string }[];
+  bank: CompanyBank | null;
+}): string {
+  const total = params.refunds.reduce((a, r) => a + Number(r.amount), 0);
+  return [
+    `INFO PENGGANTIAN — klaim periode ${params.period}:`,
+    ...params.refunds.map(
+      (r) =>
+        `- Trip no ${r.trip_no}: ${formatAmount(r.amount)} ${
+          r.status === "CLAIMED" ? "(sudah Anda transfer — menunggu cek HR)" : "(belum transfer)"
+        }`
+    ),
+    ``,
+    `Total yang harus diganti: ${formatAmount(total)}`,
+    ``,
+    ...(params.bank ? bankLines(params.bank) : [`Rekening kantor belum diisi HR — hubungi HR Perkom.`]),
+    ``,
+    `Sudah transfer? Balas: SUDAH TF`,
+  ].join("\n");
+}
+
+/** Karyawan menyatakan sudah transfer → menunggu pencocokan HR. */
+export function buildRefundClaimedMessage(total: number, count: number): string {
+  return [
+    `TERCATAT. Anda menyatakan sudah transfer ${formatAmount(total)} untuk ${count} trip penggantian.`,
+    `HR akan mencocokkannya dengan mutasi rekening kantor.`,
+    `Setelah cocok, trip-nya keluar dari klaim dan Anda dikabari lagi.`,
+  ].join("\n");
+}
+
+/** Notifikasi ke HR: karyawan menyatakan sudah transfer — cek mutasi. */
+export function buildRefundClaimedHrMessage(params: {
+  employee_name: string;
+  period: string;
+  total: number;
+  trip_nos: number[];
+  note?: string | null;
+}): string {
+  return [
+    `INFO PENGGANTIAN: ${params.employee_name} menyatakan SUDAH TRANSFER ${formatAmount(params.total)}`,
+    `(trip no ${params.trip_nos.join(", ")} — klaim periode ${params.period}).`,
+    params.note ? `Keterangan karyawan: ${params.note}` : ``,
+    ``,
+    `Cocokkan mutasi rekening kantor, lalu buka detail klaim dan tekan`,
+    `"Pembayaran diterima" agar trip keluar dari klaim.`,
+  ]
+    .filter(Boolean)
+    .join("\n");
+}
+
+/** HR konfirmasi uang masuk → trip keluar dari klaim, total baru. */
+export function buildRefundConfirmedMessage(params: {
+  employee_name: string;
+  period: string;
+  trip_no: number;
+  amount: number;
+  new_total: number;
+}): string {
+  return [
+    `TERIMA KASIH ${params.employee_name}. Penggantian ${formatAmount(params.amount)} sudah DITERIMA HR.`,
+    `Trip no ${params.trip_no} keluar dari klaim periode ${params.period}.`,
+    `Total klaim sekarang: ${formatAmount(params.new_total)}`,
+  ].join("\n");
+}
+
+/** Uang belum ditemukan di mutasi → minta karyawan cek/ulang transfer. */
+export function buildRefundAskAgainMessage(amount: number): string {
+  return [
+    `HR belum menemukan transferan ${formatAmount(amount)} di mutasi rekening kantor.`,
+    `Mohon cek kembali (nominal/nama bank/tujuan), atau ulangi transfer,`,
+    `lalu balas lagi: SUDAH TF`,
+  ].join("\n");
+}
+
+/** Karyawan membatalkan pernyataan sudah transfer (salah kirim). */
+export function buildRefundUnclaimedMessage(): string {
+  return [
+    `Baik — status penggantian dikembalikan ke MENUNGGU transfer.`,
+    `Kalau nanti sudah transfer, balas lagi: SUDAH TF`,
+  ].join("\n");
+}
+
+/** HR membatalkan tanda "tidak sesuai" — tidak perlu penggantian lagi. */
+export function buildRefundCancelledMessage(trip_no: number, period: string): string {
+  return [
+    `Kabar baik: tanda "tidak sesuai" pada trip no ${trip_no} dihapus oleh HR.`,
+    `Trip tetap berada di klaim periode ${period} — tidak perlu penggantian.`,
+  ].join("\n");
+}
+
 function formatTripDate(dateStr: string): string {
   const date = new Date(dateStr);
   const monthNames = ["Jan", "Feb", "Mar", "Apr", "Mei", "Jun", "Jul", "Agu", "Sep", "Okt", "Nov", "Des"];

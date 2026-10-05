@@ -53,11 +53,25 @@ export async function GET(request: NextRequest) {
     }
   }
 
+  // Penggantian trip "tidak sesuai" yang masih berjalan — halaman menampilkan
+  // badge per-trip dan menonaktifkan Hapus/Ubah untuk trip bersangkutan.
+  const { data: refundRows } = await supabase
+    .from("trip_refunds")
+    .select("trip_no, amount, reason, status")
+    .eq("claim_id", v.claimId)
+    .in("status", ["REQUESTED", "CLAIMED"]);
+
   return NextResponse.json({
     success: true,
     role: v.role,
     in_revision: inRevision,
     revision_reason,
+    refunds: (refundRows || []).map((r) => ({
+      no: r.trip_no,
+      amount: Number(r.amount),
+      reason: r.reason,
+      status: r.status,
+    })),
     claim: {
       period: claim.period,
       employee_name: claim.employee?.employee_name || "Karyawan",
@@ -126,8 +140,9 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // COMMAND hanya berlaku saat klaim benar-benar dalam fase revisi.
-    if (action === "COMMAND" && (claim.status !== "NEED_REVIEW" || !claim.approved_at)) {
+    // COMMAND berlaku saat klaim ditahan (revisi, atau menunggu penggantian
+    // yang ditandai HR sebelum karyawan konfirmasi).
+    if (action === "COMMAND" && claim.status !== "NEED_REVIEW") {
       return NextResponse.json(
         { success: false, error: "NOT_IN_REVISION", message: "Klaim ini tidak sedang dalam revisi." },
         { status: 409 }

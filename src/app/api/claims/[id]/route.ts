@@ -132,6 +132,26 @@ export async function PATCH(
 
   const { manager_signature, hr_signature, ...updateData } = body;
 
+  // Penggantian trip "tidak sesuai" belum selesai — klaim tidak boleh
+  // disetujui penuh (jalur approve manual di web maupun signature pad).
+  if (updateData.status === "APPROVED") {
+    const { data: active } = await serviceClient
+      .from("trip_refunds")
+      .select("trip_no, amount")
+      .eq("claim_id", id)
+      .in("status", ["REQUESTED", "CLAIMED"]);
+    if (active && active.length > 0) {
+      const total = active.reduce((acc, r) => acc + Number(r.amount), 0);
+      return NextResponse.json(
+        {
+          success: false,
+          error: `Masih ada ${active.length} trip menunggu penggantian (Rp${total.toLocaleString("id-ID")}) — selesaikan dulu di panel Penggantian.`,
+        },
+        { status: 409 }
+      );
+    }
+  }
+
   // If there are signatures, fetch the claim first to get the employee IDs
   if (manager_signature || hr_signature) {
     const { data: claimInfo } = await supabase
