@@ -48,8 +48,15 @@ export async function proxy(request: NextRequest) {
     return supabaseResponse;
   }
 
-  // Ada cookie → validasi sesi ke server auth (jalan aman untuk route
-  // proteksi maupun redirect login→dashboard).
+  // Ada cookie → validasi sesi ke server auth. Hanya route yang benar-benar
+  // memakai identitas yang membayar roundtrip getUser(): route proteksi,
+  // /login (redirect ke dashboard), dan / (redirect ke dashboard). Halaman
+  // publik lain milik user login (/docs, /changelog, /approve, …) tidak
+  // memerlukan identitas — tidak ada alasan menunggu server auth di sana.
+  if (!(isProtected || isLoginPage || isRoot)) {
+    return supabaseResponse;
+  }
+
   let user = null;
   try {
     const supabase = createServerClient(

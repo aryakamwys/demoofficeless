@@ -7,7 +7,9 @@ export async function GET() {
   const { data, error } = await supabase
     .from("managed_service_claims")
     .select("*")
-    .order("created_at", { ascending: false });
+    .order("created_at", { ascending: false })
+    // ponytail: pengaman pertumbuhan data — naikkan/pagination kalau mendekati
+    .limit(200);
 
   if (error) {
     return NextResponse.json(
@@ -24,21 +26,31 @@ export async function GET() {
       total_amount,
       status,
       period,
-      employee:employees(name)
+      employee:employees(employee_name)
     `)
-    .eq("status", "PENDING");
+    .eq("status", "PENDING")
+    .limit(200);
 
-  // Attach grab_match if customer_name matches employee name
-  // + signed URL file (bucket private — URL ditandatangani service role saat dibaca)
+  // Signed URL file (bucket private) — dulu satu request storage per baris;
+  // sekarang satu panggilan batch untuk semua path.
   const storage = createServiceClient().storage.from("dataperkom");
-  const enrichedData = await Promise.all(data.map(async (mClaim) => {
+  const paths = (data || []).map((m) => m.storage_path).filter(Boolean) as string[];
+  const urlByPath = new Map<string, string>();
+  if (paths.length > 0) {
+    const { data: signedBatch } = await storage.createSignedUrls(paths, 3600);
+    (signedBatch || []).forEach((s) => {
+      if (s.path && s.signedUrl) urlByPath.set(s.path, s.signedUrl);
+    });
+  }
+
+  const enrichedData = (data || []).map((mClaim) => {
     let grab_match = null;
     if (grabClaims && mClaim.customer_name) {
       const match = grabClaims.find(
         (gc) => {
           // Join Supabase bisa balikin object atau array — terima keduanya.
-          const emp = gc.employee as { name?: string } | { name?: string }[] | null;
-          const empName = Array.isArray(emp) ? emp[0]?.name : emp?.name;
+          const emp = gc.employee as { employee_name?: string } | { employee_name?: string }[] | null;
+          const empName = Array.isArray(emp) ? emp[0]?.employee_name : emp?.employee_name;
           return empName && empName.toLowerCase() === mClaim.customer_name?.toLowerCase();
         }
       );
@@ -46,17 +58,12 @@ export async function GET() {
         grab_match = match;
       }
     }
-    let file_url: string | null = null;
-    if (mClaim.storage_path) {
-      const { data: signed } = await storage.createSignedUrl(mClaim.storage_path, 3600);
-      file_url = signed?.signedUrl ?? null;
-    }
     return {
       ...mClaim,
-      file_url,
+      file_url: mClaim.storage_path ? urlByPath.get(mClaim.storage_path) ?? null : null,
       grab_match,
     };
-  }));
+  });
 
   return NextResponse.json({ success: true, data: enrichedData });
 }

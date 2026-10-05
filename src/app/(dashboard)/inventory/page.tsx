@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Html5Qrcode } from "html5-qrcode";
+import type { Html5Qrcode } from "html5-qrcode";
 import { Boxes, Loader2, Plus, ScanBarcode, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -65,6 +65,8 @@ export default function InventoryPage() {
 
   const startScan = async () => {
     try {
+      // Library berat (~370KB) hanya dimuat saat tombol scan benar-benar dipakai
+      const { Html5Qrcode } = await import("html5-qrcode");
       const scanner = new Html5Qrcode("scanner-region");
       scannerRef.current = scanner;
       await scanner.start(

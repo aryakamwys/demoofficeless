@@ -90,7 +90,9 @@ export default async function ClaimDetailPage({ params }: ClaimDetailPageProps) 
 
   return (
     <>
-      <AutoRefresh />
+      {/* Klaim final tidak di-poll lagi — 6 query + payload base64 ttd tiap 10s
+          tidak ada gunanya setelah APPROVED. */}
+      <AutoRefresh enabled={claim.status !== "APPROVED"} />
       <ClaimDetailView claim={claimDetail} />
     </>
   );

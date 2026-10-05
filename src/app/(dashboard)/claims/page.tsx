@@ -52,12 +52,14 @@ export default function ClaimsPage() {
   const [sendWADialogOpen, setSendWADialogOpen] = useState(false);
   const [selectedClaim, setSelectedClaim] = useState<ClaimWithEmployee | null>(null);
 
-  const fetchClaims = useCallback(async () => {
+  const fetchClaims = useCallback(async (opts?: { silent?: boolean }) => {
     // Batalkan request lama supaya respons stale tidak menimpa hasil baru
     abortRef.current?.abort();
     const ctrl = new AbortController();
     abortRef.current = ctrl;
-    setLoading(true);
+    // Polling periodik memakai silent — tanpa skeleton/loading supaya tabel
+    // tidak kedip dan tidak di-remount tiap 10 detik.
+    if (!opts?.silent) setLoading(true);
     try {
       const params = new URLSearchParams();
       if (debouncedSearch) params.set("search", debouncedSearch);
@@ -68,12 +70,16 @@ export default function ClaimsPage() {
       const res = await fetch(`/api/claims?${params}`, { signal: ctrl.signal });
       const result = await res.json();
       if (result.success) {
-        setClaims(result.data);
+        // Identitas array dipertahankan saat data tidak berubah — React bails
+        // out dan tabel 500 baris tidak re-render hanya karena polling.
+        setClaims((prev) =>
+          JSON.stringify(prev) === JSON.stringify(result.data) ? prev : result.data
+        );
       }
     } catch {
       // AbortError diabaikan — request terbaru sudah berjalan
     } finally {
-      setLoading(false);
+      if (!opts?.silent) setLoading(false);
     }
   }, [debouncedSearch, statusFilter, periodFilter, uploadFilter]);
 
@@ -92,10 +98,10 @@ export default function ClaimsPage() {
   }, [fetchClaims]);
 
   // Update otomatis tiap 10 detik saat tab terlihat — status klaim berubah via
-  // WhatsApp langsung kelihatan tanpa refresh browser.
+  // WhatsApp langsung kelihatan tanpa refresh browser. Silent: tanpa loading.
   useEffect(() => {
     const id = setInterval(() => {
-      if (document.visibilityState === "visible") fetchClaims();
+      if (document.visibilityState === "visible") fetchClaims({ silent: true });
     }, 10000);
     return () => clearInterval(id);
   }, [fetchClaims]);
@@ -204,7 +210,8 @@ export default function ClaimsPage() {
       {/* Table */}
       <Card>
         <CardContent className="p-0">
-          {loading ? (
+          {/* Skeleton hanya saat load pertama — polling silent tidak mencabut tabel */}
+          {loading && claims.length === 0 ? (
             <div className="p-0">
               {/* Skeleton table header */}
               <div className="border-b px-4 py-3 flex gap-6">
