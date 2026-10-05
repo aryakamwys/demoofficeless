@@ -1,7 +1,7 @@
 import { createServerClient, createServiceClient } from "@/lib/supabase-server";
 import { notFound } from "next/navigation";
-import Link from "next/link";
 import dayjs from "dayjs";
+import { BackLink } from "@/components/ui/back-link";
 import { MapPin } from "lucide-react";
 import {
   getTicket,
@@ -308,17 +308,14 @@ export default async function ClaimReportPage({ params }: ReportPageProps) {
   const total = Number(claim.total_amount);
 
   return (
-    <div className="report-doc mx-auto max-w-3xl bg-white p-6 lg:p-10 text-slate-800 print:p-0">
-      {/* Toolbar — hilang saat print */}
-      <div className="flex items-center justify-between mb-4 print:hidden">
-        <Link
-          href={`/claims/${id}`}
-          className="rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm text-slate-600 transition-colors hover:border-blue-300 hover:text-blue-700"
-        >
-          ← Kembali ke Claim
-        </Link>
+    <>
+      {/* Toolbar — di luar kolom dokumen, hilang saat print */}
+      <div className="flex items-center justify-between print:hidden">
+        <BackLink href={`/claims/${id}`} label="Kembali ke Detail Klaim" />
         <ReportPrintButton />
       </div>
+
+      <div className="report-doc mx-auto max-w-3xl bg-white p-6 lg:p-10 text-slate-800 print:p-0">
 
       {/* Peringatan koneksi EnvGate — report tetap tercetak dengan bukti minimal */}
       {envgateDown && (
@@ -461,6 +458,7 @@ export default async function ClaimReportPage({ params }: ReportPageProps) {
         <SignatureBlock title="Manager" name={managerName} signature={managerSig} />
         <SignatureBlock title="HR" name={hrName} signature={hrSig} />
       </div>
-    </div>
+      </div>
+    </>
   );
 }

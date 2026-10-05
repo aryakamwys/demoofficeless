@@ -5,7 +5,8 @@ import { ClaimDetail, TripRefund } from "@/types";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { StatusBadge } from "@/components/claims/status-badge";
-import { Send, Info, UserCheck, ChevronRight, Loader2, Printer, Pencil, Trash2, FileText, Undo2, Flag } from "lucide-react";
+import { Send, Info, UserCheck, Loader2, Printer, Pencil, Trash2, FileText, Undo2, Flag } from "lucide-react";
+import { BackLink } from "@/components/ui/back-link";
 import { toast } from "sonner";
 import dayjs from "dayjs";
 import { useRouter } from "next/navigation";
@@ -337,11 +338,7 @@ export function ClaimDetailView({ claim }: ClaimDetailViewProps) {
       {/* Header matching Grab Style */}
       <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between mb-8 print:mb-4">
         <div>
-          <div className="flex items-center gap-2 text-sm text-muted-foreground mb-2 print:hidden">
-            <span>Activity</span>
-            <ChevronRight className="h-4 w-4" />
-            <span className="text-[#00B14F] font-medium">Transport</span>
-          </div>
+          <BackLink href="/claims" label="Kembali ke Claims" className="mb-2" />
           <h2 className="text-2xl font-bold tracking-tight text-slate-900">
             {claim.employee?.employee_name || "Unmatched Employee"}
           </h2>
