@@ -1,6 +1,5 @@
 "use client";
 
-import Image from "next/image";
 import { useState, type FormEvent } from "react";
 import { Loader2, Lock, Mail } from "lucide-react";
 import { createBrowserClient } from "@/lib/supabase";
@@ -40,24 +39,11 @@ export default function LoginPage() {
   };
 
   return (
-    // Login satu halaman penuh — tanpa kartu, kolom form terpusat.
+    // Login satu halaman penuh — tanpa kartu/logo, langsung form.
     <div className="flex min-h-screen flex-col items-center justify-center bg-slate-50 px-4 py-10">
-      <div className="w-fit rounded-2xl bg-blue-50 p-3">
-        <Image
-          src="/ogoperkom.png"
-          alt="Logo Perkom"
-          width={40}
-          height={40}
-          className="h-10 w-10 object-contain"
-          priority
-        />
-      </div>
-      <h1 className="mt-5 text-2xl font-bold text-slate-900">
-        Masuk ke Officeless Perkom
+      <h1 className="text-2xl font-bold text-slate-900">
+        Masuk ke Perkombusiness
       </h1>
-      <p className="mt-1.5 text-sm text-slate-500">
-        Approval klaim Grab Business — cukup dari WhatsApp.
-      </p>
 
       <form onSubmit={handleLogin} className="mt-8 w-full max-w-sm space-y-5">
         <div className="space-y-2">
@@ -67,7 +53,7 @@ export default function LoginPage() {
             <Input
               id="email"
               type="email"
-              className="h-11 rounded-full pl-11"
+              className="h-11 rounded-full bg-white pl-11"
               placeholder="nama@perkom.co.id"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
@@ -83,7 +69,7 @@ export default function LoginPage() {
             <Input
               id="password"
               type="password"
-              className="h-11 rounded-full pl-11"
+              className="h-11 rounded-full bg-white pl-11"
               placeholder="••••••••"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
