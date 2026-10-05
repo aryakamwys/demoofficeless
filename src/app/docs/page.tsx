@@ -15,6 +15,7 @@ const NAV = [
   {
     group: "Alur WhatsApp",
     items: [
+      { id: "wa-flow", title: "Diagram Alur & Data" },
       { id: "wa-karyawan", title: "Panduan Karyawan" },
       { id: "wa-approver", title: "Panduan Manager & HR" },
     ],
@@ -138,6 +139,35 @@ function Shot({ src, caption }: { src: string; caption: string }) {
       <img src={src} alt={caption} onError={() => setFailed(true)} className="w-full rounded-lg border border-slate-200 shadow-sm" />
       <figcaption className="mt-2 text-xs text-slate-500">{caption}</figcaption>
     </figure>
+  );
+}
+
+/** Diagram alur/state — teks ASCII monospace, bisa digeser di layar kecil. */
+function Diagram({ caption, children }: { caption: string; children: string }) {
+  return (
+    <figure className="my-5">
+      <div className="overflow-x-auto rounded-xl border border-slate-700 bg-slate-900 p-4">
+        <pre className="font-mono text-[11px] leading-relaxed text-slate-100">{children}</pre>
+      </div>
+      <figcaption className="mt-2 text-xs text-slate-500">{caption}</figcaption>
+    </figure>
+  );
+}
+
+/** Kartu entitas untuk ERD — nama tabel + field penting beserta keterangannya. */
+function Entity({ name, rows }: { name: string; rows: Array<[string, string]> }) {
+  return (
+    <div className="overflow-hidden rounded-lg border border-slate-300">
+      <div className="bg-slate-100 px-3 py-1.5 font-mono text-xs font-bold text-slate-700">{name}</div>
+      <dl className="divide-y divide-slate-100 bg-white">
+        {rows.map(([f, d]) => (
+          <div key={f} className="flex justify-between gap-3 px-3 py-1.5">
+            <dt className="shrink-0 font-mono text-[11px] font-semibold text-slate-800">{f}</dt>
+            <dd className="text-right text-[11px] leading-snug text-slate-500">{d}</dd>
+          </div>
+        ))}
+      </dl>
+    </div>
   );
 }
 
@@ -297,6 +327,193 @@ const CONTENT: Record<string, ReactNode> = {
         trip dan ticket tidak berubah. Pembatalan tercatat sebagai note pada klaim.
       </P>
       <Shot src="/docs/claims.png?v=2" caption="Daftar Claims beserta statusnya" />
+    </>
+  ),
+
+  "wa-flow": (
+    <>
+      <H1>Diagram Alur WhatsApp &amp; Struktur Data</H1>
+      <P>
+        Semua persetujuan klaim lewat satu bot WhatsApp. Identitas pengirim adalah
+        <b> nomor WhatsApp</b> yang terdaftar di data karyawan — bot mencocokkannya dengan klaim
+        yang sedang berjalan. Ada dua cara memberi keputusan: <b>balas chat</b> (angka/perintah)
+        atau <b>ketuk link</b> di pesan lalu tekan tombolnya — keduanya menjalani pemeriksaan yang sama.
+      </P>
+
+      <H2>Peta Alur Klaim</H2>
+      <Diagram caption="Alur persetujuan: karyawan → manager → HR, dengan mode revisi yang bisa berulang.">{`
+                    ┌─────────────────────────────────────────────┐
+                    │                MODE REVISI                 │
+                    │    karyawan mengerjakan via chat / tombol:  │
+                    │    LIST          daftar trip bernomor      │
+                    │    UBAH 3 x      ubah nominal trip 3       │
+                    │    HAPUS 3 x     hapus trip 3 + alasan     │
+                    │    TICKET 3 x    lampirkan ticket EnvGate  │
+                    │    SUDAH TF      penggantian sudah dibayar │
+                    │    SELESAI       kirim ulang ke approver   │
+                    └──────▲────────────────────────────▲────────┘
+                           │ "2 <alasan>"               │ "2 <alasan>"
+                           │                            │
+ ┌───────────┐  "1"  ┌───────────┐  "1"   ┌───────────┐ "1"  ┌────────────────┐
+ │ KARYAWAN  │──────►│  MANAGER  │───────►│    HR     │─────►│ APPROVED       │
+ │ cek data  │       │ cek klaim │        │ cek akhir │      │ klaim selesai, │
+ └───────────┘       └───────────┘        └───────────┘      │ kabar ke       │
+   │"2" catatan       │ chat aneh →        │ chat aneh →     │ karyawan       │
+   │"3" detail        │ menu bantuan       │ menu bantuan    └────────────────┘
+   │teks = catatan
+`}</Diagram>
+      <P>
+        Balasan <Cmd>SELESAI</Cmd> mengembalikan klaim ke approver yang meminta revisi
+        (Manager atau HR) — bisa berulang sampai semua setuju. Chat yang tidak dikenali
+        selalu dibalas menu bantuan, tidak pernah dibiarkan diam.
+      </P>
+
+      <H2>Alur Penggantian Trip Tidak Sesuai</H2>
+      <P>
+        Trip yang ditandai HR (misalnya arah pulang di jam kantor) tidak langsung hilang —
+        biayanya diganti karyawan ke rekening kantor, dan trip keluar dari klaim setelah
+        pembayaran dikonfirmasi.
+      </P>
+      <Diagram caption="State penggantian (tabel trip_refunds): REQUESTED → CLAIMED → CONFIRMED, plus jalur batal.">{`
+    HR menandai trip "tidak sesuai" di web
+    (alasan + nominal + rekening kantor dikirim ke WA karyawan)
+                      │
+                      ▼
+         ┌────────────────────┐    SUDAH TF    ┌────────────────────┐
+         │     REQUESTED      │ ─────────────► │      CLAIMED       │
+         │  menunggu transfer │                │ karyawan bilang    │
+         │                    │ ◄───────────── │ sudah transfer     │
+         └────────────────────┘  BELUM TF /    │ (menunggu HR cek   │
+              │                HR: belum masuk │  mutasi rekening)  │
+              │ HR: batalkan                   └─────────┬──────────┘
+              ▼                                          │ HR: "Pembayaran
+         ┌────────────────────┐                          ▼    diterima" (web)
+         │     CANCELLED      │                ┌────────────────────┐
+         │ trip tetap di      │                │     CONFIRMED      │
+         │ klaim, tidak perlu │                │ trip keluar klaim, │
+         │ diganti            │                │ total dihitung     │
+         └────────────────────┘                │ ulang otomatis     │
+                                               └────────────────────┘
+
+    Selama ada REQUESTED / CLAIMED: klaim DITAHAN —
+    "1", SELESAI, dan approve manual ditolak sampai penggantian beres.
+`}</Diagram>
+
+      <H2>Struktur Data (ERD)</H2>
+      <P>
+        Tujuh tabel yang dipakai alur klaim &amp; WhatsApp. Panah relasi ada di daftar
+        di bawah kartu.
+      </P>
+      <div className="my-4 grid gap-3 sm:grid-cols-2">
+        <Entity
+          name="employees"
+          rows={[
+            ["id", "identitas karyawan"],
+            ["employee_name", "dipakai cocokkan nama di statement Grab"],
+            ["department", "departemen"],
+            ["phone_number", "nomor WhatsApp — kunci pengenalan bot"],
+            ["manager_id →", "atasan (menunjuk employees lagi)"],
+            ["hr_id →", "HR (menunjuk employees lagi)"],
+          ]}
+        />
+        <Entity
+          name="claims"
+          rows={[
+            ["employee_id →", "pemilik klaim"],
+            ["manager_id → / hr_id →", "dua pemberi persetujuan"],
+            ["period", "periode tagihan, mis. Agustus 2026"],
+            ["status", "PENDING / SENT / NEED_REVIEW / APPROVED"],
+            ["approved_at", "waktu karyawan tekan SETUJU"],
+            ["manager_status · hr_status", "PENDING / APPROVED per tahap"],
+            ["total_amount · trip_count", "ikut dihitung ulang tiap perubahan"],
+            ["pending_wa_change", "konfirmasi UBAH/HAPUS yang menunggu YA"],
+            ["ticket_wizard", "progres mode isi ticket satu-per-satu"],
+          ]}
+        />
+        <Entity
+          name="trips"
+          rows={[
+            ["claim_id →", "klaim induk"],
+            ["trip_date", "tanggal + jam perjalanan"],
+            ["pickup · dropoff", "titik jemput / tujuan"],
+            ["fare", "biaya perjalanan"],
+            ["ticket_id", "bukti ticket EnvGate (opsional)"],
+          ]}
+        />
+        <Entity
+          name="trip_refunds"
+          rows={[
+            ["claim_id → · trip_id →", "trip_id jadi NULL setelah trip dihapus"],
+            ["trip_no · trip_date · …", "snapshot trip — riwayat tetap hidup"],
+            ["amount · reason", "nominal penggantian + alasan penandaan"],
+            ["status", "REQUESTED / CLAIMED / CONFIRMED / CANCELLED"],
+            ["employee_note", "keterangan karyawan, mis. bca jam 14.30"],
+            ["requested_by/at · claimed_at", "jejak siapa-kapan"],
+            ["confirmed_by/at · cancelled_at", "keputusan HR"],
+          ]}
+        />
+        <Entity
+          name="comments"
+          rows={[
+            ["claim_id →", "timeline klaim"],
+            ["message", "isi catatan / keputusan"],
+            ["author_name · author_role", "EMPLOYEE / MANAGER / HR / SYSTEM"],
+            ["created_at", "urutan kejadian"],
+          ]}
+        />
+        <Entity
+          name="whatsapp_logs"
+          rows={[
+            ["claim_id → (boleh NULL)", "jejak setiap pesan masuk/keluar"],
+            ["phone_number", "nomor pengirim/penerima"],
+            ["message_type", "label jenis pesan, mis. MANAGER_APPROVAL_PROMPT"],
+            ["status", "SENT / FAILED / RECEIVED"],
+            ["response", "cuplikan isi / pesan error"],
+          ]}
+        />
+        <Entity
+          name="app_settings"
+          rows={[
+            ["key", "mis. company_bank_name"],
+            ["value", "mis. BCA"],
+            ["", "rekening kantor tujuan penggantian — berdiri sendiri, tidak berelasi"],
+          ]}
+        />
+      </div>
+      <div className="my-4 overflow-x-auto rounded-lg border border-slate-200">
+        <table className="w-full border-collapse text-left text-xs">
+          <thead>
+            <tr className="bg-slate-50">
+              <th className="border-b border-slate-200 px-3 py-2 font-semibold text-slate-700">Relasi</th>
+              <th className="border-b border-slate-200 px-3 py-2 font-semibold text-slate-700">Arti</th>
+            </tr>
+          </thead>
+          <tbody className="text-slate-600">
+            {[
+              ["employees 1 ─ N claims", "satu karyawan bisa punya banyak klaim; manager_id dan hr_id menunjuk karyawan lain sebagai pemberi persetujuan"],
+              ["employees.manager_id / hr_id ─ employees", "struktur atasan menunjuk dirinya sendiri (self-reference)"],
+              ["claims 1 ─ N trips", "satu klaim berisi banyak perjalanan"],
+              ["claims 1 ─ N trip_refunds", "penggantian tercatat per klaim"],
+              ["trips 1 ─ 0..1 trip_refunds", "satu trip maksimal satu penggantian aktif; trip dihapus saat CONFIRMED tapi snapshot-nya tetap"],
+              ["claims 1 ─ N comments", "semua catatan & keputusan jadi timeline"],
+              ["claims 1 ─ N whatsapp_logs", "audit tiap pesan; boleh NULL untuk pesan di luar klaim"],
+            ].map(([r, d]) => (
+              <tr key={r}>
+                <td className="border-b border-slate-100 px-3 py-2 font-mono text-[11px] font-semibold text-slate-700">{r}</td>
+                <td className="border-b border-slate-100 px-3 py-2">{d}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      <Note>
+        <b>Kenapa aman:</b> nomor WhatsApp adalah identitas — pesan dari nomor asing tidak
+        dikenali. Link tombol di pesan bertanda tangan rahasia dan hangus 7 hari; peran
+        dan tahap klaim dicek ulang setiap aksi. Semua keputusan tercatat di
+        <span className="font-mono text-[11px]"> comments</span> dan
+        <span className="font-mono text-[11px]"> whatsapp_logs</span> — siapa, kapan, apa.
+      </Note>
     </>
   ),
 
