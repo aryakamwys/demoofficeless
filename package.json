@@ -54,6 +54,7 @@
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "@types/react-signature-canvas": "^1.0.7",
+    "daisyui": "^5.7.47",
     "eslint": "^9",
     "eslint-config-next": "16.2.9",
     "playwright": "^1.63.0",

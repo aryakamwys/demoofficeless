@@ -1,18 +1,20 @@
 import type { Metadata } from "next";
 import { SiteNavbar } from "@/components/site-navbar";
 import { SiteFooter } from "@/components/site-footer";
+import { ScrollProgress } from "@/components/scroll-progress";
 
 export const metadata: Metadata = {
   title: "Changelog — Officeless Perkom",
   description: "Semua pembaruan dan fitur terbaru dari Officeless Perkom.",
 };
 
-// Tipe entri → kelas badge tinted (token DESIGN.md).
+// Tipe entri → kelas warna badge (daisyUI badge + token warna sendiri;
+// tema daisy dimatikan di globals.css).
 const TYPE_STYLES: Record<string, string> = {
-  Baru: "bg-emerald-50 text-emerald-700",
-  Fitur: "bg-blue-50 text-blue-700",
-  Peningkatan: "bg-amber-50 text-amber-700",
-  Perbaikan: "bg-slate-100 text-slate-700",
+  Baru: "border-emerald-200 bg-emerald-50 text-emerald-700",
+  Fitur: "border-blue-200 bg-blue-50 text-blue-700",
+  Peningkatan: "border-amber-200 bg-amber-50 text-amber-700",
+  Perbaikan: "border-slate-200 bg-slate-100 text-slate-700",
 };
 
 const ENTRIES: {
@@ -28,8 +30,8 @@ const ENTRIES: {
     title: "Tampilan area publik baru",
     desc: "Landing, login, dan halaman changelog didesain ulang agar lebih ringkas dan modern.",
     items: [
-      "Navbar mengambang bergaya glassmorphism di landing dan changelog.",
-      "Landing diringkas menjadi satu kartu pembuka + footer baru.",
+      "Navbar glass (blur) di landing dan changelog.",
+      "Landing diringkas + footer baru.",
       "Halaman Changelog untuk memantau setiap pembaruan aplikasi.",
       "Halaman login menjadi satu halaman penuh tanpa kartu.",
     ],
@@ -92,36 +94,44 @@ const ENTRIES: {
 export default function ChangelogPage() {
   return (
     <div className="flex min-h-screen flex-col bg-white">
+      <ScrollProgress />
       <SiteNavbar />
 
-      <main className="mx-auto w-full max-w-2xl flex-1 px-4 py-14 sm:py-16">
-        <h1 className="text-3xl font-bold text-slate-900">Changelog</h1>
-        <p className="mt-2 text-sm leading-relaxed text-slate-500">
+      <main className="mx-auto w-full max-w-2xl flex-1 px-4 py-14 sm:py-20">
+        <h1 className="text-3xl font-bold tracking-tight text-slate-900 sm:text-4xl">
+          Changelog
+        </h1>
+        <p className="mt-3 text-sm leading-relaxed text-slate-500">
           Semua pembaruan dan fitur terbaru dari Officeless Perkom.
         </p>
 
-        <div className="mt-12 space-y-12">
+        <div className="mt-10 space-y-6">
           {ENTRIES.map((entry) => (
-            <article key={entry.title}>
-              <div className="flex items-center gap-3 text-sm">
-                <span className="font-medium text-slate-500">{entry.date}</span>
-                <span
-                  className={`rounded-full px-2.5 py-0.5 text-xs font-semibold ${TYPE_STYLES[entry.type]}`}
-                >
-                  {entry.type}
-                </span>
+            <article
+              key={entry.title}
+              className="card border border-slate-200 bg-white shadow-sm"
+            >
+              <div className="card-body gap-2 p-6">
+                <div className="flex flex-wrap items-center gap-3">
+                  <span className="text-sm font-medium text-slate-500">
+                    {entry.date}
+                  </span>
+                  <span className={`badge badge-sm border font-semibold ${TYPE_STYLES[entry.type]}`}>
+                    {entry.type}
+                  </span>
+                </div>
+                <h2 className="card-title text-lg font-semibold text-slate-900">
+                  {entry.title}
+                </h2>
+                <p className="text-sm leading-relaxed text-slate-600">
+                  {entry.desc}
+                </p>
+                <ol className="mt-1 list-decimal space-y-1.5 pl-5 text-sm leading-relaxed text-slate-600 marker:text-slate-400">
+                  {entry.items.map((item) => (
+                    <li key={item}>{item}</li>
+                  ))}
+                </ol>
               </div>
-              <h2 className="mt-2 text-xl font-semibold text-slate-900">
-                {entry.title}
-              </h2>
-              <p className="mt-2 text-sm leading-relaxed text-slate-600">
-                {entry.desc}
-              </p>
-              <ol className="mt-3 list-decimal space-y-1.5 pl-5 text-sm leading-relaxed text-slate-600 marker:text-slate-400">
-                {entry.items.map((item) => (
-                  <li key={item}>{item}</li>
-                ))}
-              </ol>
             </article>
           ))}
         </div>

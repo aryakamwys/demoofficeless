@@ -2,6 +2,12 @@
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
 
+/* daisyUI hanya untuk komponen (badge/card/dll) — themes dimatikan supaya
+   tidak menimpa token warna shadcn (--color-primary dsb) di seluruh app. */
+@plugin "daisyui" {
+  themes: false;
+}
+
 @custom-variant dark (&:is(.dark *));
 
 @theme inline {
