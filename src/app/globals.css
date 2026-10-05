@@ -147,3 +147,82 @@
   50% { opacity: 0.4; transform: scale(0.75); }
 }
 .animate-pulse-dot { animation: pulse-dot 1.6s ease-in-out infinite; }
+/* ===== Report print — dokumen A4, bukan screenshot web ===== */
+@media print {
+  @page {
+    size: A4;
+    margin: 14mm 16mm 16mm 16mm;
+  }
+
+  html,
+  body {
+    background: white !important;
+  }
+
+  /* Dokumen mengikuti printable area A4, bukan viewport */
+  .report-doc {
+    width: auto;
+    max-width: none;
+    margin: 0;
+    padding: 0 0 6mm 0;
+    font-size: 10.5pt;
+  }
+
+  /* Section yang harus utuh satu halaman (summary, timeline, kartu, ttd) */
+  .report-keep {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+
+  /* Judul section tidak boleh yatim di dasar halaman */
+  .report-h2 {
+    break-after: avoid;
+    page-break-after: avoid;
+  }
+
+  /* Tabel boleh mengalir antar halaman: header + footer bar berulang,
+     satu baris trip tidak terbelah */
+  .report-table thead {
+    display: table-header-group;
+  }
+  .report-table tfoot {
+    display: table-footer-group;
+  }
+  .report-table tr {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+
+  /* Rute/alamat panjang: patah di mana saja, tidak pernah overflow horizontal */
+  .report-anywhere {
+    overflow-wrap: anywhere;
+    word-break: normal;
+    white-space: normal;
+  }
+
+  /* Footer berjalan — kontinuitas visual di tiap halaman */
+  .report-running-footer {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    display: flex;
+    justify-content: space-between;
+    gap: 8mm;
+    font-size: 7.5pt;
+    color: #475569;
+    border-top: 0.5pt solid #94a3b8;
+    padding-top: 1.5mm;
+  }
+
+  a {
+    text-decoration: none !important;
+    color: inherit !important;
+  }
+}
+
+@media screen {
+  .report-running-footer {
+    display: none;
+  }
+}

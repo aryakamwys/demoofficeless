@@ -5,7 +5,6 @@ import dayjs from "dayjs";
 import { MapPin } from "lucide-react";
 import {
   getTicket,
-  findTicketByRequesterName,
   getStatusMap,
   getPriorityMap,
   getSourceMap,
@@ -291,14 +290,12 @@ export default async function ClaimReportPage({ params }: ReportPageProps) {
     }
   });
 
-  // Detail ticket level klaim: dari link managed-service, atau fallback by nama
-  let invTicket: InvTicket | null = ticket
+  // Detail ticket level klaim: hanya dari link managed-service yang eksplisit.
+  // Tidak ada tebakan by nama requester — ticket yang tidak berhubungan dengan
+  // klaim tidak boleh muncul di report (permintaan: jangan ada yang tidak sesuai).
+  const invTicket: InvTicket | null = ticket
     ? ticketById.get(digitsOf(ticket.ticket_id)) ?? null
     : null;
-  if (!ticket && !invTicket && claim.employee?.employee_name) {
-    const found = await findTicketByRequesterName(claim.employee.employee_name);
-    if (found && !ticketById.has(String(found.id))) invTicket = found;
-  }
 
   // Lampiran file ticket — signed URL (bucket private)
   let attachmentUrl: string | null = null;
@@ -377,7 +374,7 @@ export default async function ClaimReportPage({ params }: ReportPageProps) {
   const total = Number(claim.total_amount);
 
   return (
-    <div className="mx-auto max-w-3xl bg-white p-6 lg:p-10 text-slate-800 print:p-0">
+    <div className="report-doc mx-auto max-w-3xl bg-white p-6 lg:p-10 text-slate-800 print:p-0">
       {/* Toolbar — hilang saat print */}
       <div className="flex items-center justify-between mb-4 print:hidden">
         <Link
@@ -397,16 +394,25 @@ export default async function ClaimReportPage({ params }: ReportPageProps) {
         </div>
       )}
 
-      {/* Kop */}
-      <div className="border-b-2 border-slate-800 pb-3 mb-6">
-        <h1 className="text-lg font-bold uppercase tracking-wide">Perkom — Report Klaim Perjalanan</h1>
-        <p className="text-xs text-slate-500 mt-1">
-          Dicetak {dayjs().format("DD MMM YYYY HH:mm")} · Claim ID {claim.id.slice(0, 8)}
-        </p>
+      {/* Kop perusahaan — utuh satu halaman */}
+      <div className="report-keep flex items-start justify-between gap-4 border-b-2 border-slate-800 pb-3 mb-6">
+        <div className="flex items-center gap-3">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src="/ogoperkom.png" alt="Logo Perkom" className="h-12 w-12 object-contain" />
+          <div>
+            <h1 className="text-lg font-bold uppercase tracking-wide">Laporan Klaim Perjalanan</h1>
+            <p className="text-xs text-slate-500 mt-0.5">PT Perkom · Dokumen Internal</p>
+          </div>
+        </div>
+        <div className="text-right text-[10px] leading-relaxed text-slate-500">
+          <p>Claim ID: {claim.id.slice(0, 8)}</p>
+          <p>Dicetak: {dayjs().format("DD MMM YYYY HH:mm")}</p>
+        </div>
       </div>
 
-      {/* Ringkasan */}
-      <div className="space-y-1 mb-6">
+      {/* Ringkasan klaim — utuh satu halaman */}
+      <h2 className="report-h2 text-sm font-bold uppercase mb-2">Ringkasan Klaim</h2>
+      <div className="report-keep space-y-1 mb-6">
         <Row label="Karyawan" value={claim.employee?.employee_name || "—"} />
         <Row label="Department" value={claim.employee?.department || "—"} />
         <Row label="Periode" value={claim.period} />
@@ -415,9 +421,9 @@ export default async function ClaimReportPage({ params }: ReportPageProps) {
         <Row label="Status" value={claim.status} />
       </div>
 
-      {/* Timeline approval */}
-      <h2 className="text-sm font-bold uppercase mb-2">Timeline Approval</h2>
-      <div className="space-y-1 mb-6 text-sm">
+      {/* Timeline approval — utuh satu halaman */}
+      <h2 className="report-h2 text-sm font-bold uppercase mb-2">Timeline Approval</h2>
+      <div className="report-keep space-y-1 mb-6 text-sm">
         <Row
           label="Konfirmasi Engineer"
           value={claim.approved_at ? dayjs(claim.approved_at).format("DD MMM YYYY HH:mm") : "—"}
@@ -426,9 +432,9 @@ export default async function ClaimReportPage({ params }: ReportPageProps) {
         <Row label={`HR (${hrName})`} value={claim.hr_status} />
       </div>
 
-      {/* Tabel trip */}
-      <h2 className="text-sm font-bold uppercase mb-2">Detail Perjalanan</h2>
-      <table className="w-full border-collapse text-xs mb-6">
+      {/* Tabel trip — boleh mengalir antar halaman, header berulang otomatis */}
+      <h2 className="report-h2 text-sm font-bold uppercase mb-2">Detail Perjalanan</h2>
+      <table className="report-table w-full border-collapse text-xs mb-6">
         <thead>
           <tr className="bg-slate-100">
             <th className="border border-slate-300 px-2 py-2 text-left">No</th>
@@ -445,7 +451,7 @@ export default async function ClaimReportPage({ params }: ReportPageProps) {
               <td className="border border-slate-300 px-2 py-1 whitespace-nowrap">
                 {formatTripDateTime(t.trip_date)}
               </td>
-              <td className="border border-slate-300 px-2 py-1">
+              <td className="report-anywhere border border-slate-300 px-2 py-1">
                 {t.pickup} → {t.dropoff}
               </td>
               <td className="border border-slate-300 px-2 py-1">
@@ -471,6 +477,8 @@ export default async function ClaimReportPage({ params }: ReportPageProps) {
               </td>
             </tr>
           ))}
+        </tbody>
+        <tfoot>
           <tr className="font-semibold bg-slate-50">
             <td colSpan={4} className="border border-slate-300 px-2 py-1 text-right">
               Total
@@ -479,11 +487,11 @@ export default async function ClaimReportPage({ params }: ReportPageProps) {
               {total.toLocaleString("id-ID")}
             </td>
           </tr>
-        </tbody>
+        </tfoot>
       </table>
 
       {/* Ticket EnvGate — kartu bergaya halaman ticket InvGate */}
-      <h2 className="text-sm font-bold uppercase mb-2">Referensi Ticket EnvGate</h2>
+      <h2 className="report-h2 text-sm font-bold uppercase mb-2">Referensi Ticket EnvGate</h2>
       {invCards.length > 0 ? (
         <div className="mb-6">
           {invCards.map((c) => (
@@ -509,9 +517,9 @@ export default async function ClaimReportPage({ params }: ReportPageProps) {
         </p>
       )}
 
-      {/* Tanda tangan */}
-      <h2 className="text-sm font-bold uppercase mb-4">Persetujuan</h2>
-      <div className="flex gap-6 mb-8">
+      {/* Tanda tangan — satu blok logis, tidak boleh terpisah antar halaman */}
+      <h2 className="report-h2 text-sm font-bold uppercase mb-4">Persetujuan</h2>
+      <div className="report-keep flex gap-6 mb-8">
         <SignatureBlock
           title="Engineer"
           name={claim.employee?.employee_name || "—"}
@@ -524,6 +532,12 @@ export default async function ClaimReportPage({ params }: ReportPageProps) {
       <p className="text-[10px] text-slate-400 text-center">
         Report ini dihasilkan otomatis oleh Perkom Dashboard — data ticket live dari EnvGate Service Desk.
       </p>
+
+      {/* Footer berjalan — tampil di tiap halaman cetak (hilang di layar) */}
+      <div className="report-running-footer">
+        <span>PERKOM · Laporan Klaim Perjalanan · Dokumen Internal</span>
+        <span>Claim ID {claim.id.slice(0, 8)}</span>
+      </div>
     </div>
   );
 }
