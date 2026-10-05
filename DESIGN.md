@@ -24,14 +24,15 @@ tokens:
     icon_tile: rounded-xl p-2.5 tinted (bg-*-50 text-*-600); ungu hanya aksen OpenClaw (referensi user)
     progress_bar: h-1.5 rounded-full bg-slate-100, fill bg-<accent> (blue/emerald/amber/purple)
     landing:
-      navbar: putih border-b h-16, logo h-8 + "Officeless Perkom" bold, kanan link Dokumentasi + tombol Masuk
-      hero: bg-slate-50, headline text-3xl/4xl bold + sub + CTA (primary/outline), kartu akses putih rounded-2xl border kanan
-      footer: bg-slate-50 border-t, 3 kolom (brand/kontak/tautan) + bar copyright
-    auth_card:
-      layout: split rounded-3xl shadow-xl — panel brand bg-blue-600 (dekor lingkaran putih/10) kiri, form putih kanan; pembatas SVG melengkung (putih menonjol ke panel brand)
+      navbar: pill mengambang sticky top-4 — rounded-full border-white/60 bg-white/70 backdrop-blur-xl backdrop-saturate-150 shadow; logo h-7 + nama, kanan Dokumentasi/Changelog + tombol Masuk (rounded-full)
+      opening_card: satu kartu terpusat max-w-xl rounded-2xl border-slate-200 bg-white p-8/10 text-center shadow-sm (gaya docs.bagibagi.co) — logo tile, judul, deskripsi singkat, CTA Masuk/Dokumentasi
+      footer: bg-slate-50 border-t, 3 kolom (brand+tagline / Kontak / Tautan) + bar copyright © 2026 PT Perkom
+    changelog:
+      entry: baris tanggal (text-sm text-slate-500) + badge tipe tinted pill (Baru=emerald, Fitur=blue, Peningkatan=amber, Perbaikan=slate), judul text-xl font-semibold, deskripsi, list bernomor; kolom max-w-2xl
+    auth_page:
+      layout: satu halaman penuh TANPA kartu — bg-slate-50, kolom max-w-sm terpusat: logo tile + judul + sub + form + catatan kaki
       input: pill h-11 rounded-full, ikon lucide absolute left-4 text-slate-400
       button: pill h-11 rounded-full w-full bg-primary
-      mobile: panel brand disembunyikan (sm:block), form penuh
 ---
 
 # DESIGN.md — Perkom Dashboard
