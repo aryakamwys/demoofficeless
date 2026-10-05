@@ -200,29 +200,8 @@
     white-space: normal;
   }
 
-  /* Footer berjalan — kontinuitas visual di tiap halaman */
-  .report-running-footer {
-    position: fixed;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    display: flex;
-    justify-content: space-between;
-    gap: 8mm;
-    font-size: 7.5pt;
-    color: #475569;
-    border-top: 0.5pt solid #94a3b8;
-    padding-top: 1.5mm;
-  }
-
   a {
     text-decoration: none !important;
     color: inherit !important;
-  }
-}
-
-@media screen {
-  .report-running-footer {
-    display: none;
   }
 }

@@ -5,7 +5,6 @@ import dayjs from "dayjs";
 import { MapPin } from "lucide-react";
 import {
   getTicket,
-  getStatusMap,
   getPriorityMap,
   getSourceMap,
   getLocationsMap,
@@ -13,7 +12,7 @@ import {
   ticketTitle,
   type InvTicket,
 } from "@/lib/envgate";
-import { TYPE_NAMES, PRIORITY_NAMES, InvAvatar, InvTypeIcon, invPrettyId, stripInvHtml } from "@/components/services/invgate-ui";
+import { TYPE_NAMES, PRIORITY_NAMES, invPrettyId } from "@/components/services/invgate-ui";
 import { formatTripDateTime } from "@/lib/format";
 import { ReportPrintButton } from "@/components/claims/report-print-button";
 
@@ -67,37 +66,11 @@ function MetricCell({ label, value }: { label: string; value: string }) {
   );
 }
 
-function Participant({
-  name,
-  role,
-  showClock,
-}: {
-  name: string;
-  role: string;
-  showClock?: boolean;
-}) {
-  return (
-    <div className="flex items-center gap-2">
-      <InvAvatar name={name} />
-      <div>
-        <p className="font-medium leading-tight text-slate-700">{name}</p>
-        <p className="flex items-center gap-1 text-[9px] text-slate-400">
-          {role}
-          {showClock && (
-            <span className="inline-block h-1.5 w-1.5 rounded-full bg-emerald-500" />
-          )}
-        </p>
-      </div>
-    </div>
-  );
-}
-
-/** Kartu bukti ticket — meniru layout halaman ticket EnvGate (semua data live API). */
+/** Kartu bukti ticket — meniru panel header detail ticket EnvGate (data live API). */
 function InvGateCard({
   caption,
   inv,
   live,
-  statusName,
   priorityName,
   sourceName,
   locationName,
@@ -106,7 +79,6 @@ function InvGateCard({
   caption: string;
   inv: InvTicket;
   live?: boolean;
-  statusName: string;
   priorityName: string;
   sourceName: string;
   locationName: string;
@@ -117,48 +89,38 @@ function InvGateCard({
     ? dayjs(String(inv.created_at)).format("DD MMM YYYY HH:mm")
     : "—";
   const customer = inv.requester_user?.name || "—";
-  const agent = inv.assigned_user?.name || "—";
-  const helpdesk = inv.assigned_group_details?.name || "—";
-  const creator = inv.creator_user?.name || inv.requester_user?.name || "—";
   const crumb = inv.category_breadcrumb?.replace(/ > /g, " » ");
 
   return (
     <div className="mb-3 break-inside-avoid rounded-sm border border-slate-300 text-xs">
-      {/* Bar atas: status + badge ID */}
-      <div className="flex items-center justify-between border-b border-slate-200 bg-slate-50 px-3 py-2">
-        <div className="flex items-center gap-2">
-          <span className="rounded border border-slate-300 bg-white px-2 py-0.5 text-slate-600">
-            {statusName || (inv.status_id ? `ID ${inv.status_id}` : "—")}
-          </span>
-          {caption && (
-            <span className="text-[9px] font-semibold uppercase tracking-wider text-slate-400">
-              {caption}
-            </span>
-          )}
-        </div>
-        <span className="rounded-sm bg-blue-600 px-2 py-0.5 font-semibold text-white">
-          {invPrettyId(inv)}
-        </span>
-      </div>
+      {caption && (
+        <p className="border-b border-slate-200 px-3 py-1 text-[9px] font-semibold uppercase tracking-wider text-slate-400">
+          {caption}
+        </p>
+      )}
 
-      {/* Judul + breadcrumb + lokasi */}
-      <div className="flex items-start gap-2 border-b border-slate-200 px-3 py-2">
-        <InvTypeIcon typeId={inv.type_id} />
-        <div className="min-w-0 flex-1">
-          <p className="font-semibold leading-snug text-slate-800">
+      {/* Judul + breadcrumb + lokasi + badge ID */}
+      <div className="flex items-start justify-between gap-3 px-3 pb-2 pt-3">
+        <div className="min-w-0">
+          <p className="text-sm font-semibold leading-snug text-slate-800">
             {ticketTitle(inv) || "—"}
           </p>
           {crumb && <p className="mt-0.5 text-[10px] text-slate-400">{crumb}</p>}
         </div>
-        {locationName && (
-          <span className="flex items-center gap-0.5 whitespace-nowrap text-[10px] text-slate-500">
-            <MapPin className="h-3 w-3" /> {locationName}
+        <div className="flex shrink-0 items-center gap-2">
+          {locationName && (
+            <span className="flex items-center gap-1 whitespace-nowrap text-[10px] text-slate-500">
+              <MapPin className="h-3 w-3" /> {locationName}
+            </span>
+          )}
+          <span className="rounded-sm bg-blue-600 px-2 py-0.5 font-semibold text-white">
+            {invPrettyId(inv)}
           </span>
-        )}
+        </div>
       </div>
 
-      {/* Metrics baris 1 */}
-      <div className="grid grid-cols-5 divide-x divide-slate-200 border-b border-slate-200">
+      {/* Metadata baris 1 */}
+      <div className="grid grid-cols-5 divide-x divide-slate-200 border-t border-slate-200">
         <MetricCell
           label="Priority"
           value={
@@ -172,45 +134,19 @@ function InvGateCard({
         <MetricCell label="Resolution" value={inv.sla_incident_resolution || "—"} />
       </div>
 
-      {/* Metrics baris 2 */}
-      <div className="grid grid-cols-3 divide-x divide-slate-200 border-b border-slate-200 bg-slate-50/50">
+      {/* Metadata baris 2 */}
+      <div className="grid grid-cols-3 divide-x divide-slate-200 border-t border-slate-200 bg-slate-50">
         <MetricCell label="Incident Location" value={locationName || "—"} />
         <MetricCell label="Details Location" value={customer} />
         <MetricCell label="Ticket Dibuat" value={created} />
       </div>
 
       {!live && (
-        <p className="border-b border-slate-200 bg-amber-50 px-3 py-1.5 text-[9px] italic text-amber-700">
+        <p className="border-t border-slate-200 bg-amber-50 px-3 py-1.5 text-[9px] italic text-amber-700">
           Detail live dari EnvGate tidak tersedia untuk ticket ini — nomor tetap
           tercatat sebagai bukti.
         </p>
       )}
-
-      {/* Kartu DESCRIPTION */}
-      <div className="flex gap-2 border-b border-slate-200 px-3 py-2">
-        <InvAvatar name={creator} />
-        <div className="min-w-0 flex-1">
-          <div className="mb-1 flex items-center justify-between gap-2">
-            <span className="font-medium text-slate-700">{creator}</span>
-            <span className="rounded-sm bg-blue-600 px-1.5 py-0.5 text-[8px] font-bold uppercase tracking-wider text-white">
-              Description
-            </span>
-          </div>
-          <div className="whitespace-pre-line rounded-sm border border-slate-200 bg-slate-50 p-2 leading-relaxed text-slate-700">
-            {(inv.description && stripInvHtml(inv.description)) || ticketTitle(inv) || "—"}
-          </div>
-        </div>
-      </div>
-
-      {/* Participants */}
-      <div className="flex flex-wrap gap-x-8 gap-y-2 px-3 py-2">
-        <Participant name={customer} role="Customer" />
-        <Participant
-          name={agent}
-          role={helpdesk !== "—" ? `Agent — ${helpdesk}` : "Agent"}
-          showClock
-        />
-      </div>
 
       {attachmentUrl && (
         <div className="border-t border-slate-200 px-3 py-2 print:hidden">
@@ -306,17 +242,15 @@ export default async function ClaimReportPage({ params }: ReportPageProps) {
     attachmentUrl = signed?.signedUrl ?? null;
   }
 
-  // Nama status/priority/source/lokasi dari entity EnvGate (cache 24 jam)
-  const [statusMap, priorityMap, sourceMap, locationsMap] = await Promise.all([
-    getStatusMap(),
+  // Nama priority/source/lokasi dari entity EnvGate (cache 24 jam)
+  const [priorityMap, sourceMap, locationsMap] = await Promise.all([
     getPriorityMap(),
     getSourceMap(),
     getLocationsMap(),
   ]);
 
-  // Kartu ticket bergaya halaman InvGate: level klaim + satu per trip (dedup by digit)
+  // Kartu ticket bergaya panel header InvGate: level klaim + satu per trip (dedup by digit)
   const namesOf = (inv: InvTicket) => ({
-    statusName: inv.status_id ? resolveEntityName(statusMap, inv.status_id) : "",
     priorityName: inv.priority_id ? resolveEntityName(priorityMap, inv.priority_id) : "",
     sourceName: inv.source_id ? resolveEntityName(sourceMap, inv.source_id) : "",
     locationName:
@@ -400,7 +334,7 @@ export default async function ClaimReportPage({ params }: ReportPageProps) {
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src="/ogoperkom.png" alt="Logo Perkom" className="h-12 w-12 object-contain" />
           <div>
-            <h1 className="text-lg font-bold uppercase tracking-wide">Laporan Klaim Perjalanan</h1>
+            <h1 className="text-lg font-bold uppercase tracking-wide">Laporan Klaim Grab</h1>
             <p className="text-xs text-slate-500 mt-0.5">PT Perkom · Dokumen Internal</p>
           </div>
         </div>
@@ -500,7 +434,6 @@ export default async function ClaimReportPage({ params }: ReportPageProps) {
               caption={c.caption}
               inv={c.inv}
               live={c.live}
-              statusName={c.statusName}
               priorityName={c.priorityName}
               sourceName={c.sourceName}
               locationName={c.locationName}
@@ -527,16 +460,6 @@ export default async function ClaimReportPage({ params }: ReportPageProps) {
         />
         <SignatureBlock title="Manager" name={managerName} signature={managerSig} />
         <SignatureBlock title="HR" name={hrName} signature={hrSig} />
-      </div>
-
-      <p className="text-[10px] text-slate-400 text-center">
-        Report ini dihasilkan otomatis oleh Perkom Dashboard — data ticket live dari EnvGate Service Desk.
-      </p>
-
-      {/* Footer berjalan — tampil di tiap halaman cetak (hilang di layar) */}
-      <div className="report-running-footer">
-        <span>PERKOM · Laporan Klaim Perjalanan · Dokumen Internal</span>
-        <span>Claim ID {claim.id.slice(0, 8)}</span>
       </div>
     </div>
   );
