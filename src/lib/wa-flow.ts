@@ -17,10 +17,6 @@ import {
   buildEmployeeStatusUpdateMessage,
   buildRevisionRequestMessage,
   buildRevisionTripListMessage,
-  buildChangeConfirmMessage,
-  buildChangeAppliedMessage,
-  buildDropConfirmMessage,
-  buildDropAppliedMessage,
   buildResubmittedMessage,
   buildRefundInfoMessage,
   buildRefundClaimedMessage,
@@ -347,9 +343,8 @@ async function sendClaimInfo(
       stage = "menunggu revisi dari Anda (diminta oleh approver).";
       hints = [
         "Ketik LIST untuk melihat daftar perjalanan bernomor.",
-        "Ketik UBAH 3 75000 untuk mengubah nominal perjalanan nomor 3.",
-        "Ketik HAPUS 3 pulang ke rumah untuk menghapus perjalanan nomor 3.",
         "Ketik TICKET 3 PIM-34285 untuk melampirkan ticket.",
+        "Ada yang perlu diluruskan? Balas dengan catatan untuk HR, sebutkan nomor perjalanannya.",
         "Kalau sudah beres, ketik SELESAI. Klaim dikirim ulang ke approver.",
       ];
     } else {
@@ -827,8 +822,27 @@ async function handleWizardTurn(
 
 // ==========================================
 // Revision flow — command engineer via chat
-// LIST / UBAH <no> <nominal> / TICKET <no> <id> / YA / BATAL / SELESAI / teks bebas → note
+// LIST / TICKET <no> <id> / SELESAI / teks bebas → note.
+// UBAH/HAPUS dipensiunkan: data klaim langsung dari statement Grab,
+// koreksi cukup lewat catatan untuk HR (HR memproses di web).
 // ==========================================
+
+/** Balasan untuk percobaan UBAH/HAPUS/YA/BATAL — arahkan ke catatan. */
+function dataLockedMessage(what: string): string {
+  return [
+    `*Data Tidak Bisa Diubah*`,
+    ``,
+    `Maaf, ${what} tidak bisa lewat chat ya. Data perjalanan langsung dari statement Grab Business.`,
+    ``,
+    `Kalau ada yang perlu diluruskan, balas dengan catatan untuk HR — sebutkan nomor perjalanannya, nanti HR yang memproses.`,
+    `Contoh: perjalanan nomor 3 bukan perjalanan saya`,
+    ``,
+    `Ketik LIST untuk melihat daftar perjalanan bernomor.`,
+    ``,
+    `Kalau sudah beres, ketik *SELESAI*.`,
+  ].join("\n");
+}
+
 async function handleRevisionCommands(
   supabase: ReturnType<typeof createServiceClient>,
   claim: ClaimWithRelations,
@@ -868,108 +882,19 @@ async function handleRevisionCommands(
     return;
   }
 
-  if (cmd.type === "CHANGE") {
-    const { data: trips } = await supabase.from("trips").select("*").eq("claim_id", claim.id).order("trip_date", { ascending: true });
-    const trip = (trips || [])[cmd.tripNo - 1];
-    if (!trip) {
-      await sendAndLog(supabase, claim.id, employeePhone, `*Nomor Tidak Ada*\n\nNomor perjalanan ${cmd.tripNo} tidak ada. Ketik LIST untuk melihat daftarnya ya.`, "REVISION_INVALID");
-      return;
-    }
-    // Trip yang ditandai "tidak sesuai" tidak boleh diubah nominalnya —
-    // nominal penggantian sudah terkunci di trip_refunds.
-    if (refunds.some((r) => r.trip_id === trip.id)) {
-      await sendAndLog(
-        supabase, claim.id, employeePhone,
-        [
-          `*Nominal Terkunci*`,
-          ``,
-          `Perjalanan nomor ${cmd.tripNo} sedang menunggu penggantian, jadi nominalnya belum boleh diubah dulu ya.`,
-          `Selesaikan dulu penggantiannya: transfer ke rekening kantor lalu balas *SUDAH TF*.`,
-        ].join("\n"),
-        "REVISION_INVALID"
-      );
-      return;
-    }
-    const oldFare = Number(trip.fare);
-    if (cmd.newFare === oldFare) {
-      await sendAndLog(supabase, claim.id, employeePhone, `*Tidak Ada Perubahan*\n\nNominal barunya sama dengan yang sekarang, jadi tidak ada perubahan.`, "REVISION_INVALID");
-      return;
-    }
-    await supabase.from("claims").update({
-      pending_wa_change: { trip_id: trip.id, trip_no: cmd.tripNo, old_fare: oldFare, new_fare: cmd.newFare },
-    }).eq("id", claim.id);
-    await sendAndLog(supabase, claim.id, employeePhone, buildChangeConfirmMessage(trip, cmd.tripNo, oldFare, cmd.newFare), "REVISION_CHANGE_PROMPT");
+  // UBAH — dipensiunkan: data klaim langsung dari statement Grab.
+  if (cmd.type === "CHANGE" || cmd.type === "BAD_CHANGE") {
+    await sendAndLog(supabase, claim.id, employeePhone, dataLockedMessage("mengubah nominal"), "REVISION_INVALID");
     return;
   }
 
-  if (cmd.type === "CONFIRM") {
-    const pending = claim.pending_wa_change as
-      | { kind?: string; trip_id: string; trip_no: number; old_fare: number; new_fare: number; reason?: string }
-      | null;
-    if (!pending) {
-      await sendAndLog(
-        supabase, claim.id, employeePhone,
-        [
-          `*Tidak Ada Perubahan*`,
-          ``,
-          `Tidak ada perubahan yang menunggu konfirmasi.`,
-          ``,
-          `Ketik LIST untuk melihat daftar perjalanan, UBAH atau HAPUS untuk mengubah, atau SELESAI untuk mengajukan ulang.`,
-        ].join("\n"),
-        "REVISION_INVALID"
-      );
-      return;
-    }
-
-    // HAPUS trip — misal rute pulang ke rumah di jam kerja yang tidak boleh
-    // diklaim. Trip keluar dari klaim, total dihitung ulang, alasan tercatat.
-    if (pending.kind === "DROP_TRIP") {
-      const { error: delErr } = await supabase.from("trips").delete().eq("id", pending.trip_id);
-      if (delErr) {
-        await sendAndLog(supabase, claim.id, employeePhone, `*Gagal Memproses*\n\nMaaf, gagal menghapus perjalanan. Coba lagi sebentar lagi ya. (${delErr.message})`, "REVISION_DROP_FAILED");
-        return;
-      }
-      const { data: fares } = await supabase.from("trips").select("fare").eq("claim_id", claim.id);
-      const total = (fares || []).reduce((acc, t) => acc + Number(t.fare), 0);
-      await mustUpdateClaim(supabase, claim.id, {
-        total_amount: total,
-        trip_count: (fares || []).length,
-        pending_wa_change: null,
-      });
-
-      await supabase.from("comments").insert({
-        claim_id: claim.id,
-        message: `Trip ${pending.trip_no} DIHAPUS dari klaim (Rp${Number(pending.old_fare).toLocaleString("id-ID")}). Alasan: ${pending.reason || "-"}`,
-        author_name: empName,
-        author_role: "EMPLOYEE",
-      });
-      await sendAndLog(supabase, claim.id, employeePhone, buildDropAppliedMessage(pending.trip_no, Number(pending.old_fare), total), "REVISION_DROP_APPLIED");
-      return;
-    }
-    const { error: updErr } = await supabase.from("trips").update({ fare: pending.new_fare }).eq("id", pending.trip_id);
-    if (updErr) {
-      await sendAndLog(supabase, claim.id, employeePhone, `*Gagal Memproses*\n\nMaaf, gagal menyimpan perubahan. Coba lagi sebentar lagi ya. (${updErr.message})`, "REVISION_CHANGE_FAILED");
-      return;
-    }
-    const { data: fares } = await supabase.from("trips").select("fare").eq("claim_id", claim.id);
-    const total = (fares || []).reduce((acc, t) => acc + Number(t.fare), 0);
-    await mustUpdateClaim(supabase, claim.id, { total_amount: total, pending_wa_change: null });
-
-    await supabase.from("comments").insert({
-      claim_id: claim.id,
-      message: `Trip ${pending.trip_no} nominal diubah Rp${pending.old_fare.toLocaleString("id-ID")} -> Rp${pending.new_fare.toLocaleString("id-ID")}.`,
-      author_name: empName,
-      author_role: "EMPLOYEE",
-    });
-    await sendAndLog(supabase, claim.id, employeePhone, buildChangeAppliedMessage(pending.trip_no, pending.old_fare, pending.new_fare, total), "REVISION_CHANGE_APPLIED");
-    return;
-  }
-
-  if (cmd.type === "CANCEL") {
+  // YA / BATAL — konfirmasi ubah/hapus sudah tidak ada; bersihkan sisa
+  // pending_wa_change lama (kalau ada) supaya tidak menggantung.
+  if (cmd.type === "CONFIRM" || cmd.type === "CANCEL") {
     if (claim.pending_wa_change) {
       await supabase.from("claims").update({ pending_wa_change: null }).eq("id", claim.id);
     }
-    await sendAndLog(supabase, claim.id, employeePhone, "*Perubahan Dibatalkan*\n\nBaik, perubahannya dibatalkan.", "REVISION_CANCELLED");
+    await sendAndLog(supabase, claim.id, employeePhone, dataLockedMessage("mengubah atau menghapus data"), "REVISION_INVALID");
     return;
   }
 
@@ -1019,73 +944,30 @@ async function handleRevisionCommands(
     return;
   }
 
-  if (cmd.type === "BAD_CHANGE") {
-    await sendAndLog(supabase, claim.id, employeePhone, "*Format Salah*\n\nFormatnya belum tepat. Contoh yang benar: UBAH 3 75000", "REVISION_INVALID");
-    return;
-  }
-
-  if (cmd.type === "DROP") {
-    const { data: trips } = await supabase.from("trips").select("*").eq("claim_id", claim.id).order("trip_date", { ascending: true });
-    const trip = (trips || [])[cmd.tripNo - 1];
-    if (!trip) {
-      await sendAndLog(supabase, claim.id, employeePhone, `*Nomor Tidak Ada*\n\nNomor perjalanan ${cmd.tripNo} tidak ada. Ketik LIST untuk melihat daftarnya ya.`, "REVISION_INVALID");
-      return;
+  // HAPUS — dipensiunkan; kecuali trip ditandai "tidak sesuai": itu hanya
+  // bisa selesai lewat jalur penggantian (transfer + SUDAH TF).
+  if (cmd.type === "DROP" || cmd.type === "BAD_DROP") {
+    if (cmd.type === "DROP") {
+      const { data: trips } = await supabase.from("trips").select("*").eq("claim_id", claim.id).order("trip_date", { ascending: true });
+      const trip = (trips || [])[cmd.tripNo - 1];
+      if (trip && refunds.some((r) => r.trip_id === trip.id)) {
+        await sendAndLog(
+          supabase, claim.id, employeePhone,
+          [
+            `*Tidak Bisa Dihapus*`,
+            ``,
+            `Perjalanan nomor ${cmd.tripNo} ditandai tidak sesuai oleh HR, jadi tidak bisa dihapus sendiri.`,
+            `Biayanya harus diganti: transfer ke rekening kantor lalu balas *SUDAH TF*.`,
+            `Setelah uangnya diterima HR, perjalanan ini otomatis keluar dari klaim.`,
+            ``,
+            `Mau lihat nominal dan rekeningnya? Balas *NOREK*.`,
+          ].join("\n"),
+          "REVISION_INVALID"
+        );
+        return;
+      }
     }
-    // Trip bertanda "tidak sesuai" hanya keluar lewat penggantian —
-    // HAPUS sendiri akan mem-bypass pembayaran ke kantor.
-    if (refunds.some((r) => r.trip_id === trip.id)) {
-      await sendAndLog(
-        supabase, claim.id, employeePhone,
-        [
-          `*Tidak Bisa Dihapus*`,
-          ``,
-          `Perjalanan nomor ${cmd.tripNo} ditandai tidak sesuai oleh HR, jadi tidak bisa dihapus sendiri.`,
-          `Biayanya harus diganti: transfer ke rekening kantor lalu balas *SUDAH TF*.`,
-          `Setelah uangnya diterima HR, perjalanan ini otomatis keluar dari klaim.`,
-          ``,
-          `Mau lihat nominal dan rekeningnya? Balas *NOREK*.`,
-        ].join("\n"),
-        "REVISION_INVALID"
-      );
-      return;
-    }
-    // Klaim tanpa trip sama sekali tidak masuk akal — arahkan ke HR/catatan.
-    if ((trips || []).length === 1) {
-      await sendAndLog(
-        supabase, claim.id, employeePhone,
-        [
-          `*Tidak Bisa Dihapus*`,
-          ``,
-          `Perjalanan nomor ${cmd.tripNo} satu satunya di klaim ini.`,
-          `Kalau dihapus, klaimnya jadi kosong. Lebih baik hubungi HR atau tulis catatan saja ya.`,
-        ].join("\n"),
-        "REVISION_INVALID"
-      );
-      return;
-    }
-    if (!cmd.reason) {
-      await sendAndLog(
-        supabase, claim.id, employeePhone,
-        [
-          `*Perlu Alasan*`,
-          ``,
-          `Hapus perjalanan nomor ${cmd.tripNo} dengan alasan apa? Misalnya pulang ke rumah di jam kantor.`,
-          ``,
-          `Ketik HAPUS ${cmd.tripNo} lalu alasannya.`,
-        ].join("\n"),
-        "REVISION_INVALID"
-      );
-      return;
-    }
-    await supabase.from("claims").update({
-      pending_wa_change: { kind: "DROP_TRIP", trip_id: trip.id, trip_no: cmd.tripNo, old_fare: Number(trip.fare), reason: cmd.reason },
-    }).eq("id", claim.id);
-    await sendAndLog(supabase, claim.id, employeePhone, buildDropConfirmMessage(trip, cmd.tripNo, cmd.reason), "REVISION_DROP_PROMPT");
-    return;
-  }
-
-  if (cmd.type === "BAD_DROP") {
-    await sendAndLog(supabase, claim.id, employeePhone, "*Format Salah*\n\nFormatnya belum tepat. Contoh yang benar: HAPUS 3 pulang ke rumah di jam kantor", "REVISION_INVALID");
+    await sendAndLog(supabase, claim.id, employeePhone, dataLockedMessage("menghapus perjalanan"), "REVISION_INVALID");
     return;
   }
 
@@ -1095,7 +977,7 @@ async function handleRevisionCommands(
       cmd.type === "TICKET" ? cmd.tripNo : null,
       cmd.ticketId,
       employeePhone,
-      "Untuk mengubah nominal, ketik UBAH lalu nomor perjalanan dan nominalnya. Kalau sudah beres, ketik SELESAI."
+      "Ada yang perlu diluruskan? Balas dengan catatan untuk HR, sebutkan nomor perjalanannya. Kalau sudah beres, ketik SELESAI."
     );
     return;
   }
@@ -1127,7 +1009,7 @@ async function handleRevisionCommands(
     supabase, claim.id, employeePhone,
     buildNoteSavedMessage(
       noteText,
-      "Untuk mengubah nominal, ketik UBAH lalu nomor perjalanan dan nominalnya. Kalau sudah beres, ketik SELESAI."
+      "Ada lagi yang perlu diluruskan? Tulis catatan lain. Kalau sudah beres, ketik SELESAI."
     ),
     "REVISION_NOTE"
   );
@@ -1276,15 +1158,21 @@ export async function processWebhookReply(
               "TICKET_INVALID"
             );
           }
-        } else if (cmd.type === "DROP" || cmd.type === "BAD_DROP") {
+        } else if (
+          cmd.type === "DROP" || cmd.type === "BAD_DROP" ||
+          cmd.type === "CHANGE" || cmd.type === "BAD_CHANGE"
+        ) {
+          // UBAH/HAPUS dipensiunkan — data klaim langsung dari statement Grab.
           if (employeePhone) {
             await sendAndLog(
               supabase, claim.id, employeePhone,
               [
-                `*Hanya Saat Revisi*`,
+                `*Data Tidak Bisa Diubah*`,
                 ``,
-                `Menghapus perjalanan hanya bisa saat masa revisi, setelah Manager atau HR meminta revisi.`,
-                `Sekarang cukup ketik *1* untuk setuju, *3* untuk lihat detail, atau tulis catatan.`,
+                `Maaf, ubah atau hapus perjalanan tidak bisa lewat chat ya. Data klaim langsung dari statement Grab Business.`,
+                ``,
+                `Kalau ada yang salah, ketik *2* lalu ceritakan masalahnya — tulisan Anda jadi catatan untuk HR.`,
+                `Atau ketik *1* kalau semua data sudah benar.`,
               ].join("\n"),
               "INVALID_REPLY"
             );

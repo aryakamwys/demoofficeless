@@ -116,7 +116,7 @@ export async function sendTextMessage(
 /**
  * Gaya pesan: seperti customer service manusia — paragraf pendek, bahasa
  * santai tapi sopan, tanpa header kapital/ikon teknis. Angka perjalanan
- * tetap dipakai (dipakai command UBAH/HAPUS/TICKET), ditulis "nomor 3".
+ * tetap dipakai (dipakai command TICKET & catatan), ditulis "nomor 3".
  */
 
 type WaTripLine = {
@@ -145,7 +145,7 @@ function ticketChip(ticketId?: string | null): string {
 function tripLine(t: WaTripLine, full: boolean, no?: number): string {
   const addr = (s: string) => (full ? (s || "").trim() : shortAddr(s));
   const costCode = t.cost_code ? `, code ${t.cost_code}` : "";
-  // Bernomor (1. 2. …) supaya nyambung dengan command UBAH/HAPUS/TICKET.
+  // Bernomor (1. 2. …) supaya nyambung dengan command TICKET dan catatan.
   const prefix = no != null ? `${no}. ` : "";
   return `${prefix}${formatTripDate(t.trip_date)}, dari ${addr(t.pickup)} ke ${addr(t.dropoff)}, ${formatAmount(t.fare)}${costCode}${ticketChip(t.ticket_id)}`;
 }
@@ -610,6 +610,8 @@ function formatTripDate(dateStr: string): string {
 
 /**
  * Notifikasi ke engineer: klaim diminta revisi oleh Manager/HR.
+ * Data klaim tidak bisa diubah lewat chat (langsung dari statement Grab) —
+ * koreksi cukup lewat catatan untuk HR.
  */
 export function buildRevisionRequestMessage(params: {
   employee_name: string;
@@ -627,15 +629,11 @@ export function buildRevisionRequestMessage(params: {
     `Klaim periode ${params.period} diminta direvisi oleh ${roleLabel} (${params.requester_name}).`,
     `Alasannya: ${params.reason || "tidak disertakan"}`,
     ``,
-    `Cara revisinya lewat chat ini saja ya.`,
+    `Data perjalanan di klaim ini langsung dari statement Grab, jadi tidak diubah lewat chat ya. Kalau ada yang perlu diluruskan, cukup balas dengan catatan untuk HR — sebutkan nomor perjalanannya.`,
+    ``,
+    `Contoh: perjalanan nomor 3 bukan perjalanan saya`,
     ``,
     `Ketik LIST untuk melihat daftar perjalanan beserta nomornya.`,
-    ``,
-    `Ketik UBAH lalu nomor perjalanan dan nominal barunya.`,
-    `Contoh: UBAH 3 75000 artinya perjalanan nomor 3 jadi Rp75.000.`,
-    ``,
-    `Ketik HAPUS lalu nomor perjalanan dan alasannya, untuk menghapus perjalanan yang tidak boleh diklaim.`,
-    `Contoh: HAPUS 3 pulang ke rumah di jam kantor`,
     ``,
     `Ketik TICKET lalu nomor perjalanan dan nomor ticketnya untuk melampirkan ticket EnvGate.`,
     `Contoh: TICKET 3 PIM-34285`,
@@ -643,14 +641,12 @@ export function buildRevisionRequestMessage(params: {
     ``,
     `Kalau sudah beres, ketik *SELESAI*. Klaimnya dikirim ulang ke ${roleLabel}.`,
     ``,
-    `Ada yang mau disampaikan ke ${roleLabel}? Balas saja pesan ini.`,
-    ``,
     `Ketik INFO kapan saja untuk melihat posisi klaim.`,
   ].join("\n");
 }
 
 /**
- * Daftar trip bernomor untuk command LIST / UBAH.
+ * Daftar trip bernomor — acuan menulis catatan & command TICKET.
  */
 export function buildRevisionTripListMessage(
   trips: WaTripLine[],
@@ -666,11 +662,8 @@ export function buildRevisionTripListMessage(
     ``,
     `Totalnya *${formatAmount(total_amount)}*.`,
     ``,
-    `Kalau perlu mengubah sesuatu:`,
-    ``,
-    `Ketik UBAH lalu nomor perjalanan dan nominal barunya. Contoh: UBAH 3 75000`,
-    ``,
-    `Ketik HAPUS lalu nomor perjalanan dan alasannya. Contoh: HAPUS 3 pulang ke rumah di jam kantor`,
+    `Ada yang perlu diluruskan? Balas dengan catatan untuk HR, sebutkan nomor perjalanannya.`,
+    `Contoh: perjalanan nomor 3 bukan perjalanan saya`,
     ``,
     `Ketik TICKET lalu nomor perjalanan dan nomor ticketnya. Contoh: TICKET 3 PIM-34285`,
     ``,
@@ -679,89 +672,6 @@ export function buildRevisionTripListMessage(
     `Kalau sudah beres, ketik *SELESAI* ya, nanti klaimnya dikirim ulang ke approver.`,
     ``,
     `Ketik INFO untuk melihat posisi klaim.`,
-  ].join("\n");
-}
-
-/**
- * Konfirmasi sebelum nominal diubah (jalur uang — wajib YA/BATAL).
- */
-export function buildChangeConfirmMessage(
-  trip: WaTripLine,
-  tripNo: number,
-  oldFare: number,
-  newFare: number
-): string {
-  return [
-    `*Konfirmasi Ubah Nominal*`,
-    ``,
-    `Perjalanan nomor ${tripNo}, ${formatTripDate(trip.trip_date)}, dari ${trip.pickup} ke ${trip.dropoff}.`,
-    `Nominal sekarang ${formatAmount(oldFare)}, akan diubah jadi *${formatAmount(newFare)}*.`,
-    ``,
-    `Balas *YA* untuk simpan, atau *BATAL* kalau salah.`,
-  ].join("\n");
-}
-
-/**
- * Setelah perubahan diterapkan + total dihitung ulang.
- */
-export function buildChangeAppliedMessage(
-  tripNo: number,
-  oldFare: number,
-  newFare: number,
-  newTotal: number
-): string {
-  return [
-    `*Nominal Diubah*`,
-    ``,
-    `Sudah tersimpan. Perjalanan nomor ${tripNo} berubah dari ${formatAmount(oldFare)} jadi *${formatAmount(newFare)}*.`,
-    ``,
-    `Total klaim sekarang *${formatAmount(newTotal)}*.`,
-    ``,
-    `Masih ada yang mau diubah? Ketik UBAH lagi, atau LIST untuk melihat daftarnya.`,
-    ``,
-    `Kalau sudah beres, ketik *SELESAI*.`,
-  ].join("\n");
-}
-
-/**
- * Konfirmasi sebelum trip dihapus dari klaim — jalur uang & merusak
- * (data trip hilang), wajib YA/BATAL seperti UBAH.
- */
-export function buildDropConfirmMessage(
-  trip: WaTripLine,
-  tripNo: number,
-  reason: string
-): string {
-  return [
-    `*Konfirmasi Hapus Perjalanan*`,
-    ``,
-    `Perjalanan nomor ${tripNo}, ${formatTripDate(trip.trip_date)}, dari ${trip.pickup} ke ${trip.dropoff}, ${formatAmount(trip.fare)}.`,
-    `Alasan penghapusan: ${reason}`,
-    ``,
-    `Perjalanan ini akan dihapus dari klaim dan tidak dihitung lagi.`,
-    ``,
-    `Balas *YA* untuk hapus, atau *BATAL* kalau salah.`,
-  ].join("\n");
-}
-
-/**
- * Setelah trip dihapus + total dihitung ulang.
- */
-export function buildDropAppliedMessage(
-  tripNo: number,
-  fare: number,
-  newTotal: number
-): string {
-  return [
-    `*Perjalanan Dihapus*`,
-    ``,
-    `Sudah dihapus. Perjalanan nomor ${tripNo} (${formatAmount(fare)}) keluar dari klaim.`,
-    ``,
-    `Total klaim sekarang *${formatAmount(newTotal)}*.`,
-    ``,
-    `Masih ada lagi? Ketik UBAH atau HAPUS, atau LIST untuk melihat daftarnya.`,
-    ``,
-    `Kalau sudah beres, ketik *SELESAI*.`,
   ].join("\n");
 }
 

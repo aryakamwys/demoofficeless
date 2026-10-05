@@ -80,7 +80,7 @@ function Note({ children }: { children: ReactNode }) {
   );
 }
 
-/** Chip perintah, mis. UBAH 3 75000 */
+/** Chip perintah, mis. TICKET 3 PIM-34285 */
 function Cmd({ children }: { children: ReactNode }) {
   return (
     <code className="rounded bg-slate-100 px-1.5 py-0.5 font-mono text-[12px] font-semibold text-blue-700">
@@ -344,14 +344,13 @@ const CONTENT: Record<string, ReactNode> = {
       <Diagram caption="Alur persetujuan: karyawan → manager → HR, dengan mode revisi yang bisa berulang.">{`
                     ┌─────────────────────────────────────────────┐
                     │                MODE REVISI                 │
-                    │    karyawan mengerjakan via chat:          │
+                    │    karyawan menjawab via chat:             │
                     │    LIST          daftar perjalanan nomor  │
-                    │    UBAH 3 x      ubah nominal nomor 3      │
-                    │    HAPUS 3 x     hapus nomor 3 + alasan    │
                     │    TICKET 3 x    lampirkan ticket EnvGate  │
                     │    SUDAH TF      penggantian sudah dibayar │
                     │    SELESAI       kirim ulang ke approver   │
                     │    INFO           posisi klaim sekarang    │
+                    │    teks bebas    jadi catatan untuk HR     │
                     └──────▲────────────────────────────▲────────┘
                            │ "2 <alasan>"               │ "2 <alasan>"
                            │                            │
@@ -427,7 +426,6 @@ const CONTENT: Record<string, ReactNode> = {
             ["approved_at", "waktu karyawan tekan SETUJU"],
             ["manager_status · hr_status", "PENDING / APPROVED per tahap"],
             ["total_amount · trip_count", "ikut dihitung ulang tiap perubahan"],
-            ["pending_wa_change", "konfirmasi UBAH/HAPUS yang menunggu YA"],
             ["ticket_wizard", "progres mode isi ticket satu-per-satu"],
           ]}
         />
@@ -595,13 +593,13 @@ const CONTENT: Record<string, ReactNode> = {
 
       <H2>4. Contoh: Diminta Revisi oleh Manager / HR</H2>
       <P>
-        Kalau Manager atau HR meminta revisi, Anda bisa mengubah nominal sendiri lewat chat —
-        tanpa buka laptop. Tiga perintahnya:
+        Kalau Manager atau HR meminta revisi, datanya tidak perlu diubah dari chat —
+        rincian perjalanan langsung dari statement Grab. Cukup balas dengan catatan
+        untuk HR, lampirkan ticket bila perlu, lalu tutup dengan <b>SELESAI</b>.
       </P>
       <ul className="my-3 list-disc space-y-1 pl-5 text-sm text-slate-600">
+        <li><b>Tulis masalahnya sebagai balasan</b> — otomatis jadi catatan untuk HR. Sebutkan nomor perjalanannya, mis. <i>perjalanan nomor 3 bukan perjalanan saya</i>.</li>
         <li><Cmd>LIST</Cmd> — lihat daftar trip bernomor (lengkap dengan jam).</li>
-        <li><Cmd>UBAH 3 75000</Cmd> — ubah trip no 3 jadi Rp75.000 (contoh).</li>
-        <li><Cmd>HAPUS 3 pulang ke rumah di jam kantor</Cmd> — hapus trip yang tidak boleh diklaim (dengan alasan, ada konfirmasi YA).</li>
         <li><Cmd>TICKET 3 PIM-34285</Cmd> — lampirkan bukti ticket EnvGate ke trip no 3.</li>
         <li><Cmd>TICKET SEMUA</Cmd> — isi ticket semua trip, dipandu satu per satu.</li>
         <li><Cmd>SELESAI</Cmd> — sudah selesai, kirim ulang ke approver.</li>
@@ -622,8 +620,8 @@ const CONTENT: Record<string, ReactNode> = {
       </ul>
       <P>
         Setelah HR menekan <b>Pembayaran Diterima</b> di halaman klaim, trip itu keluar
-        dari klaim otomatis dan total dihitung ulang. Trip bertanda tidak sesuai tidak
-        bisa dihapus sendiri lewat <Cmd>HAPUS</Cmd> — harus lewat penggantian ini.
+        dari klaim otomatis dan total dihitung ulang. Trip bertanda tidak sesuai hanya
+        bisa keluar lewat penggantian ini — tidak bisa dimatikan lewat catatan.
       </P>
       <Chat
         title="Contoh percakapan — penggantian trip tidak sesuai"
@@ -648,22 +646,17 @@ const CONTENT: Record<string, ReactNode> = {
         messages={[
           {
             from: "bot",
-            text: "*Permintaan Revisi*\n\nHalo Mario,\n\nKlaim periode Agustus 2026 diminta direvisi oleh Manager (Rini).\nAlasannya: nominal perjalanan nomor 3 masih kurang tepat\n\nCara revisinya lewat chat ini saja ya.\n\nKetik LIST untuk melihat daftar perjalanan beserta nomornya.\n\nKetik UBAH lalu nomor perjalanan dan nominal barunya.\nContoh: UBAH 3 75000 artinya perjalanan nomor 3 jadi Rp75.000.\n\nKetik HAPUS lalu nomor perjalanan dan alasannya, untuk menghapus perjalanan yang tidak boleh diklaim.\nContoh: HAPUS 3 pulang ke rumah di jam kantor\n\nKetik TICKET lalu nomor perjalanan dan nomor ticketnya untuk melampirkan ticket EnvGate.\nContoh: TICKET 3 PIM-34285\n\nKalau sudah beres, ketik SELESAI. Klaimnya dikirim ulang ke Manager.\n\nKetik INFO kapan saja untuk melihat posisi klaim.",
+            text: "*Permintaan Revisi*\n\nHalo Mario,\n\nKlaim periode Agustus 2026 diminta direvisi oleh Manager (Rini).\nAlasannya: perjalanan nomor 3 bukan perjalanan dinas\n\nData perjalanan di klaim ini langsung dari statement Grab, jadi tidak diubah lewat chat ya. Kalau ada yang perlu diluruskan, cukup balas dengan catatan untuk HR — sebutkan nomor perjalanannya.\n\nContoh: perjalanan nomor 3 bukan perjalanan saya\n\nKetik LIST untuk melihat daftar perjalanan beserta nomornya.\n\nKetik TICKET lalu nomor perjalanan dan nomor ticketnya untuk melampirkan ticket EnvGate.\nContoh: TICKET 3 PIM-34285\nKalau perjalanannya banyak, ketik TICKET SEMUA, nanti dipandu satu per satu.\n\nKalau sudah beres, ketik SELESAI. Klaimnya dikirim ulang ke Manager.\n\nKetik INFO kapan saja untuk melihat posisi klaim.",
           },
           { from: "user", text: "list" },
           {
             from: "bot",
-            text: "*Daftar Perjalanan*\n\nKlaim periode Agustus 2026:\n1. 02 Jul 07:00, dari Menara Karya Main Lobby ke MID Plaza, Rp40.500\n2. 02 Jul 17:30, dari MID Plaza ke Menara Karya Main Lobby, Rp36.000\n3. 10 Jul 07:15, dari Palmerah Motorcycle Station ke MID Plaza 1, Rp61.000\n\nTotalnya Rp137.500.\n\nKalau perlu mengubah sesuatu:\n\nKetik UBAH lalu nomor perjalanan dan nominal barunya. Contoh: UBAH 3 75000\n\nKetik HAPUS lalu nomor perjalanan dan alasannya. Contoh: HAPUS 3 pulang ke rumah di jam kantor\n\nKalau sudah beres, ketik SELESAI ya, nanti klaimnya dikirim ulang ke approver.",
+            text: "*Daftar Perjalanan*\n\nKlaim periode Agustus 2026:\n1. 02 Jul 07:00, dari Menara Karya Main Lobby ke MID Plaza, Rp40.500\n2. 02 Jul 17:30, dari MID Plaza ke Menara Karya Main Lobby, Rp36.000\n3. 10 Jul 07:15, dari Palmerah Motorcycle Station ke MID Plaza 1, Rp61.000\n\nTotalnya Rp137.500.\n\nAda yang perlu diluruskan? Balas dengan catatan untuk HR, sebutkan nomor perjalanannya.\nContoh: perjalanan nomor 3 bukan perjalanan saya\n\nKetik TICKET lalu nomor perjalanan dan nomor ticketnya. Contoh: TICKET 3 PIM-34285\n\nKalau sudah beres, ketik SELESAI ya, nanti klaimnya dikirim ulang ke approver.",
           },
-          { from: "user", text: "UBAH 3 75000" },
+          { from: "user", text: "perjalanan nomor 3 itu bukan perjalanan saya, mohon dicek" },
           {
             from: "bot",
-            text: "*Konfirmasi Ubah Nominal*\n\nPerjalanan nomor 3, 10 Jul 07:15, dari Palmerah Motorcycle Station ke MID Plaza 1.\nNominal sekarang Rp61.000, akan diubah jadi Rp75.000.\n\nBalas YA untuk simpan, atau BATAL kalau salah.",
-          },
-          { from: "user", text: "YA" },
-          {
-            from: "bot",
-            text: "*Nominal Diubah*\n\nSudah tersimpan. Perjalanan nomor 3 berubah dari Rp61.000 jadi Rp75.000.\n\nTotal klaim sekarang Rp151.500.\n\nMasih ada yang mau diubah? Ketik UBAH lagi, atau LIST untuk melihat daftarnya.\n\nKalau sudah beres, ketik SELESAI.",
+            text: '*Catatan Tersimpan*\n\nSudah tersimpan ya. Catatan Anda:\n"perjalanan nomor 3 itu bukan perjalanan saya, mohon dicek"\n\nAda lagi yang perlu diluruskan? Tulis catatan lain. Kalau sudah beres, ketik SELESAI.',
           },
           { from: "user", text: "SELESAI" },
           {
@@ -801,10 +794,10 @@ const CONTENT: Record<string, ReactNode> = {
         ]}
       />
       <P>
-        Karyawan lalu merevisi sendiri lewat chat (lihat <b>Panduan Karyawan</b>) — mengubah nominal
-        dengan <Cmd>UBAH</Cmd>, menghapus trip yang tidak boleh diklaim dengan <Cmd>HAPUS</Cmd>,
-        lalu <Cmd>SELESAI</Cmd>. Setelah itu Anda menerima lagi pesan klaimnya untuk keputusan
-        berikutnya. Alur ini bisa berulang sampai Anda setuju.
+        Karyawan lalu menjawab lewat chat (lihat <b>Panduan Karyawan</b>) — menulis catatan
+        untuk HR dan/atau melampirkan ticket EnvGate, lalu <Cmd>SELESAI</Cmd>. Setelah itu
+        Anda menerima lagi pesan klaimnya untuk keputusan berikutnya. Alur ini bisa berulang
+        sampai Anda setuju.
       </P>
 
       <H2>Trip yang Mencurigakan (contoh: pulang ke rumah di jam kerja)</H2>
@@ -815,10 +808,11 @@ const CONTENT: Record<string, ReactNode> = {
         Daftar trip di pesan menampilkan <b>jam</b> perjalanan supaya mudah dinilai.
       </P>
       <P>
-        Kalau memang tidak seharusnya diklaim, karyawan menghapusnya sendiri dengan{" "}
-        <Cmd>HAPUS 5 &lt;alasan&gt;</Cmd> — trip keluar dari klaim, total biaya dihitung ulang,
-        dan alasannya tercatat sebagai note untuk audit. Klaim dengan trip yang sudah dihapus
-        tetap tampil rapi di Report PDF.
+        Kalau memang tidak seharusnya diklaim, tandai trip-nya sebagai <b>tidak sesuai</b> dari
+        halaman detail klaim di web — biayanya diganti karyawan ke rekening kantor (alur
+        <b> Penggantian</b>), dan setelah pembayaran dikonfirmasi trip otomatis keluar dari
+        klaim. Semua keputusan tercatat sebagai note untuk audit, dan klaimnya tetap tampil
+        rapi di Report PDF.
       </P>
 
       <H2>Cara Paling Mudah: Tombol</H2>
