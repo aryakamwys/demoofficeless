@@ -36,14 +36,15 @@ export async function proxy(request: NextRequest) {
   const hasAuthCookies = request.cookies.getAll().some((c) => c.name.startsWith("sb-"));
 
   if (!hasAuthCookies) {
-    // Root & halaman proteksi → langsung arahkan ke login (tanpa roundtrip)
-    if (isRoot || isProtected) {
+    // Halaman proteksi → langsung arahkan ke login (tanpa roundtrip).
+    // Root publik (landing) — biarkan ditampilkan.
+    if (isProtected) {
       const url = request.nextUrl.clone();
       url.pathname = "/login";
       url.search = "";
       return NextResponse.redirect(url);
     }
-    // Halaman publik (login/docs/approve/…) untuk anonim → selesai
+    // Halaman publik (landing/login/docs/approve/…) untuk anonim → selesai
     return supabaseResponse;
   }
 
@@ -100,10 +101,10 @@ export async function proxy(request: NextRequest) {
     return NextResponse.redirect(url);
   }
 
-  // Redirect root ke dashboard/login
-  if (isRoot) {
+  // Root = landing publik; yang sudah login langsung masuk dashboard
+  if (isRoot && user) {
     const url = request.nextUrl.clone();
-    url.pathname = user ? "/dashboard" : "/login";
+    url.pathname = "/dashboard";
     url.search = "";
     return NextResponse.redirect(url);
   }

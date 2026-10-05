@@ -23,6 +23,15 @@ tokens:
     card: rounded-xl border border-slate-200 bg-white p-5
     icon_tile: rounded-xl p-2.5 tinted (bg-*-50 text-*-600); ungu hanya aksen OpenClaw (referensi user)
     progress_bar: h-1.5 rounded-full bg-slate-100, fill bg-<accent> (blue/emerald/amber/purple)
+    landing:
+      navbar: putih border-b h-16, logo h-8 + "Officeless Perkom" bold, kanan link Dokumentasi + tombol Masuk
+      hero: bg-slate-50, headline text-3xl/4xl bold + sub + CTA (primary/outline), kartu akses putih rounded-2xl border kanan
+      footer: bg-slate-50 border-t, 3 kolom (brand/kontak/tautan) + bar copyright
+    auth_card:
+      layout: split rounded-3xl shadow-xl — panel brand bg-blue-600 (dekor lingkaran putih/10) kiri, form putih kanan; pembatas SVG melengkung (putih menonjol ke panel brand)
+      input: pill h-11 rounded-full, ikon lucide absolute left-4 text-slate-400
+      button: pill h-11 rounded-full w-full bg-primary
+      mobile: panel brand disembunyikan (sm:block), form penuh
 ---
 
 # DESIGN.md — Perkom Dashboard

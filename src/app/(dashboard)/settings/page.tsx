@@ -3,11 +3,11 @@
 // Pengaturan aplikasi. Saat ini: rekening kantor — tujuan transfer penggantian
 // trip "tidak sesuai" yang diminta dari karyawan lewat WhatsApp.
 import { useEffect, useState } from "react";
+import { Building2, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Loader2 } from "lucide-react";
 import { toast } from "sonner";
 
 type BankSettings = {
@@ -61,42 +61,55 @@ export default function SettingsPage() {
   };
 
   return (
-    <div className="space-y-6 max-w-xl">
-      <Card className="shadow-sm border-slate-200">
-        <CardHeader className="bg-slate-50/50 border-b pb-4">
-          <CardTitle className="text-base font-semibold text-slate-800">Rekening Kantor</CardTitle>
+    <div className="max-w-xl">
+      <h1 className="text-lg font-semibold text-slate-800">Pengaturan</h1>
+      <p className="mb-6 text-sm text-slate-500">
+        Konfigurasi aplikasi untuk alur klaim Grab.
+      </p>
+
+      <Card className="border-slate-200">
+        <CardHeader className="flex flex-row items-center gap-2 border-b border-slate-100 py-4">
+          <span className="rounded-xl bg-blue-50 p-2.5 text-blue-600">
+            <Building2 className="h-4 w-4" />
+          </span>
+          <div>
+            <CardTitle className="text-base font-semibold text-slate-800">
+              Rekening Kantor
+            </CardTitle>
+            <p className="text-xs text-slate-500">
+              Tujuan transfer penggantian trip yang ditandai tidak sesuai.
+            </p>
+          </div>
         </CardHeader>
-        <CardContent className="space-y-4 pt-4">
-          <p className="text-sm text-slate-500">
-            Tujuan transfer saat karyawan mengganti biaya trip yang ditandai
-            <span className="font-medium text-slate-700"> tidak sesuai</span> (mis. arah pulang di jam kantor).
-            Nominal &amp; rekening ini otomatis tercantum di pesan WhatsApp karyawan.
-          </p>
+        <CardContent className="space-y-4 pt-5">
           {loading ? (
-            <div className="flex items-center gap-2 text-sm text-slate-500">
+            <div className="flex items-center gap-2 py-6 text-sm text-slate-500">
               <Loader2 className="h-4 w-4 animate-spin" /> Memuat…
             </div>
           ) : (
             <>
-              <div className="space-y-2">
-                <Label htmlFor="bank-name">Nama bank</Label>
-                <Input
-                  id="bank-name"
-                  value={bankName}
-                  onChange={(e) => setBankName(e.target.value)}
-                  placeholder="Contoh: BCA"
-                  maxLength={100}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="account-number">Nomor rekening</Label>
-                <Input
-                  id="account-number"
-                  value={accountNumber}
-                  onChange={(e) => setAccountNumber(e.target.value.replace(/[^\d\s\-]/g, ""))}
-                  placeholder="Contoh: 1234567890"
-                  maxLength={100}
-                />
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div className="space-y-2">
+                  <Label htmlFor="bank-name">Nama bank</Label>
+                  <Input
+                    id="bank-name"
+                    value={bankName}
+                    onChange={(e) => setBankName(e.target.value)}
+                    placeholder="Contoh: BCA"
+                    maxLength={100}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="account-number">Nomor rekening</Label>
+                  <Input
+                    id="account-number"
+                    inputMode="numeric"
+                    value={accountNumber}
+                    onChange={(e) => setAccountNumber(e.target.value.replace(/[^\d\s\-]/g, ""))}
+                    placeholder="Contoh: 1234567890"
+                    maxLength={100}
+                  />
+                </div>
               </div>
               <div className="space-y-2">
                 <Label htmlFor="account-name">Atas nama</Label>
@@ -108,17 +121,20 @@ export default function SettingsPage() {
                   maxLength={100}
                 />
               </div>
-              <Button
-                onClick={save}
-                disabled={saving || !bankName.trim() || !accountNumber.trim()}
-                className="bg-[#00B14F] hover:bg-[#009040] text-white"
-              >
-                {saving && <Loader2 className="h-4 w-4 animate-spin" />} Simpan
-              </Button>
-              <p className="text-xs text-slate-400">
-                Wajib diisi sebelum menandai trip di detail klaim — kalau kosong,
-                penandaan akan ditolak dan karyawan tidak dikirimi rekening.
-              </p>
+
+              <div className="flex items-center justify-between gap-4 border-t border-slate-100 pt-4">
+                <p className="text-xs leading-relaxed text-slate-400">
+                  Wajib diisi sebelum menandai trip di detail klaim — kalau kosong,
+                  penandaan ditolak dan karyawan tidak dikirimi rekening.
+                </p>
+                <Button
+                  onClick={save}
+                  disabled={saving || !bankName.trim() || !accountNumber.trim()}
+                  className="shrink-0"
+                >
+                  {saving && <Loader2 className="h-4 w-4 animate-spin" />} Simpan
+                </Button>
+              </div>
             </>
           )}
         </CardContent>
