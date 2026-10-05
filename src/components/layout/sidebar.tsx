@@ -25,6 +25,8 @@ import {
   Boxes,
   ShieldCheck,
   Activity,
+  BarChart3,
+  Wallet,
 } from "lucide-react";
 import { useState } from "react";
 
@@ -208,6 +210,8 @@ export function Sidebar({ collapsed, onToggle, isSuperadmin }: SidebarProps) {
                   </Tooltip>
                   <SidebarLink href="/services/openclaw" icon={Ticket} label="Openclaw Ticket" isActive={pathname === "/services/openclaw"} collapsed={collapsed} />
                   <SidebarLink href="/services/envgate" icon={Activity} label="EnvGate Test" isActive={pathname === "/services/envgate"} collapsed={collapsed} />
+                  <SidebarLink href="/services/report" icon={BarChart3} label="Report" isActive={pathname.startsWith("/services/report")} collapsed={collapsed} />
+                  <SidebarLink href="/services/finance" icon={Wallet} label="Finance" isActive={pathname.startsWith("/services/finance")} collapsed={collapsed} />
                 </>
               ) : (
                 <div>
@@ -230,6 +234,12 @@ export function Sidebar({ collapsed, onToggle, isSuperadmin }: SidebarProps) {
                       </Link>
                       <Link href="/services/envgate" className={cn("flex items-center gap-3 py-2 px-3 text-sm font-medium transition-colors rounded-lg", pathname === "/services/envgate" ? "bg-blue-50/50 text-blue-700" : "text-slate-500 hover:bg-slate-50 hover:text-slate-800")}>
                         <Activity className="h-4 w-4 shrink-0" /> EnvGate Test
+                      </Link>
+                      <Link href="/services/report" className={cn("flex items-center gap-3 py-2 px-3 text-sm font-medium transition-colors rounded-lg", pathname.startsWith("/services/report") ? "bg-blue-50/50 text-blue-700" : "text-slate-500 hover:bg-slate-50 hover:text-slate-800")}>
+                        <BarChart3 className="h-4 w-4 shrink-0" /> Report
+                      </Link>
+                      <Link href="/services/finance" className={cn("flex items-center gap-3 py-2 px-3 text-sm font-medium transition-colors rounded-lg", pathname.startsWith("/services/finance") ? "bg-blue-50/50 text-blue-700" : "text-slate-500 hover:bg-slate-50 hover:text-slate-800")}>
+                        <Wallet className="h-4 w-4 shrink-0" /> Finance
                       </Link>
                     </div>
                   </div>
