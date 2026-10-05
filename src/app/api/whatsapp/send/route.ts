@@ -30,6 +30,9 @@ export async function POST(request: NextRequest) {
       trips(*)
     `)
     .eq("id", claim_id)
+    // Urutan sama dengan LIST/detail — nomor trip di pesan konsisten dengan
+    // perintah UBAH/HAPUS/TICKET
+    .order("trip_date", { referencedTable: "trips", ascending: true })
     .single();
 
   if (claimError || !claim) {

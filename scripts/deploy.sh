@@ -27,11 +27,16 @@ git fetch --quiet origin
 git reset --hard "$SHA"
 
 # 1.5 Tautan tombol WA butuh NEXT_PUBLIC_APP_URL (di-bake saat build, jadi
-#     harus ada SEBELUM build). Derive dari SB_DOMAIN bila belum diisi —
-#     sekali saja, tertulis ke .env supaya admin bisa meng-overridenya.
-if ! grep -q '^NEXT_PUBLIC_APP_URL=' .env && [ -n "${SB_DOMAIN:-}" ]; then
-  echo "NEXT_PUBLIC_APP_URL=https://${SB_DOMAIN}" >> .env
-  echo "== .env: NEXT_PUBLIC_APP_URL=https://${SB_DOMAIN} (otomatis) =="
+#     harus ada SEBELUM build). SELALU dijaga = https://APP_DOMAIN — dulu
+#     di-derive dari SB_DOMAIN sehingga link di pesan WA menunjuk ke
+#     subdomain supabase (jalan, tapi tampak mencurigakan bagi penerima).
+if [ -n "${APP_DOMAIN:-}" ]; then
+  if grep -q '^NEXT_PUBLIC_APP_URL=' .env; then
+    sed -i "s|^NEXT_PUBLIC_APP_URL=.*|NEXT_PUBLIC_APP_URL=https://${APP_DOMAIN}|" .env
+  else
+    echo "NEXT_PUBLIC_APP_URL=https://${APP_DOMAIN}" >> .env
+  fi
+  echo "== .env: NEXT_PUBLIC_APP_URL=https://${APP_DOMAIN} =="
 fi
 
 # 2. Build image baru (tag = sha)

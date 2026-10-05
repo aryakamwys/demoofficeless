@@ -142,10 +142,13 @@ function ticketChip(ticketId?: string | null): string {
   return digits ? ` [#PIM-${digits}]` : "";
 }
 
-function tripLine(t: WaTripLine, full: boolean): string {
+function tripLine(t: WaTripLine, full: boolean, no?: number): string {
   const addr = (s: string) => (full ? (s || "").trim() : shortAddr(s));
   const costCode = t.cost_code ? ` [Code: ${t.cost_code}]` : "";
-  return `- ${formatTripDate(t.trip_date)}: ${addr(t.pickup)} -> ${addr(t.dropoff)} (${formatAmount(t.fare)})${costCode}${ticketChip(t.ticket_id)}`;
+  // Bernomor (1., 2., …) supaya sama dengan daftar LIST — angka trip di
+  // perintah UBAH/HAPUS/TICKET langsung nyambung dengan pesan ini.
+  const prefix = no != null ? `${no}. ` : "- ";
+  return `${prefix}${formatTripDate(t.trip_date)}: ${addr(t.pickup)} -> ${addr(t.dropoff)} (${formatAmount(t.fare)})${costCode}${ticketChip(t.ticket_id)}`;
 }
 
 /** Menu karyawan — selalu dengan penjelasan + contoh. */
@@ -197,7 +200,7 @@ export function buildClaimMessage(params: {
     `Ini rangkuman klaim Grab Business Anda periode ${period}.`,
     `Mohon dicek dulu sebelum disetujui:`,
     ``,
-    ...trips.map((t) => tripLine(t, false)),
+    ...trips.map((t, i) => tripLine(t, false, i + 1)),
     ``,
     `Jumlah perjalanan: ${trip_count}`,
     `Total biaya: ${formatAmount(total_amount)}`,
@@ -221,7 +224,7 @@ export function buildDetailMessage(
   return [
     `DETAIL PERJALANAN (alamat lengkap):`,
     ``,
-    ...trips.map((t) => tripLine(t, true)),
+    ...trips.map((t, i) => tripLine(t, true, i + 1)),
     ``,
     `Total biaya: ${formatAmount(total_amount)}`,
     ``,
@@ -287,7 +290,7 @@ export function buildManagerApprovalMessage(params: {
     `${employee_name} mengajukan klaim Grab periode ${period}.`,
     `Karyawan tersebut SUDAH mengecek dan menyetujui datanya sendiri.`,
     ``,
-    ...trips.map((t) => tripLine(t, false)),
+    ...trips.map((t, i) => tripLine(t, false, i + 1)),
     ``,
     `Jumlah perjalanan: ${trips.length}`,
     `Total biaya: ${formatAmount(total_amount)}`,
@@ -319,7 +322,7 @@ export function buildHrApprovalMessage(params: {
     `${employee_name} mengajukan klaim Grab periode ${period}.`,
     `Managernya (${manager_name}) SUDAH menyetujui — Anda pemberi persetujuan terakhir.`,
     ``,
-    ...trips.map((t) => tripLine(t, false)),
+    ...trips.map((t, i) => tripLine(t, false, i + 1)),
     ``,
     `Jumlah perjalanan: ${trips.length}`,
     `Total biaya: ${formatAmount(total_amount)}`,
