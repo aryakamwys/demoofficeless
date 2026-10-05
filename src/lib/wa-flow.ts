@@ -643,6 +643,15 @@ async function handleWizardTurn(
       [
         `Mode ticket ditutup. ${ticketProgress(trips)}`,
         `Kapan saja bisa dilanjutkan: ketik TICKET SEMUA`,
+        // SELESAI di sini hanya menutup mode ticket — tanpa catatan ini
+        // karyawan mengira klaimnya sudah diajukan ulang (padahal belum).
+        ...(upper === "SELESAI"
+          ? [
+              ``,
+              `Catatan: SELESAI barusan hanya menutup mode ticket — klaim BELUM diajukan ulang.`,
+              `Ketik SELESAI sekali lagi untuk mengajukan ulang.`,
+            ]
+          : []),
       ],
       "TICKET_WIZARD_CANCELLED"
     );
@@ -1022,13 +1031,34 @@ export async function processWebhookReply(
     // ROLE: EMPLOYEE
     // ==========================================
     if (role === 'EMPLOYEE') {
-      // Mode isi ticket satu-per-satu aktif → tangani duluan
+      // Mode isi ticket satu-per-satu aktif → tangani duluan, KECUALI balasan
+      // yang merupakan keputusan/perintah lain (1/2/HAPUS/UBAH/YA/SUDAH TF...).
+      // Tanpa ini wizard menelan "1" — klaim tidak pernah disetujui padahal
+      // halaman web sudah menampilkan "tercatat SETUJU" (sukses bohong).
       const wiz = claim.ticket_wizard as TicketWizard | null;
-      if (wiz && Array.isArray(wiz.queue) && wiz.i != null && wiz.i < wiz.queue.length) {
+      const wizActive =
+        wiz != null && Array.isArray(wiz.queue) && wiz.i != null && wiz.i < wiz.queue.length
+        && claim.status !== "APPROVED"; // klaim selesai = mode ticket hangus
+      const isDecision = new Set([
+        "APPROVE", "REVISE", "DROP", "CHANGE", "CONFIRM",
+        "REFUND_CLAIM", "REFUND_UNCLAIM", "REFUND_INFO",
+      ]).has(parseWaCommand(reply).type);
+      if (wizActive && wiz && !isDecision) {
         await handleWizardTurn(supabase, claim, wiz, reply, employeePhone);
+      } else {
+      // Keputusan menang atas mode isi ticket: tutup wizard dulu, lalu proses
+      if (wizActive && isDecision) {
+        await supabase.from("claims").update({ ticket_wizard: null }).eq("id", claim.id);
+        if (employeePhone) {
+          await sendAndLog(
+            supabase, claim.id, employeePhone,
+            `(Mode isi ticket ditutup otomatis karena Anda mengirim perintah lain. Lanjutkan nanti dengan: TICKET SEMUA)`,
+            "TICKET_WIZARD_AUTOCLOSE"
+          );
+        }
       }
       // Fase revisi: klaim sudah dikonfirmasi engineer tapi diminta revisi
-      else if (claim.status === 'NEED_REVIEW' && claim.approved_at) {
+      if (claim.status === 'NEED_REVIEW' && claim.approved_at) {
         await handleRevisionCommands(supabase, claim, reply, employeePhone, refunds);
       } else if (reply === "1" && refunds.length > 0) {
         // Ada penggantian belum selesai — konfirmasi ditahan
@@ -1149,6 +1179,7 @@ export async function processWebhookReply(
           );
         }
       }
+      } // akhir else (wizard tidak aktif / keputusan menang)
     }
 
     // ==========================================
@@ -1159,7 +1190,9 @@ export async function processWebhookReply(
         // Penggantian belum selesai — approval ditahan
         await sendAndLog(supabase, claim.id, phoneNumber, refundHoldMessage(refunds), "REFUND_HOLD");
       } else if (reply === "1") {
-        await mustUpdateClaim(supabase, claim.id, { manager_status: "APPROVED" });
+        // ticket_wizard ikut dihapus: mode isi ticket tidak boleh nyangkut
+        // setelah klaim maju tahap / selesai
+        await mustUpdateClaim(supabase, claim.id, { manager_status: "APPROVED", ticket_wizard: null });
         await sendAndLog(
           supabase, claim.id, phoneNumber,
           [
@@ -1212,7 +1245,7 @@ export async function processWebhookReply(
         // Penggantian belum selesai — approval ditahan
         await sendAndLog(supabase, claim.id, phoneNumber, refundHoldMessage(refunds), "REFUND_HOLD");
       } else if (reply === "1") {
-        await mustUpdateClaim(supabase, claim.id, { hr_status: "APPROVED", status: "APPROVED" });
+        await mustUpdateClaim(supabase, claim.id, { hr_status: "APPROVED", status: "APPROVED", ticket_wizard: null });
         await sendAndLog(
           supabase, claim.id, phoneNumber,
           [
