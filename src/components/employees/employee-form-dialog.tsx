@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
+import { z } from "zod";
 import {
   employeeSchema,
   EmployeeSchemaType,
@@ -49,7 +50,10 @@ export function EmployeeFormDialog({
   const [sigPadOpen, setSigPadOpen] = useState(false);
   const isEdit = !!employee;
 
-  const form = useForm<EmployeeSchemaType>({
+  // phone_number dipakai z.preprocess (input bebas format → output 62…),
+  // jadi tipe input form berbeda dari tipe output — z.input untuk field,
+  // EmployeeSchemaType (output) untuk hasil submit.
+  const form = useForm<z.input<typeof employeeSchema>, unknown, EmployeeSchemaType>({
     resolver: zodResolver(employeeSchema),
     defaultValues: {
       employee_name: employee?.employee_name || "",
@@ -213,12 +217,15 @@ export function EmployeeFormDialog({
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="phone_number">Phone Number</Label>
+            <Label htmlFor="phone_number">Phone Number (WhatsApp)</Label>
             <Input
               id="phone_number"
               {...form.register("phone_number")}
-              placeholder="628xxxxxxxxxx"
+              placeholder="0812xxxxxxx atau 62812xxxxxxx"
             />
+            <p className="text-xs text-slate-400">
+              Bebas format — 08…, +62…, atau 62… semua diterima, otomatis dirapikan.
+            </p>
             {form.formState.errors.phone_number && (
               <p className="text-sm text-destructive">
                 {form.formState.errors.phone_number.message}

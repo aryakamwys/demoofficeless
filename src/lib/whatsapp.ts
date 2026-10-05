@@ -26,20 +26,12 @@ interface SendTextResponse {
 }
 
 /**
- * Normalisasi nomor ke format Kirimi (6281234567890, tanpa +/spasi/@lid).
- * Tahan banting untuk data yang beda-beda: "+62…", "62…", "08…", "6208…"
- * (double prefix), "008…", spasi/tanda hubung/kurung, dan akhiran @lid.
+ * Normalisasi nomor ke format Kirimi (6281234567890) — implementasi pindah
+ * ke lib/phone.ts supaya bisa dipakai form/validation tanpa menyeret modul
+ * integrasi WA. Re-export menjaga import lama tetap jalan.
  */
-export function normalizePhone(phone: string | undefined | null): string | null {
-  if (!phone) return null;
-  return phone
-    .replace(/[\s\-().]/g, "")
-    .replace(/@lid$/, "")
-    .replace(/^\+/, "")
-    .replace(/^620+/, "62") // double prefix: 62 + 08xx
-    .replace(/^00+/, "62") // double zero
-    .replace(/^0/, "62"); // leading 0 lokal
-}
+export { normalizePhone } from "./phone";
+import { normalizePhone } from "./phone";
 
 /**
  * Send a text message via Kirimi API.
