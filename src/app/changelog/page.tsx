@@ -25,6 +25,18 @@ const ENTRIES: {
   items: string[];
 }[] = [
   {
+    date: "6 Okt 2026",
+    type: "Baru",
+    title: "Modul Finance: request dokumen",
+    desc: "Karyawan bisa mengajukan pembuatan dokumen (PR, PO, dll) dengan alur approval manager lalu diproses finance.",
+    items: [
+      "Pengajuan dari template dokumen yang bisa dikelola admin.",
+      "Approval manager (setujui/tolak dengan alasan) sebelum diproses finance.",
+      "Finance menandai selesai + catatan nomor dokumen dan unggah file hasil.",
+      "Tab Klaim Disetujui siap-bayar tetap tersedia di modul yang sama.",
+    ],
+  },
+  {
     date: "5 Okt 2026",
     type: "Peningkatan",
     title: "Tampilan area publik baru",

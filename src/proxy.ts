@@ -23,7 +23,8 @@ export async function proxy(request: NextRequest) {
     "/api/claims",
     "/api/employees",
     "/api/trips",
-    "/api/envgate"
+    "/api/envgate",
+    "/api/documents"
   ];
   const pathname = request.nextUrl.pathname;
   const isProtected = protectedPaths.some((path) => pathname.startsWith(path));

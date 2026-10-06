@@ -165,6 +165,44 @@ export interface TripRefund {
   cancelled_at?: string | null;
 }
 
+// ------- Modul Finance: Request Dokumen -------
+
+export interface DocumentTemplate {
+  id: string;
+  code: string;
+  name: string;
+  active: boolean;
+  created_at: string;
+}
+
+export type DocumentRequestStatus =
+  | "PENDING"
+  | "APPROVED"
+  | "REJECTED"
+  | "DIPROSES"
+  | "SELESAI";
+
+export interface DocumentRequest {
+  id: string;
+  template_id: string;
+  title: string;
+  notes: string | null;
+  requested_by: string | null;
+  approver_id: string | null;
+  status: DocumentRequestStatus;
+  rejected_reason: string | null;
+  approved_at: string | null;
+  processed_at: string | null;
+  completed_at: string | null;
+  result_notes: string | null;
+  result_url: string | null; // signed URL dari result_path (dibuat server)
+  created_at: string;
+  updated_at: string;
+  template?: { code: string; name: string } | { code: string; name: string }[];
+  requester?: { employee_name: string } | { employee_name: string }[] | null;
+  approver?: { employee_name: string } | { employee_name: string }[] | null;
+}
+
 // ------- Form / Input Types -------
 
 export interface EmployeeFormData {
