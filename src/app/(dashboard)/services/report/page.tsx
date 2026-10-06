@@ -50,7 +50,8 @@ export default async function EnvGateReportPage() {
         <h1 className="text-lg font-semibold">Report EnvGate</h1>
         <p className="text-sm text-slate-500">
           Data ticket live dari EnvGate Service Desk — bisa diunduh sebagai PPT,
-          Excel, atau PDF (cetak).
+          Excel, atau PDF (cetak). File PPT bisa diimpor langsung ke Canva
+          (Canva → Buat desain → Impor file) untuk diedit lebih lanjut.
         </p>
       </div>
       {error ? (

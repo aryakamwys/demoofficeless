@@ -27,6 +27,7 @@ import {
   Boxes,
   Activity,
   ShieldCheck,
+  Wallet,
 } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
@@ -47,6 +48,8 @@ const pageTitles: Record<string, string> = {
   "/services/inventory": "Inventory",
   "/inventory": "Inventory",
   "/settings": "Settings",
+  "/services/report": "Report",
+  "/finance": "Finance",
 };
 
 function getPageTitle(pathname: string): string {
@@ -179,6 +182,22 @@ export function Header({ isSuperadmin }: { isSuperadmin?: boolean }) {
               >
                 <Activity className="h-4 w-4 shrink-0" />
                 EnvGate Test
+              </Link>
+            </div>
+
+            {/* Finance — modul terpisah */}
+            <div className="pt-2 mt-2 border-t border-slate-100">
+              <Link
+                href="/finance"
+                className={cn(
+                  "flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors",
+                  pathname.startsWith("/finance")
+                    ? "bg-accent text-primary"
+                    : "text-muted-foreground hover:bg-accent hover:text-foreground"
+                )}
+              >
+                <Wallet className="h-4 w-4 shrink-0" />
+                Finance
               </Link>
             </div>
 
