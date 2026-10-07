@@ -301,15 +301,17 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    // Fetch active claims
+    // Fetch active claims — TANPA trips: saat musim blast ada puluhan klaim
+    // aktif dan menarik trips untuk semuanya berarti ribuan baris per pesan
+    // masuk, padahal pencocokan role hanya butuh nomor & status. Klaim yang
+    // cocok di-refetch lengkap (dengan trips) oleh processWebhookReply.
     const { data: claims } = await supabase
       .from("claims")
       .select(`
         *,
         employee:employees!claims_employee_id_fkey(*),
         manager:employees!claims_manager_id_fkey(*),
-        hr:employees!claims_hr_id_fkey(*),
-        trips(*)
+        hr:employees!claims_hr_id_fkey(*)
       `)
       .in("status", ["SENT", "NEED_REVIEW"])
       .order("wa_sent_at", { ascending: false });
@@ -475,7 +477,16 @@ export async function POST(request: NextRequest) {
     // Balas Kirimi INSTAN supaya tidak timeout/retry-dobel; pesan WA dikirim
     // di background dengan jeda anti-bot tetap. Aman di VPS (node standalone,
     // proses tetap hidup setelah response — bukan lagi serverless Vercel).
-    after(() => processWebhookReply(claim!, role!, reply, phoneNumber));
+    // Cast: klaim di sini tanpa trips (hemat query) — processWebhookReply
+    // langsung me-refetch-nya lengkap di dalam.
+    after(() =>
+      processWebhookReply(
+        claim as unknown as Parameters<typeof processWebhookReply>[0],
+        role!,
+        reply,
+        phoneNumber
+      )
+    );
 
     // Respond immediately to Kirimi webhook (no timeout risk)
     return NextResponse.json({ success: true });
