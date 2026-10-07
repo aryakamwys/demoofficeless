@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServerClient } from "@/lib/supabase-server";
-import { sendTextMessage, buildClaimMessage, buildManagerApprovalMessage, buildHrApprovalMessage } from "@/lib/whatsapp";
+import { sendTextMessage, buildManagerApprovalMessage, buildHrApprovalMessage } from "@/lib/whatsapp";
+import { sendClaimToEmployee } from "@/lib/wa-send";
 import { errorMessage } from "@/lib/utils";
 
 // Retry rate-limit bisa total ~17 detik — kasih ruang di serverless.
@@ -16,6 +17,18 @@ export async function POST(request: NextRequest) {
       { success: false, error: "claim_id wajib diisi" },
       { status: 400 }
     );
+  }
+
+  // Kirim ke karyawan — logika di lib (dipakai juga blast massal)
+  if (target === "EMPLOYEE") {
+    const r = await sendClaimToEmployee(claim_id, { manager_id, hr_id });
+    if (!r.ok) {
+      return NextResponse.json(
+        { success: false, error: r.error || "Gagal mengirim WhatsApp" },
+        { status: r.status || 500 }
+      );
+    }
+    return NextResponse.json({ success: true });
   }
 
   // Get claim with employee, manager, hr, and trips
@@ -52,16 +65,7 @@ export async function POST(request: NextRequest) {
   let message = "";
   let messageType = "CLAIM_NOTIFICATION";
 
-  if (target === "EMPLOYEE") {
-    message = buildClaimMessage({
-      employee_name: claim.employee.employee_name,
-      period: claim.period,
-      trip_count: claim.trip_count,
-      total_amount: claim.total_amount,
-      trips: claim.trips || [],
-      category: claim.employee.category ?? null,
-    });
-  } else if (target === "MANAGER") {
+  if (target === "MANAGER") {
     if (!claim.manager) {
       return NextResponse.json({ success: false, error: "Manager belum diatur untuk klaim ini" }, { status: 400 });
     }
@@ -129,20 +133,6 @@ export async function POST(request: NextRequest) {
       { success: false, error: result.error || "Gagal mengirim WhatsApp" },
       { status: 500 }
     );
-  }
-
-  // Only update general claim status if sending to EMPLOYEE
-  if (target === "EMPLOYEE") {
-    await supabase
-      .from("claims")
-      .update({
-        status: "SENT",
-        manager_id: manager_id !== undefined ? manager_id : claim.employee.manager_id,
-        hr_id: hr_id !== undefined ? hr_id : claim.employee.hr_id,
-        wa_sent: true,
-        wa_sent_at: new Date().toISOString(),
-      })
-      .eq("id", claim_id);
   }
 
     return NextResponse.json({ success: true });

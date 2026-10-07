@@ -54,12 +54,11 @@ export default function ClaimsPage() {
   const [selectedClaim, setSelectedClaim] = useState<ClaimWithEmployee | null>(null);
   const [bulkOpen, setBulkOpen] = useState(false);
 
-  // Klaim siap kirim massal: sudah ter-map karyawan + ada nomor WA
-  // (syarat sama dengan tombol Send per baris)
+  // Klaim siap blast massal: PENDING + ter-map karyawan + ada nomor WA.
+  // Kirim ulang klaim lama (SENT) tetap manual per baris — blast tidak
+  // boleh mengirim ulang ke karyawan yang sudah dapat pesannya.
   const bulkClaims = claims.filter(
-    (c) =>
-      c.employee?.phone_number &&
-      (c.status === "PENDING" || c.status === "SENT")
+    (c) => c.employee?.phone_number && c.status === "PENDING"
   );
 
   const fetchClaims = useCallback(async (opts?: { silent?: boolean }) => {

@@ -24,7 +24,9 @@ export async function proxy(request: NextRequest) {
     "/api/employees",
     "/api/trips",
     "/api/envgate",
-    "/api/documents"
+    "/api/documents",
+    "/api/whatsapp/send",
+    "/api/whatsapp/bulk"
   ];
   const pathname = request.nextUrl.pathname;
   const isProtected = protectedPaths.some((path) => pathname.startsWith(path));
