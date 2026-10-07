@@ -118,6 +118,15 @@ test("ticket: format salah jadi BAD_TICKET, bukan note", () => {
   assert.equal(parseWaCommand("TICKET 3 abc").type, "BAD_TICKET");
 });
 
+test("ticket: TICKET LIST minta daftar ticket milik engineer", () => {
+  assert.deepEqual(parseWaCommand("TICKET LIST"), { type: "TICKET_LIST" });
+  assert.deepEqual(parseWaCommand("ticket list"), { type: "TICKET_LIST" });
+  assert.deepEqual(parseWaCommand("TICKET DAFTAR"), { type: "TICKET_LIST" });
+  assert.deepEqual(parseWaCommand("LIST TICKET"), { type: "TICKET_LIST" });
+  // Bukan bentuk lain yang mirip
+  assert.equal(parseWaCommand("TICKET LIST 3").type, "BAD_TICKET");
+});
+
 test("ticket: TICKET SEMUA memulai mode wizard", () => {
   assert.deepEqual(parseWaCommand("TICKET SEMUA"), { type: "TICKET_WIZARD" });
   assert.deepEqual(parseWaCommand("ticket semua"), { type: "TICKET_WIZARD" });

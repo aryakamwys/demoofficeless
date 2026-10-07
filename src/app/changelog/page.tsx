@@ -25,6 +25,19 @@ const ENTRIES: {
   items: string[];
 }[] = [
   {
+    date: "7 Okt 2026",
+    type: "Baru",
+    title: "Revisi manager: kategori karyawan, paraf, list ticket, bukti TF otomatis",
+    desc: "Sederet penyempurnaan dari revisi manager untuk alur klaim dan request dokumen.",
+    items: [
+      "Kategori karyawan Engineer/Sales — template chat WhatsApp menyesuaikan (sales lebih sederhana, tanpa command ticket).",
+      "Approval request dokumen kini memakai paraf/tanda tangan manager + notifikasi WhatsApp.",
+      "Command TICKET LIST — engineer bisa minta daftar ID ticket EnvGate miliknya di bulan klaim.",
+      "Pilihan ticket di tabel Bookings difilter per engineer dan bulan klaim.",
+      "Bukti transfer dikirim sebagai gambar di WhatsApp otomatis tersimpan dan divalidasi HR dari web.",
+    ],
+  },
+  {
     date: "6 Okt 2026",
     type: "Baru",
     title: "Modul Finance: request dokumen",

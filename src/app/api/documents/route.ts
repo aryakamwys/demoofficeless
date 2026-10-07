@@ -1,5 +1,6 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest, NextResponse, after } from "next/server";
 import { createServerClient, createServiceClient } from "@/lib/supabase-server";
+import { sendTextMessage } from "@/lib/whatsapp";
 
 export async function GET() {
   const supabase = await createServerClient();
@@ -60,7 +61,7 @@ export async function POST(request: NextRequest) {
   // Approver disnapshot dari manager si pengaju saat diajukan
   const { data: employee } = await supabase
     .from("employees")
-    .select("id, manager_id")
+    .select("id, employee_name, manager_id")
     .eq("id", requested_by)
     .single();
 
@@ -70,6 +71,17 @@ export async function POST(request: NextRequest) {
       { status: 404 }
     );
   }
+
+  const [{ data: template }, { data: manager }] = await Promise.all([
+    supabase.from("document_templates").select("code, name").eq("id", template_id).single(),
+    employee.manager_id
+      ? supabase
+          .from("employees")
+          .select("employee_name, phone_number")
+          .eq("id", employee.manager_id)
+          .single()
+      : Promise.resolve({ data: null }),
+  ]);
 
   const { data, error } = await supabase
     .from("document_requests")
@@ -86,6 +98,31 @@ export async function POST(request: NextRequest) {
   if (error) {
     return NextResponse.json({ success: false, error: error.message }, { status: 500 });
   }
+
+  // Notifikasi WA ke manager — best-effort via after(), tidak memblokir respons
+  const tplLabel = template ? `${template.code} — ${template.name}` : "dokumen";
+  const requesterName = employee.employee_name || "Karyawan";
+  after(async () => {
+    if (!manager?.phone_number) return;
+    try {
+      await sendTextMessage(
+        manager.phone_number,
+        [
+          `*Request Dokumen Baru*`,
+          ``,
+          `Halo ${manager.employee_name || "Manager"},`,
+          ``,
+          `${requesterName} mengajukan request dokumen:`,
+          `${tplLabel} — ${title.trim()}`,
+          ...(notes?.trim() ? [`Catatan: ${notes.trim()}`] : []),
+          ``,
+          `Silakan buka aplikasi (menu *Finance*) untuk menyetujui atau menolak — persetujuan memakai tanda tangan Anda.`,
+        ].join("\n")
+      );
+    } catch (e) {
+      console.error("Notif WA request dokumen gagal:", e);
+    }
+  });
 
   return NextResponse.json({ success: true, data });
 }

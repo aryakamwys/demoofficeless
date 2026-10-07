@@ -23,6 +23,7 @@ export interface Employee {
   department: string;
   phone_number: string;
   role: 'EMPLOYEE' | 'MANAGER' | 'HR';
+  category?: 'ENGINEER' | 'SALES';
   manager_id: string | null;
   hr_id: string | null;
   is_active: boolean;
@@ -156,6 +157,13 @@ export interface TripRefund {
   reason: string;
   /** REQUESTED | CLAIMED | CONFIRMED | CANCELLED */
   status: string;
+  /** Bukti transfer otomatis dari WhatsApp (bucket private) + validasi HR */
+  proof_path?: string | null;
+  proof_validated?: boolean;
+  proof_reject_reason?: string | null;
+  proof_received_at?: string | null;
+  /** Signed URL proof_path (dibuat server untuk web) */
+  proof_url?: string | null;
   employee_note?: string | null;
   requested_by?: string | null;
   requested_at: string;
@@ -196,6 +204,8 @@ export interface DocumentRequest {
   completed_at: string | null;
   result_notes: string | null;
   result_url: string | null; // signed URL dari result_path (dibuat server)
+  /** Paraf manager (base64 PNG) — bukti persetujuan request dokumen */
+  manager_signature?: string | null;
   created_at: string;
   updated_at: string;
   template?: { code: string; name: string } | { code: string; name: string }[];

@@ -18,6 +18,7 @@ export async function PATCH(
   let action = "";
   let reason = "";
   let resultNotes = "";
+  let managerSignature: string | null = null;
   let file: File | null = null;
 
   if (contentType.includes("multipart/form-data")) {
@@ -32,6 +33,10 @@ export async function PATCH(
     action = body.action || "";
     reason = body.reason || "";
     resultNotes = body.result_notes || "";
+    // Paraf manager (base64 PNG dari signature pad) — disimpan saat approve
+    if (action === "approve" && typeof body.manager_signature === "string") {
+      managerSignature = body.manager_signature;
+    }
   }
 
   const now = new Date().toISOString();
@@ -40,6 +45,8 @@ export async function PATCH(
   if (action === "approve") {
     patch.status = "APPROVED";
     patch.approved_at = now;
+    // Paraf manager dari signature pad — bukti persetujuan
+    if (managerSignature) patch.manager_signature = managerSignature;
   } else if (action === "reject") {
     if (!reason.trim()) {
       return NextResponse.json(

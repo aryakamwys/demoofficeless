@@ -77,6 +77,24 @@ export default async function ClaimDetailPage({ params }: ClaimDetailPageProps) 
   const sigOf = (empId: string | null | undefined) =>
     (sigsRes.data || []).find((s: { employee_id: string }) => s.employee_id === empId)?.signature ?? null;
 
+  // Signed URL bukti transfer dari WA (bucket private) — satu panggilan batch
+  const proofPaths = (refunds || [])
+    .map((r: { proof_path?: string | null }) => r.proof_path)
+    .filter(Boolean) as string[];
+  const proofUrlByPath = new Map<string, string>();
+  if (proofPaths.length > 0) {
+    const { data: proofSigned } = await serviceClient.storage
+      .from("dataperkom")
+      .createSignedUrls(proofPaths, 3600);
+    (proofSigned || []).forEach((s: { path?: string | null; signedUrl?: string | null }) => {
+      if (s.path && s.signedUrl) proofUrlByPath.set(s.path, s.signedUrl);
+    });
+  }
+  const refundsWithProof = (refunds || []).map((r: { proof_path?: string | null }) => ({
+    ...r,
+    proof_url: r.proof_path ? proofUrlByPath.get(r.proof_path) ?? null : null,
+  }));
+
   const claimDetail: ClaimDetail = {
     ...claim,
     trips: trips || [],
@@ -85,7 +103,7 @@ export default async function ClaimDetailPage({ params }: ClaimDetailPageProps) 
     manager_signature: sigOf(managerIdToUse),
     hr_signature: sigOf(hrIdToUse),
     employee_signature: sigOf(employeeIdToUse),
-    refunds: refunds || []
+    refunds: refundsWithProof
   };
 
   return (

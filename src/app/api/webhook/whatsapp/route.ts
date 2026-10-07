@@ -2,7 +2,92 @@ import { NextRequest, NextResponse, after } from "next/server";
 import { createServiceClient } from "@/lib/supabase-server";
 import { sendTextMessage, normalizePhone } from "@/lib/whatsapp";
 import { matchRole, type WaRole, type ClaimRow } from "@/lib/wa-match";
-import { processWebhookReply } from "@/lib/wa-flow";
+import { processWebhookReply, activeRefunds } from "@/lib/wa-flow";
+
+/** Deteksi URL gambar dari payload Kirimi — bentuk payload media bisa
+ *  bervariasi, jadi beberapa lokasi umum dicek sekaligus. */
+function extractImageUrl(body: Record<string, unknown>): string | null {
+  const m = (body.message && typeof body.message === "object" ? body.message : {}) as Record<string, unknown>;
+  const attachments = Array.isArray(m.attachments) ? m.attachments : [];
+  const candidates: unknown[] = [
+    m.image_url,
+    m.media_url,
+    (m.attachment as Record<string, unknown> | undefined)?.url,
+    ...attachments.map((a) => (a as Record<string, unknown>)?.url),
+    body.image_url,
+    body.media_url,
+    body.url,
+  ];
+  for (const c of candidates) {
+    if (typeof c === "string" && /^https?:\/\//i.test(c)) return c;
+  }
+  return null;
+}
+
+/** Bukti transfer otomatis: gambar dari karyawan disimpan ke refund aktifnya.
+ *  Balikan dipakai untuk membalas WA; null = bukan bukti TF (tidak ditangani). */
+async function handleProofImage(
+  supabase: ReturnType<typeof createServiceClient>,
+  phoneNumber: string,
+  imageUrl: string
+): Promise<{ trip_no: number; amount: number; remaining: number[] } | null> {
+  // Employee pengirim
+  const { data: employee } = await supabase
+    .from("employees")
+    .select("id, employee_name")
+    .eq("phone_number", phoneNumber)
+    .maybeSingle();
+  if (!employee) return null;
+
+  // Klaim aktif miliknya (terbaru)
+  const { data: claims } = await supabase
+    .from("claims")
+    .select("id")
+    .eq("employee_id", employee.id)
+    .in("status", ["SENT", "NEED_REVIEW"])
+    .order("wa_sent_at", { ascending: false })
+    .limit(1);
+  const claimId = claims?.[0]?.id;
+  if (!claimId) return null;
+
+  // Refund aktif yang belum punya bukti (terbaru dulu)
+  const refunds = await activeRefunds(supabase, claimId);
+  const withoutProof = refunds.filter((r) => !r.proof_path);
+  const target = withoutProof[withoutProof.length - 1];
+  if (!target) return null;
+
+  // Unduh gambar (batas 5MB — bukti transfer cukup jauh di bawah ini)
+  const imgRes = await fetch(imageUrl);
+  if (!imgRes.ok) return null;
+  const buf = Buffer.from(await imgRes.arrayBuffer());
+  if (buf.length === 0 || buf.length > 5 * 1024 * 1024) return null;
+  const ct = imgRes.headers.get("content-type") || "";
+  const ext = ct.includes("png") ? "png" : ct.includes("webp") ? "webp" : "jpg";
+
+  // Simpan ke bucket private, tandai refund
+  const storagePath = `refunds/${target.id}/${Date.now()}.${ext}`;
+  const { error: upErr } = await supabase.storage
+    .from("dataperkom")
+    .upload(storagePath, buf, { contentType: ct || "image/jpeg" });
+  if (upErr) {
+    console.error("[WA] upload bukti TF gagal:", upErr.message);
+    return null;
+  }
+  const { error: updErr } = await supabase
+    .from("trip_refunds")
+    .update({ proof_path: storagePath, proof_received_at: new Date().toISOString() })
+    .eq("id", target.id);
+  if (updErr) {
+    console.error("[WA] update refund bukti gagal:", updErr.message);
+    return null;
+  }
+
+  return {
+    trip_no: target.trip_no,
+    amount: Number(target.amount),
+    remaining: withoutProof.slice(0, -1).map((r) => r.trip_no),
+  };
+}
 
 // ============================================================
 // Anti-loop webhook (state di memori proses — cukup untuk 1 VPS)
@@ -117,8 +202,52 @@ export async function POST(request: NextRequest) {
     });
     if (rawLogErr) console.error("[WA] RAW_WEBHOOK log gagal:", rawLogErr.message);
 
+    // URL gambar (kalau ada) — dipakai bukti transfer penggantian
+    const imageUrl = extractImageUrl(body);
+
     if (!sender || !messageText) {
-      // Pesan non-teks (voice note/gambar) atau format tak dikenal — tetap
+      // Gambar dari karyawan = bukti transfer penggantian. Coba pasang ke
+      // refund aktifnya dulu; kalau bukan/kagak cocok, jatuh ke balasan
+      // non-teks biasa.
+      const mediaPhone0 = normalizePhone(sender);
+      if (sender && imageUrl && mediaPhone0) {
+        let proofInfo: Awaited<ReturnType<typeof handleProofImage>> = null;
+        try {
+          proofInfo = await handleProofImage(supabase, mediaPhone0, imageUrl);
+        } catch (e) {
+          console.error("[WA] handleProofImage error:", e);
+        }
+        if (proofInfo) {
+          const rp = `Rp${proofInfo.amount.toLocaleString("id-ID")}`;
+          after(async () => {
+            const lines = [
+              `*Bukti Transfer Diterima*`,
+              ``,
+              `Bukti untuk perjalanan nomor ${proofInfo!.trip_no} (${rp}) sudah tersimpan dan menunggu pemeriksaan HR.`,
+              ``,
+              ...(proofInfo!.remaining.length > 0
+                ? [
+                    `Masih menunggu bukti untuk perjalanan nomor: ${proofInfo!.remaining.join(", ")}.`,
+                    `Kirim gambarnya satu per satu ya.`,
+                    ``,
+                  ]
+                : []),
+              `Kalau sudah transfer semuanya, ketik *SUDAH TF*.`,
+            ];
+            const result = await sendTextMessage(mediaPhone0, lines.join("\n"));
+            const { error: logErr } = await supabase.from("whatsapp_logs").insert({
+              phone_number: mediaPhone0,
+              message_type: "PROOF_RECEIVED",
+              status: result.success ? "SENT" : "FAILED",
+              response: `bukti TF trip ${proofInfo!.trip_no}`,
+            });
+            if (logErr) console.error("[WA] PROOF_RECEIVED log gagal:", logErr.message);
+          });
+          return NextResponse.json({ success: true, reason: "Proof image stored" });
+        }
+      }
+
+      // Pesan non-teks lain (voice note/video) atau format tak dikenal — tetap
       // dibalas, jangan biarkan chat menggantung seolah sistem error.
       if (sender) {
         const mediaPhone = normalizePhone(sender);
@@ -158,6 +287,18 @@ export async function POST(request: NextRequest) {
     // (loop pesan). Set KIRIMI_BOT_PHONE di env produksi.
     if (process.env.KIRIMI_BOT_PHONE && phoneNumber === normalizePhone(process.env.KIRIMI_BOT_PHONE)) {
       return NextResponse.json({ success: true, reason: "Self message ignored" });
+    }
+
+    // Gambar + caption: teksnya diproses seperti biasa, gambarnya disimpan
+    // sebagai bukti TF kalau cocok (diam-diam — balasannya tetap dari flow teks).
+    if (imageUrl) {
+      after(async () => {
+        try {
+          await handleProofImage(supabase, phoneNumber, imageUrl);
+        } catch (e) {
+          console.error("[WA] handleProofImage (caption) error:", e);
+        }
+      });
     }
 
     // Fetch active claims

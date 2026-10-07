@@ -25,6 +25,9 @@ export const employeeSchema = z.object({
       .regex(/^628\d{8,13}$/, "Nomor WhatsApp tidak valid — contoh: 0812xxxxxxx atau 62812xxxxxxx")
   ),
   role: z.enum(['EMPLOYEE', 'MANAGER', 'HR']),
+  // Kategori besar — menentukan template chat WA (engineer punya command
+  // ticket, sales dibuat sederhana)
+  category: z.enum(['ENGINEER', 'SALES']).default('ENGINEER'),
   manager_id: z.string().uuid().nullable().optional(),
   hr_id: z.string().uuid().nullable().optional(),
   signature: z.string().nullable().optional(),

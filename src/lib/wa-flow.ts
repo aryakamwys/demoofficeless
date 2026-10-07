@@ -19,6 +19,7 @@ import {
   buildRevisionTripListMessage,
   buildResubmittedMessage,
   buildRefundInfoMessage,
+  buildEngineerTicketListMessage,
   buildRefundClaimedMessage,
   buildRefundClaimedHrMessage,
   buildRefundUnclaimedMessage,
@@ -26,7 +27,7 @@ import {
   type CompanyBank,
 } from "@/lib/whatsapp";
 import { parseWaCommand } from "@/lib/wa-commands";
-import { getTicket, ticketTitle } from "@/lib/envgate";
+import { getTicket, getRecentTickets, ticketTitle } from "@/lib/envgate";
 
 // Helper: fetch a fresh claim with all relations
 export async function fetchClaimFresh(supabase: ReturnType<typeof createServiceClient>, claimId: string) {
@@ -119,6 +120,8 @@ export type RefundRow = {
   status: string; // REQUESTED | CLAIMED | CONFIRMED | CANCELLED
   employee_note: string | null;
   claimed_at: string | null;
+  /** Bukti transfer otomatis dari WhatsApp (bucket private) */
+  proof_path?: string | null;
 };
 
 function rupiah(n: number | string): string {
@@ -389,6 +392,7 @@ async function sendClaimInfo(
       tickets_missing: missingNos,
       refunds: refunds.map((r) => ({ no: r.trip_no, amount: Number(r.amount), status: r.status })),
       hints,
+      category: claim.employee?.category ?? null,
     }),
     "CLAIM_INFO"
   );
@@ -488,6 +492,7 @@ async function handleRevisionRequest(
         requester_name: actorName,
         requester_role: role,
         reason,
+        category: claim.employee?.category ?? null,
       }),
       "REVISION_REQUEST"
     );
@@ -544,6 +549,58 @@ async function verifyInvTicket(ticketId: string) {
     return { inv: await getTicket(ticketId), apiDown: false };
   } catch {
     return { inv: null, apiDown: true };
+  }
+}
+
+/** TICKET LIST — daftar ticket EnvGate milik engineer pada bulan periode
+ *  klaim, lengkap dengan ID-nya, supaya tahu apa yang didaftarkan. */
+async function handleTicketListCommand(
+  supabase: ReturnType<typeof createServiceClient>,
+  claim: ClaimWithRelations,
+  employeePhone: string | null
+) {
+  if (!employeePhone) return;
+  const empName = claim.employee?.employee_name;
+  if (!empName) return;
+  try {
+    // Bulan periode diambil dari trip pertama klaim (period bebas teks,
+    // trip_date pasti ISO) — fallback bulan sekarang.
+    const trips = claim.trips || [];
+    const monthDate = trips.length > 0 ? new Date(trips[0].trip_date) : new Date();
+    const recent = await getRecentTickets(null, null);
+    const monthNames = ["Jan", "Feb", "Mar", "Apr", "Mei", "Jun", "Jul", "Agu", "Sep", "Okt", "Nov", "Des"];
+    const mine = recent
+      .filter(
+        (t) => (t.requester_user?.name || "").toLowerCase() === empName.toLowerCase()
+      )
+      .filter((t) => {
+        if (!t.created_at) return false;
+        const d = new Date(String(t.created_at));
+        return (
+          d.getMonth() === monthDate.getMonth() &&
+          d.getFullYear() === monthDate.getFullYear()
+        );
+      })
+      .slice(0, 20)
+      .map((t) => {
+        const d = t.created_at ? new Date(String(t.created_at)) : null;
+        return {
+          id: t.pretty_id || `PIM-${t.id}`,
+          title: ticketTitle(t) || "-",
+          date: d ? `${d.getDate()} ${monthNames[d.getMonth()]}` : null,
+        };
+      });
+    await sendAndLog(
+      supabase, claim.id, employeePhone,
+      buildEngineerTicketListMessage(mine, empName, claim.period),
+      "TICKET_LIST"
+    );
+  } catch {
+    await sendAndLog(
+      supabase, claim.id, employeePhone,
+      "Koneksi EnvGate sedang terganggu — daftar ticket belum bisa diambil. Coba lagi beberapa saat ya.",
+      "TICKET_LIST_ERROR"
+    );
   }
 }
 
@@ -878,7 +935,13 @@ async function handleRevisionCommands(
 
   if (cmd.type === "LIST" || cmd.type === "DETAIL") {
     const { data: trips } = await supabase.from("trips").select("*").eq("claim_id", claim.id).order("trip_date", { ascending: true });
-    await sendAndLog(supabase, claim.id, employeePhone, buildRevisionTripListMessage(trips || [], claim.total_amount, claim.period), "REVISION_LIST");
+    await sendAndLog(supabase, claim.id, employeePhone, buildRevisionTripListMessage(trips || [], claim.total_amount, claim.period, claim.employee?.category ?? null), "REVISION_LIST");
+    return;
+  }
+
+  // TICKET LIST — engineer minta daftar ID ticket miliknya periode ini
+  if (cmd.type === "TICKET_LIST") {
+    await handleTicketListCommand(supabase, claim, employeePhone);
     return;
   }
 
@@ -1127,7 +1190,7 @@ export async function processWebhookReply(
       } else if (reply === "3") {
         const { data: trips } = await supabase.from("trips").select("*").eq("claim_id", claim.id).order("trip_date", { ascending: true });
         if (trips && trips.length > 0 && employeePhone) {
-          await sendAndLog(supabase, claim.id, employeePhone, buildDetailMessage(trips, claim.total_amount), "DETAIL_MESSAGE");
+          await sendAndLog(supabase, claim.id, employeePhone, buildDetailMessage(trips, claim.total_amount, claim.employee?.category ?? null), "DETAIL_MESSAGE");
         }
       } else {
         // TICKET/LIST juga bisa dipakai sebelum konfirmasi (mode awal);
@@ -1144,10 +1207,12 @@ export async function processWebhookReply(
           );
         } else if (cmd.type === "TICKET_WIZARD") {
           await startTicketWizard(supabase, claim, employeePhone);
+        } else if (cmd.type === "TICKET_LIST") {
+          await handleTicketListCommand(supabase, claim, employeePhone);
         } else if (cmd.type === "LIST" && employeePhone) {
           await sendAndLog(
             supabase, claim.id, employeePhone,
-            buildRevisionTripListMessage(claim.trips || [], claim.total_amount, claim.period),
+            buildRevisionTripListMessage(claim.trips || [], claim.total_amount, claim.period, claim.employee?.category ?? null),
             "REVISION_LIST"
           );
         } else if (cmd.type === "BAD_TICKET") {
@@ -1183,7 +1248,7 @@ export async function processWebhookReply(
           await handleRefundChat(supabase, claim, cmd, employeePhone);
         } else if (employeePhone && reply.replace(/\s/g, "").length < 3) {
           // "eh", "?", "y" — bukan catatan, arahkan ke menu
-          await sendAndLog(supabase, claim.id, employeePhone, buildEmployeeHelpMessage(), "INVALID_REPLY");
+          await sendAndLog(supabase, claim.id, employeePhone, buildEmployeeHelpMessage(claim.employee?.category ?? null), "INVALID_REPLY");
         } else if (employeePhone) {
           const { error: noteErr } = await supabase.from("comments").insert({ claim_id: claim.id, message: reply });
           if (noteErr) throw new Error(`Catatan gagal tersimpan: ${noteErr.message}`);

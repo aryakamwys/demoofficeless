@@ -83,12 +83,21 @@ export function ClaimDetailView({ claim }: ClaimDetailViewProps) {
 
   const editable = claim.status !== "APPROVED";
 
-  // Saran tiket dari 50 terbaru EnvGate — opsional, input manual tetap jalan
+  // Saran tiket EnvGate — difilter per engineer + bulan klaim biar relevan
+  // (fallback ke daftar umum kalau filternya kosong, input manual tetap jalan)
   const loadTicketOptions = async () => {
     if (ticketOptions.length > 0) return;
     try {
-      const res = await fetch("/api/envgate/tickets");
-      const json = await res.json();
+      const params = new URLSearchParams();
+      if (claim.employee?.employee_name) params.set("requester", claim.employee.employee_name);
+      const firstTrip = (claim.trips || [])[0];
+      if (firstTrip?.trip_date) params.set("month", dayjs(firstTrip.trip_date).format("YYYY-MM"));
+      let res = await fetch(`/api/envgate/tickets?${params}`);
+      let json = await res.json();
+      if (json.success && Array.isArray(json.data) && json.data.length === 0) {
+        res = await fetch("/api/envgate/tickets");
+        json = await res.json();
+      }
       if (json.success && Array.isArray(json.data)) setTicketOptions(json.data);
     } catch {
       // abaikan — HR bisa ketik ID manual
@@ -671,6 +680,84 @@ export function ClaimDetailView({ claim }: ClaimDetailViewProps) {
                     )}
                   </div>
                 </div>
+
+                {/* Bukti transfer otomatis dari WhatsApp — divalidasi HR di sini */}
+                {r.proof_url && (
+                  <div className="mt-2 rounded-lg border border-slate-200 bg-slate-50/50 p-2.5">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <p className="text-xs font-medium text-slate-600">
+                        Bukti transfer dari WhatsApp
+                        {r.proof_received_at && ` · ${dayjs(r.proof_received_at).format("DD MMM HH:mm")}`}
+                      </p>
+                      {r.proof_validated ? (
+                        <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-[11px] font-semibold text-emerald-700">
+                          Bukti tervalidasi ✓
+                        </span>
+                      ) : r.proof_reject_reason ? (
+                        <span
+                          className="rounded-full bg-red-50 px-2 py-0.5 text-[11px] font-semibold text-red-700"
+                          title={r.proof_reject_reason}
+                        >
+                          Ditolak: {r.proof_reject_reason}
+                        </span>
+                      ) : (
+                        <span className="rounded-full bg-amber-50 px-2 py-0.5 text-[11px] font-semibold text-amber-700">
+                          Menunggu validasi
+                        </span>
+                      )}
+                    </div>
+                    <div className="mt-2 flex flex-wrap items-start gap-2">
+                      <a href={r.proof_url} target="_blank" rel="noopener noreferrer">
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img
+                          src={r.proof_url}
+                          alt={`Bukti transfer trip ${r.trip_no}`}
+                          className="h-24 rounded border border-slate-200 object-cover"
+                        />
+                      </a>
+                      <div className="flex flex-col gap-1.5 text-[11px] text-slate-500">
+                        <p>
+                          Cocokkan: transfer <b>Rp{Number(r.amount).toLocaleString("id-ID")}</b> ke
+                          rekening kantor, atas nama karyawan.
+                        </p>
+                        {!r.proof_validated && (
+                          <div className="flex gap-1.5">
+                            <Button
+                              size="sm"
+                              className="h-7 bg-emerald-600 hover:bg-emerald-700 text-white"
+                              disabled={refundBusy === r.id}
+                              onClick={() =>
+                                refundAction(
+                                  { action: "validate_proof", refund_id: r.id, ok: true },
+                                  "Bukti tervalidasi — karyawan diberi tahu"
+                                )
+                              }
+                            >
+                              Valid ✓
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="h-7 border-red-200 text-red-600 hover:bg-red-50"
+                              disabled={refundBusy === r.id}
+                              onClick={() => {
+                                const reason = window.prompt("Alasan bukti ditolak:");
+                                if (reason && reason.trim()) {
+                                  refundAction(
+                                    { action: "validate_proof", refund_id: r.id, ok: false, reason },
+                                    "Bukti ditolak — karyawan diminta kirim ulang"
+                                  );
+                                }
+                              }}
+                            >
+                              Tolak
+                            </Button>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                )}
                 {r.status !== "CONFIRMED" && (
                   <div className="mt-2 flex flex-wrap gap-2">
                     {r.status === "REQUESTED" && (

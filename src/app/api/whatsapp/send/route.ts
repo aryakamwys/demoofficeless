@@ -59,6 +59,7 @@ export async function POST(request: NextRequest) {
       trip_count: claim.trip_count,
       total_amount: claim.total_amount,
       trips: claim.trips || [],
+      category: claim.employee.category ?? null,
     });
   } else if (target === "MANAGER") {
     if (!claim.manager) {

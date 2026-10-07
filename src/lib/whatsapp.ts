@@ -150,8 +150,10 @@ function tripLine(t: WaTripLine, full: boolean, no?: number): string {
   return `${prefix}${formatTripDate(t.trip_date)}, dari ${addr(t.pickup)} ke ${addr(t.dropoff)}, ${formatAmount(t.fare)}${costCode}${ticketChip(t.ticket_id)}`;
 }
 
-/** Menu karyawan — gaya percakapan, tiap opsi dijelaskan singkat. */
-function employeeMenuLines(): string[] {
+/** Menu karyawan — gaya percakapan, tiap opsi dijelaskan singkat.
+ *  Sales tidak dibebani command ticket (tidak punya ticket EnvGate) supaya
+ *  chat-nya sederhana dan tidak memancing pertanyaan. */
+function employeeMenuLines(category?: string | null): string[] {
   return [
     "Kalau semua data sudah benar, ketik *1*. Nanti klaimnya diteruskan ke Manager.",
     "",
@@ -159,6 +161,9 @@ function employeeMenuLines(): string[] {
     "",
     "Mau lihat alamat lengkap tiap perjalanan? Ketik *3*.",
     "",
+    ...(category === "SALES"
+      ? []
+      : ["Mau melampirkan ticket EnvGate ke perjalanan? Contoh: TICKET 3 PIM-34285.", ""]),
     "Mau tahu posisi klaim sekarang? Ketik *INFO*.",
   ];
 }
@@ -187,6 +192,7 @@ export function buildClaimMessage(params: {
   trip_count: number;
   total_amount: number;
   trips: WaTripLine[];
+  category?: string | null;
 }): string {
   const { employee_name, period, trip_count, total_amount, trips } = params;
   return [
@@ -200,10 +206,14 @@ export function buildClaimMessage(params: {
     ``,
     `Totalnya ${trip_count} perjalanan, *${formatAmount(total_amount)}*.`,
     ``,
-    `Kalau ada ticket EnvGate untuk pekerjaan di perjalanan ini, bisa dilampirkan lewat chat. Ketik TICKET lalu nomor perjalanan dan nomor ticketnya.`,
-    `Contoh: TICKET 3 PIM-34285`,
-    ``,
-    ...employeeMenuLines(),
+    ...(params.category === "SALES"
+      ? []
+      : [
+          `Kalau ada ticket EnvGate untuk pekerjaan di perjalanan ini, bisa dilampirkan lewat chat. Ketik TICKET lalu nomor perjalanan dan nomor ticketnya.`,
+          `Contoh: TICKET 3 PIM-34285`,
+          ``,
+        ]),
+    ...employeeMenuLines(params.category),
   ].join("\n");
 }
 
@@ -212,7 +222,8 @@ export function buildClaimMessage(params: {
  */
 export function buildDetailMessage(
   trips: WaTripLine[],
-  total_amount: number
+  total_amount: number,
+  category?: string | null
 ): string {
   return [
     `*Detail Perjalanan*`,
@@ -223,7 +234,7 @@ export function buildDetailMessage(
     ``,
     `Total biayanya *${formatAmount(total_amount)}*.`,
     ``,
-    ...employeeMenuLines(),
+    ...employeeMenuLines(category),
   ].join("\n");
 }
 
@@ -261,14 +272,15 @@ export function buildCorrectionPrompt(): string {
   ].join("\n");
 }
 
-/** Balasan untuk teks yang tidak dikenali — ulangi menu dengan santun. */
-export function buildEmployeeHelpMessage(): string {
+/** Balasan untuk teks yang tidak dikenali — ulangi menu dengan santun.
+ *  (Kalau chat terasa gantung, menu ini mengingatkan command yang tersedia.) */
+export function buildEmployeeHelpMessage(category?: string | null): string {
   return [
     `*Bantuan*`,
     ``,
     `Maaf, pesannya belum saya paham.`,
     ``,
-    ...employeeMenuLines(),
+    ...employeeMenuLines(category),
   ].join("\n");
 }
 
@@ -563,10 +575,15 @@ export function buildClaimInfoMessage(params: {
   tickets_missing: number[];
   refunds: Array<{ no: number; amount: number; status: string }>;
   hints: string[];
+  /** Kategori pengaju — sales tidak menampilkan baris/hint ticket. */
+  category?: string | null;
 }): string {
   const p = params;
   const ownerLine =
     p.viewer_role === "EMPLOYEE" ? `Klaim atas nama Anda` : `Klaim atas nama ${p.employee_name}`;
+  // Sales tidak punya ticket EnvGate — hint terkait ticket disaring.
+  const hints =
+    p.category === "SALES" ? p.hints.filter((h) => !/TICKET/i.test(h)) : p.hints;
   return [
     `*Info Klaim*`,
     ``,
@@ -575,9 +592,13 @@ export function buildClaimInfoMessage(params: {
     ``,
     `Statusnya: ${p.stage}`,
     ``,
-    `Ticket EnvGate: ${p.ticket_count} dari ${p.trip_count} perjalanan sudah ada${
-      p.tickets_missing.length > 0 ? `. Yang belum: nomor ${p.tickets_missing.join(", ")}` : `.`
-    }`,
+    ...(p.category === "SALES"
+      ? []
+      : [
+          `Ticket EnvGate: ${p.ticket_count} dari ${p.trip_count} perjalanan sudah ada${
+            p.tickets_missing.length > 0 ? `. Yang belum: nomor ${p.tickets_missing.join(", ")}` : `.`
+          }`,
+        ]),
     ...(p.refunds.length > 0
       ? [
           ``,
@@ -593,7 +614,7 @@ export function buildClaimInfoMessage(params: {
       : []),
     ``,
     `Langkah selanjutnya:`,
-    ...p.hints.map((h) => h),
+    ...hints.map((h) => h),
   ].join("\n");
 }
 
@@ -619,6 +640,7 @@ export function buildRevisionRequestMessage(params: {
   requester_name: string;
   requester_role: "MANAGER" | "HR";
   reason: string;
+  category?: string | null;
 }): string {
   const roleLabel = params.requester_role === "MANAGER" ? "Manager" : "HR";
   return [
@@ -635,10 +657,14 @@ export function buildRevisionRequestMessage(params: {
     ``,
     `Ketik LIST untuk melihat daftar perjalanan beserta nomornya.`,
     ``,
-    `Ketik TICKET lalu nomor perjalanan dan nomor ticketnya untuk melampirkan ticket EnvGate.`,
-    `Contoh: TICKET 3 PIM-34285`,
-    `Kalau perjalanannya banyak, ketik TICKET SEMUA, nanti dipandu satu per satu.`,
-    ``,
+    ...(params.category === "SALES"
+      ? []
+      : [
+          `Ketik TICKET lalu nomor perjalanan dan nomor ticketnya untuk melampirkan ticket EnvGate.`,
+          `Contoh: TICKET 3 PIM-34285`,
+          `Kalau perjalanannya banyak, ketik TICKET SEMUA, nanti dipandu satu per satu.`,
+          ``,
+        ]),
     `Kalau sudah beres, ketik *SELESAI*. Klaimnya dikirim ulang ke ${roleLabel}.`,
     ``,
     `Ketik INFO kapan saja untuk melihat posisi klaim.`,
@@ -651,7 +677,8 @@ export function buildRevisionRequestMessage(params: {
 export function buildRevisionTripListMessage(
   trips: WaTripLine[],
   total_amount: number,
-  period: string
+  period: string,
+  category?: string | null
 ): string {
   const lines = trips.map((t, i) => tripLine(t, false, i + 1));
   return [
@@ -665,13 +692,50 @@ export function buildRevisionTripListMessage(
     `Ada yang perlu diluruskan? Balas dengan catatan untuk HR, sebutkan nomor perjalanannya.`,
     `Contoh: perjalanan nomor 3 bukan perjalanan saya`,
     ``,
-    `Ketik TICKET lalu nomor perjalanan dan nomor ticketnya. Contoh: TICKET 3 PIM-34285`,
-    ``,
-    `Ketik TICKET SEMUA kalau mau mengisi ticket banyak perjalanan sekaligus, dipandu satu per satu.`,
-    ``,
+    ...(category === "SALES"
+      ? []
+      : [
+          `Ketik TICKET lalu nomor perjalanan dan nomor ticketnya. Contoh: TICKET 3 PIM-34285`,
+          ``,
+          `Ketik TICKET SEMUA kalau mau mengisi ticket banyak perjalanan sekaligus, dipandu satu per satu.`,
+          ``,
+        ]),
     `Kalau sudah beres, ketik *SELESAI* ya, nanti klaimnya dikirim ulang ke approver.`,
     ``,
     `Ketik INFO untuk melihat posisi klaim.`,
+  ].join("\n");
+}
+
+/**
+ * Daftar ticket EnvGate milik engineer untuk satu periode — dipakai command
+ * TICKET LIST supaya engineer tahu ID ticket apa yang perlu didaftarkan.
+ */
+export function buildEngineerTicketListMessage(
+  tickets: Array<{ id: string; title: string; date: string | null }>,
+  employee_name: string,
+  period: string
+): string {
+  if (tickets.length === 0) {
+    return [
+      `*Daftar Ticket EnvGate*`,
+      ``,
+      `Halo ${employee_name}, belum ada ticket EnvGate atas nama Anda untuk periode ${period}.`,
+      ``,
+      `Kalau merasa seharusnya ada, cek lagi nama Anda di ticket EnvGate atau hubungi HR.`,
+    ].join("\n");
+  }
+  const lines = tickets.map(
+    (t, i) => `${i + 1}. *${t.id}* — ${t.title}${t.date ? ` (${t.date})` : ""}`
+  );
+  return [
+    `*Daftar Ticket EnvGate*`,
+    ``,
+    `Ticket atas nama ${employee_name} periode ${period}:`,
+    ``,
+    ...lines,
+    ``,
+    `Untuk melampirkan ke perjalanan klaim: ketik TICKET lalu nomor perjalanan dan ID ticketnya.`,
+    `Contoh: TICKET 3 ${tickets[0].id}`,
   ].join("\n");
 }
 

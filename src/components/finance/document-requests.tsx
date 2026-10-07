@@ -4,7 +4,8 @@
 // approve/reject (manager), proses & selesai + upload file hasil (finance).
 import { useCallback, useEffect, useState } from "react";
 import dayjs from "dayjs";
-import { Check, FileUp, Loader2, Plus, X } from "lucide-react";
+import { Check, Eye, FileUp, Loader2, Plus, X } from "lucide-react";
+import { SignaturePadDialog } from "@/components/claims/signature-pad-dialog";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import {
@@ -66,6 +67,12 @@ export function DocumentRequests({ isSuperadmin }: { isSuperadmin: boolean }) {
   // Dialog tolak (manager)
   const [rejectReq, setRejectReq] = useState<DocumentRequest | null>(null);
   const [rejectReason, setRejectReason] = useState("");
+
+  // Paraf manager — approve lewat signature pad (bukti persetujuan)
+  const [approveReq, setApproveReq] = useState<DocumentRequest | null>(null);
+
+  // Dialog detail (semua info + paraf + file hasil)
+  const [detailReq, setDetailReq] = useState<DocumentRequest | null>(null);
 
   // Dialog template baru (superadmin)
   const [tplOpen, setTplOpen] = useState(false);
@@ -321,6 +328,14 @@ export function DocumentRequests({ isSuperadmin }: { isSuperadmin: boolean }) {
                           {dayjs(r.created_at).format("DD MMM YYYY, HH:mm")}
                         </td>
                         <td className="px-4 py-3 text-right whitespace-nowrap">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-8"
+                            onClick={() => setDetailReq(r)}
+                          >
+                            <Eye className="mr-1 h-3.5 w-3.5" /> Detail
+                          </Button>
                           {r.status === "PENDING" && (
                             <div className="flex justify-end gap-1.5">
                               <Button
@@ -328,7 +343,7 @@ export function DocumentRequests({ isSuperadmin }: { isSuperadmin: boolean }) {
                                 size="sm"
                                 className="h-8 border-emerald-200 text-emerald-700 hover:bg-emerald-50"
                                 disabled={busyId === r.id}
-                                onClick={() => act(r, { action: "approve" }, "Request disetujui")}
+                                onClick={() => setApproveReq(r)}
                               >
                                 <Check className="mr-1 h-3.5 w-3.5" /> Setujui
                               </Button>
@@ -539,6 +554,109 @@ export function DocumentRequests({ isSuperadmin }: { isSuperadmin: boolean }) {
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
               )}{" "}
               Selesaikan
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Paraf manager — persetujuan request dokumen */}
+      <SignaturePadDialog
+        open={!!approveReq}
+        onOpenChange={(o) => !o && setApproveReq(null)}
+        roleTitle="Manager"
+        onSave={async (signatureData) => {
+          if (!approveReq) return;
+          await act(
+            approveReq,
+            { action: "approve", manager_signature: signatureData },
+            "Request disetujui — paraf tersimpan"
+          );
+          setApproveReq(null);
+        }}
+      />
+
+      {/* Dialog detail — semua info + paraf manager + file hasil */}
+      <Dialog open={!!detailReq} onOpenChange={(o) => !o && setDetailReq(null)}>
+        <DialogContent className="sm:max-w-[520px]">
+          <DialogHeader>
+            <DialogTitle>Detail Request Dokumen</DialogTitle>
+            <DialogDescription>
+              {(() => {
+                const tpl = detailReq ? one(detailReq.template) : null;
+                return tpl ? `${tpl.code} — ${tpl.name}` : "";
+              })()}
+            </DialogDescription>
+          </DialogHeader>
+          {detailReq && (
+            <div className="space-y-3 text-sm">
+              <div>
+                <p className="text-xs font-medium uppercase tracking-wide text-slate-400">Keperluan</p>
+                <p className="font-medium text-slate-800">{detailReq.title}</p>
+                {detailReq.notes && (
+                  <p className="mt-1 text-slate-600">{detailReq.notes}</p>
+                )}
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <p className="text-xs font-medium uppercase tracking-wide text-slate-400">Pengaju</p>
+                  <p>{one(detailReq.requester)?.employee_name || "—"}</p>
+                </div>
+                <div>
+                  <p className="text-xs font-medium uppercase tracking-wide text-slate-400">Approver</p>
+                  <p>{one(detailReq.approver)?.employee_name || "—"}</p>
+                </div>
+                <div>
+                  <p className="text-xs font-medium uppercase tracking-wide text-slate-400">Status</p>
+                  <span
+                    className={`inline-flex rounded-full px-2 py-0.5 text-xs font-semibold uppercase ${STATUS_STYLES[detailReq.status] || "bg-slate-100 text-slate-700"}`}
+                  >
+                    {detailReq.status}
+                  </span>
+                </div>
+                <div>
+                  <p className="text-xs font-medium uppercase tracking-wide text-slate-400">Diajukan</p>
+                  <p>{dayjs(detailReq.created_at).format("DD MMM YYYY, HH:mm")}</p>
+                </div>
+              </div>
+              {detailReq.rejected_reason && (
+                <div>
+                  <p className="text-xs font-medium uppercase tracking-wide text-red-400">Alasan ditolak</p>
+                  <p className="text-red-600">{detailReq.rejected_reason}</p>
+                </div>
+              )}
+              {detailReq.result_notes && (
+                <div>
+                  <p className="text-xs font-medium uppercase tracking-wide text-emerald-500">Hasil (finance)</p>
+                  <p className="text-emerald-700">{detailReq.result_notes}</p>
+                </div>
+              )}
+              {detailReq.result_url && (
+                <Button variant="outline" size="sm" asChild>
+                  <a href={detailReq.result_url} target="_blank" rel="noopener noreferrer">
+                    <FileUp className="mr-2 h-4 w-4" /> Unduh file hasil
+                  </a>
+                </Button>
+              )}
+              {detailReq.manager_signature ? (
+                <div>
+                  <p className="text-xs font-medium uppercase tracking-wide text-slate-400">
+                    Paraf Manager (persetujuan)
+                  </p>
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={detailReq.manager_signature}
+                    alt="Paraf Manager"
+                    className="mt-1 max-h-24 rounded border border-slate-200 bg-white p-2"
+                  />
+                </div>
+              ) : (
+                <p className="text-xs italic text-slate-400">Belum ada paraf manager.</p>
+              )}
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDetailReq(null)}>
+              Tutup
             </Button>
           </DialogFooter>
         </DialogContent>

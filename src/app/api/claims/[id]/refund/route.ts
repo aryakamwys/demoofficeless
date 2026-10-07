@@ -158,6 +158,51 @@ export async function POST(
   }
   const isActive = refundRow.status === "REQUESTED" || refundRow.status === "CLAIMED";
 
+  // ==== Validasi bukti transfer (gambar dari WA) oleh HR ====
+  if (action === "validate_proof") {
+    if (!refundRow.proof_path) {
+      return NextResponse.json({ success: false, error: "Belum ada bukti transfer untuk penggantian ini" }, { status: 400 });
+    }
+    const ok = Boolean(body.ok);
+    const reason = String(body.reason || "").trim().slice(0, 300);
+    if (!ok && !reason) {
+      return NextResponse.json({ success: false, error: "Alasan penolakan wajib diisi" }, { status: 400 });
+    }
+    const { error: vErr } = await service
+      .from("trip_refunds")
+      .update({
+        proof_validated: ok,
+        proof_reject_reason: ok ? null : reason,
+      })
+      .eq("id", refundId);
+    if (vErr) {
+      return NextResponse.json({ success: false, error: vErr.message }, { status: 500 });
+    }
+
+    // Kabari karyawan hasil validasinya
+    if (employeePhone) {
+      await sendAndLog(
+        service, id, employeePhone,
+        ok
+          ? [
+              `*Bukti Transfer Diterima*`,
+              ``,
+              `Bukti transfer perjalanan nomor ${refundRow.trip_no} sudah diperiksa HR dan lolos validasi. Terima kasih!`,
+            ].join("\n")
+          : [
+              `*Bukti Transfer Ditolak*`,
+              ``,
+              `Bukti transfer perjalanan nomor ${refundRow.trip_no} belum lolos pemeriksaan HR.`,
+              `Alasannya: ${reason}`,
+              ``,
+              `Mohon kirim ulang gambar bukti transfer yang benar (transfer ke rekening kantor, nominal ${rupiah(refundRow.amount)}, nama dan nomor rekening terlihat jelas).`,
+            ].join("\n"),
+        ok ? "PROOF_VALIDATED" : "PROOF_REJECTED"
+      );
+    }
+    return NextResponse.json({ success: true });
+  }
+
   // ==== Kirim ulang info nominal + rekening kantor ====
   if (action === "send_norek") {
     if (!isActive) {

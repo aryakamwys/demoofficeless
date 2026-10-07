@@ -60,6 +60,7 @@ export function EmployeeFormDialog({
       department: employee?.department || "",
       phone_number: employee?.phone_number || "",
       role: employee?.role || "EMPLOYEE",
+      category: employee?.category || "ENGINEER",
       manager_id: employee?.manager_id || null,
       hr_id: employee?.hr_id || null,
       signature: employee?.signature || null,
@@ -73,6 +74,7 @@ export function EmployeeFormDialog({
       department: employee?.department || "",
       phone_number: employee?.phone_number || "",
       role: employee?.role || "EMPLOYEE",
+      category: employee?.category || "ENGINEER",
       manager_id: employee?.manager_id || null,
       hr_id: employee?.hr_id || null,
       signature: employee?.signature || null,
@@ -211,6 +213,22 @@ export function EmployeeFormDialog({
                   <SelectItem value="EMPLOYEE">Employee</SelectItem>
                   <SelectItem value="MANAGER">Manager</SelectItem>
                   <SelectItem value="HR">HR</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-2">
+              <Label>Kategori (template chat)</Label>
+              <Select
+                value={form.watch("category")}
+                onValueChange={(v) => form.setValue("category", v as "ENGINEER" | "SALES")}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Pilih kategori" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="ENGINEER">Engineer — chat lengkap (ada command ticket)</SelectItem>
+                  <SelectItem value="SALES">Sales — chat sederhana</SelectItem>
                 </SelectContent>
               </Select>
             </div>

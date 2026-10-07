@@ -17,6 +17,7 @@ export type WaCommand =
   | { type: "DONE" }
   | { type: "TICKET"; tripNo: number; ticketId: string }
   | { type: "TICKET_ID"; ticketId: string }
+  | { type: "TICKET_LIST" }
   | { type: "TICKET_WIZARD" }
   | { type: "BAD_TICKET" }
   | { type: "INFO" }
@@ -57,6 +58,7 @@ export function parseWaCommand(raw: string): WaCommand {
 
   const upper = input.toUpperCase();
   if (upper === "LIST") return { type: "LIST" };
+  if (upper === "LIST TICKET") return { type: "TICKET_LIST" };
   if (upper === "INFO" || upper === "STATUS") return { type: "INFO" };
   if (upper === "SELESAI") return { type: "DONE" };
   if (upper === "YA") return { type: "CONFIRM" };
@@ -89,6 +91,11 @@ export function parseWaCommand(raw: string): WaCommand {
     // "TICKET SEMUA" — mode isi satu-per-satu (wizard)
     if (/^TICKET\s+(SEMUA|ALL)$/.test(upper)) {
       return { type: "TICKET_WIZARD" };
+    }
+    // "TICKET LIST" / "LIST TICKET" — daftar ticket EnvGate milik engineer
+    // (wajib dicek sebelum parse TICKET <trip> supaya tidak jatuh ke BAD_TICKET)
+    if (/^TICKET\s+(LIST|DAFTAR)$/.test(upper) || /^LIST\s+TICKET$/.test(upper)) {
+      return { type: "TICKET_LIST" };
     }
     const parts = input.split(/\s+/);
     const tripNo = Number(parts[1]);

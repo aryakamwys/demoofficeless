@@ -99,6 +99,7 @@ export async function POST(request: NextRequest) {
       department: result.data.department,
       phone_number: result.data.phone_number,
       role: result.data.role,
+      category: result.data.category,
       manager_id: result.data.manager_id || null,
       hr_id: result.data.hr_id || null
     })
