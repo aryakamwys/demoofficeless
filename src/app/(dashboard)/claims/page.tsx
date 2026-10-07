@@ -16,6 +16,7 @@ import {
 } from "@/components/ui/select";
 
 import { SendWADialog } from "@/components/claims/send-wa-dialog";
+import { BulkSendDialog } from "@/components/claims/bulk-send-dialog";
 import { Skeleton } from "@/components/ui/skeleton";
 import { StatusBadge } from "@/components/claims/status-badge";
 import {
@@ -51,6 +52,15 @@ export default function ClaimsPage() {
 
   const [sendWADialogOpen, setSendWADialogOpen] = useState(false);
   const [selectedClaim, setSelectedClaim] = useState<ClaimWithEmployee | null>(null);
+  const [bulkOpen, setBulkOpen] = useState(false);
+
+  // Klaim siap kirim massal: sudah ter-map karyawan + ada nomor WA
+  // (syarat sama dengan tombol Send per baris)
+  const bulkClaims = claims.filter(
+    (c) =>
+      c.employee?.phone_number &&
+      (c.status === "PENDING" || c.status === "SENT")
+  );
 
   const fetchClaims = useCallback(async (opts?: { silent?: boolean }) => {
     // Batalkan request lama supaya respons stale tidak menimpa hasil baru
@@ -197,14 +207,25 @@ export default function ClaimsPage() {
           </Select>
         </div>
 
-        <Button variant="outline" onClick={handleExport} disabled={exporting}>
-          {exporting ? (
-            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-          ) : (
-            <Download className="mr-2 h-4 w-4" />
-          )}
-          {exporting ? "Exporting..." : "Export CSV"}
-        </Button>
+        <div className="flex gap-2">
+          <Button
+            className="bg-[#00B14F] text-white hover:bg-[#009040]"
+            disabled={bulkClaims.length === 0}
+            onClick={() => setBulkOpen(true)}
+            title="Kirim WhatsApp ke semua klaim ter-map sekaligus"
+          >
+            <Send className="mr-2 h-4 w-4" />
+            Kirim Semua ({bulkClaims.length})
+          </Button>
+          <Button variant="outline" onClick={handleExport} disabled={exporting}>
+            {exporting ? (
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+            ) : (
+              <Download className="mr-2 h-4 w-4" />
+            )}
+            {exporting ? "Exporting..." : "Export CSV"}
+          </Button>
+        </div>
       </div>
 
       {/* Table */}
@@ -318,6 +339,13 @@ export default function ClaimsPage() {
         onOpenChange={setSendWADialogOpen}
         claim={selectedClaim}
         onSuccess={fetchClaims}
+      />
+
+      <BulkSendDialog
+        open={bulkOpen}
+        onOpenChange={setBulkOpen}
+        claims={bulkClaims}
+        onDone={() => fetchClaims({ silent: true })}
       />
     </div>
   );
