@@ -300,6 +300,8 @@ export function buildManagerApprovalMessage(params: {
   total_amount: number;
   revised?: boolean;
   trips: WaTripLine[];
+  /** Link halaman /approve — antrean semua klaim menunggu bisa diproses dari sana. */
+  link?: string;
 }): string {
   const { employee_name, period, total_amount, trips } = params;
   return [
@@ -316,6 +318,9 @@ export function buildManagerApprovalMessage(params: {
     ...(params.revised
       ? [`Oh iya, klaim ini pernah direvisi oleh karyawannya.`, ``]
       : []),
+    ...(params.link
+      ? [`Ada banyak klaim menunggu? Semuanya bisa diproses dari satu halaman:`, params.link, ``]
+      : []),
     ...approverMenuLines("diteruskan ke HR"),
   ].join("\n");
 }
@@ -330,6 +335,8 @@ export function buildHrApprovalMessage(params: {
   total_amount: number;
   revised?: boolean;
   trips: WaTripLine[];
+  /** Link halaman /approve — antrean semua klaim menunggu bisa diproses dari sana. */
+  link?: string;
 }): string {
   const { employee_name, manager_name, period, total_amount, trips } = params;
   return [
@@ -345,6 +352,9 @@ export function buildHrApprovalMessage(params: {
     ``,
     ...(params.revised
       ? [`Oh iya, klaim ini pernah direvisi oleh karyawannya.`, ``]
+      : []),
+    ...(params.link
+      ? [`Ada banyak klaim menunggu? Semuanya bisa diproses dari satu halaman:`, params.link, ``]
       : []),
     ...approverMenuLines("klaimnya selesai"),
   ].join("\n");

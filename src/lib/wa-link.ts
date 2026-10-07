@@ -22,15 +22,19 @@ export function appUrl(): string {
   return (process.env.NEXT_PUBLIC_APP_URL || "").replace(/\/+$/, "");
 }
 
+/** Token mentah (tanpa URL) — dipakai antrean approver di /api/wa/action. */
+export function approveToken(claimId: string, phone: string, role: WaRole): string {
+  const exp = Date.now() + TOKEN_TTL_MS;
+  const payload = `${claimId}.${phone}.${role}.${exp}`;
+  const sig = createHmac("sha256", secret()).update(payload).digest("base64url");
+  return Buffer.from(`${payload}.${sig}`).toString("base64url");
+}
+
 /** Buat tautan tombol untuk satu klaim + nomor + role. Kosong jika APP_URL belum diset. */
 export function approveLink(claimId: string, phone: string, role: WaRole): string {
   const base = appUrl();
   if (!base) return "";
-  const exp = Date.now() + TOKEN_TTL_MS;
-  const payload = `${claimId}.${phone}.${role}.${exp}`;
-  const sig = createHmac("sha256", secret()).update(payload).digest("base64url");
-  const token = Buffer.from(`${payload}.${sig}`).toString("base64url");
-  return `${base}/approve?t=${token}`;
+  return `${base}/approve?t=${approveToken(claimId, phone, role)}`;
 }
 
 /** Verifikasi tautan — null jika rusak/kedaluwarsa/dimanipulasi. */

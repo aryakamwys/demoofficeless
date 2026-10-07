@@ -28,6 +28,7 @@ import {
 } from "@/lib/whatsapp";
 import { parseWaCommand } from "@/lib/wa-commands";
 import { getTicket, getRecentTickets, ticketTitle } from "@/lib/envgate";
+import { approveLink } from "@/lib/wa-link";
 
 // Helper: fetch a fresh claim with all relations
 export async function fetchClaimFresh(supabase: ReturnType<typeof createServiceClient>, claimId: string) {
@@ -415,6 +416,7 @@ async function proceedToHrOrFinalize(
           period: claim.period,
           total_amount: claim.total_amount,
           trips: claim.trips || [],
+          link: approveLink(claim.id, hrPhone, "HR"),
         }),
         "HR_APPROVAL_PROMPT"
       );
@@ -994,6 +996,7 @@ async function handleRevisionCommands(
               total_amount: fresh.total_amount,
               trips: fresh.trips || [],
               revised: true,
+              link: approveLink(fresh.id, mgrPhone, "MANAGER"),
             }),
             "MANAGER_APPROVAL_PROMPT"
           );
@@ -1166,6 +1169,7 @@ export async function processWebhookReply(
                 period: claim.period,
                 total_amount: claim.total_amount,
                 trips: claim.trips || [],
+                link: approveLink(claim.id, mgrPhone, "MANAGER"),
               }),
               "MANAGER_APPROVAL_PROMPT"
             );

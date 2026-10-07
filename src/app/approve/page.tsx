@@ -28,10 +28,19 @@ type ClaimInfo = {
   trips: Trip[];
 };
 
+type QueueItem = {
+  token: string;
+  employee_name: string;
+  period: string;
+  total_amount: number;
+  trip_count: number;
+};
+
 type Data = {
   role: string;
   in_revision: boolean;
   revision_reason: string | null;
+  queue?: QueueItem[];
   refunds: { no: number; amount: number; reason: string; status: string }[];
   claim: ClaimInfo;
 };
@@ -39,7 +48,7 @@ type Data = {
 type Phase =
   | { phase: "loading" }
   | { phase: "error"; message: string }
-  | { phase: "stale" }
+  | { phase: "stale"; queue: QueueItem[] }
   | { phase: "done"; title: string }
   | { phase: "ready"; data: Data; busy: string | null };
 
@@ -118,6 +127,9 @@ export default function ApprovePage() {
     | { kind: "ticket"; no: number; ticket: string }
     | null
   >(null);
+  // Antrean klaim lain menunggu approver ini (Manager/HR)
+  const [queueBusy, setQueueBusy] = useState<string | null>(null);
+  const [queueDone, setQueueDone] = useState<Record<string, string>>({});
 
   const load = (t: string) =>
     fetch(`/api/wa/action?t=${encodeURIComponent(t)}`)
@@ -134,7 +146,7 @@ export default function ApprovePage() {
           return;
         }
         if (body.stale) {
-          setState({ phase: "stale" });
+          setState({ phase: "stale", queue: body.queue || [] });
           return;
         }
         setState({ phase: "ready", data: body as Data, busy: null });
@@ -155,16 +167,18 @@ export default function ApprovePage() {
     load(t);
   }, []);
 
-  const post = (payload: Record<string, unknown>) =>
+  const postWith = (token: string, payload: Record<string, unknown>) =>
     fetch("/api/wa/action", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ token: tokenRef.current, ...payload }),
+      body: JSON.stringify({ token, ...payload }),
     }).then(async (res) => {
       const body = await res.json();
       if (!res.ok || !body.success) throw new Error(body.message || body.error || "Gagal memproses. Coba lagi.");
       return body;
     });
+
+  const post = (payload: Record<string, unknown>) => postWith(tokenRef.current, payload);
 
   /** Aksi keputusan (SETUJU / revisi / catatan). */
   const submit = async (action: "APPROVE" | "REVISE" | "NOTE", text?: string) => {
@@ -224,6 +238,81 @@ export default function ApprovePage() {
     </div>
   );
 
+  /** Aksi pada klaim lain di antrean — Manager/HR memproses banyak klaim
+   *  dari satu halaman tanpa balas chat satu per satu. */
+  const queueAction = async (q: QueueItem, action: "APPROVE" | "REVISE", reason?: string) => {
+    setQueueBusy(q.token);
+    setError("");
+    try {
+      await postWith(q.token, { action, reason: reason || "" });
+      setQueueDone((d) => ({
+        ...d,
+        [q.token]: action === "APPROVE" ? "Disetujui ✓" : "Revisi diminta ✓",
+      }));
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Gagal memproses. Coba lagi.");
+    } finally {
+      setQueueBusy(null);
+    }
+  };
+
+  const queueBlock = (items: QueueItem[]) =>
+    items.length > 0 && (
+      <div className="mt-4 rounded-xl border border-slate-200 bg-white p-4">
+        <p className="text-[14px] font-bold text-slate-800">
+          Klaim lain menunggu Anda ({items.length})
+        </p>
+        <p className="mt-0.5 text-[12px] leading-relaxed text-slate-600">
+          Proses dari sini saja — tidak perlu membalas chat satu per satu. Tiap tombol butuh ± 10 detik (mengirim WhatsApp).
+        </p>
+        <ul className="mt-3 space-y-2.5">
+          {items.map((q) => {
+            const done = queueDone[q.token];
+            return (
+              <li
+                key={q.token}
+                className="flex items-center justify-between gap-3 border-b border-slate-100 pb-2.5 last:border-0 last:pb-0"
+              >
+                <div className="min-w-0">
+                  <p className="truncate text-[13px] font-semibold text-slate-800">
+                    {q.employee_name}
+                  </p>
+                  <p className="text-[12px] text-slate-500">
+                    {q.period} · {rupiah(q.total_amount)} · {q.trip_count} trip
+                  </p>
+                </div>
+                {done ? (
+                  <span className="shrink-0 text-[12px] font-bold text-emerald-700">{done}</span>
+                ) : (
+                  <div className="flex shrink-0 gap-1.5">
+                    <button
+                      type="button"
+                      disabled={!!queueBusy}
+                      onClick={() => queueAction(q, "APPROVE")}
+                      className="rounded-lg bg-emerald-600 px-3 py-1.5 text-[12px] font-bold text-white transition-colors hover:bg-emerald-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-600 disabled:opacity-50"
+                    >
+                      {queueBusy === q.token ? "Memproses…" : "Setujui"}
+                    </button>
+                    <button
+                      type="button"
+                      disabled={!!queueBusy}
+                      onClick={() => {
+                        const r = window.prompt(`Alasan revisi untuk ${q.employee_name}:`);
+                        if (r && r.trim().length >= 5) queueAction(q, "REVISE", r.trim());
+                      }}
+                      className="rounded-lg border border-amber-300 bg-amber-50 px-3 py-1.5 text-[12px] font-bold text-amber-700 transition-colors hover:bg-amber-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 disabled:opacity-50"
+                    >
+                      Revisi
+                    </button>
+                  </div>
+                )}
+              </li>
+            );
+          })}
+        </ul>
+      </div>
+    );
+
   return (
     <div className="min-h-screen bg-slate-50">
       <header className="border-b border-slate-200 bg-white">
@@ -250,13 +339,19 @@ export default function ApprovePage() {
         )}
 
         {state.phase === "stale" && (
-          <div className="rounded-xl border border-slate-200 bg-white p-6 text-center">
-            <p className="text-3xl">✅</p>
-            <p className="mt-3 text-[15px] font-semibold text-slate-800">Klaim ini sudah diproses</p>
-            <p className="mt-1 text-[13px] leading-relaxed text-slate-600">
-              Keputusannya sudah tercatat. Tidak ada yang perlu dilakukan lagi di sini.
-            </p>
-          </div>
+          <>
+            <div className="rounded-xl border border-slate-200 bg-white p-6 text-center">
+              <p className="text-3xl">✅</p>
+              <p className="mt-3 text-[15px] font-semibold text-slate-800">Klaim ini sudah diproses</p>
+              <p className="mt-1 text-[13px] leading-relaxed text-slate-600">
+                Keputusannya sudah tercatat. Tidak ada yang perlu dilakukan lagi di sini.
+              </p>
+            </div>
+            {queueBlock(state.queue)}
+            {error && (
+              <p className="mt-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-[13px] text-red-700">{error}</p>
+            )}
+          </>
         )}
 
         {state.phase === "done" && (
@@ -622,6 +717,8 @@ export default function ApprovePage() {
                 SUDAH BERES — KIRIM ULANG ✓
               </button>
             )}
+
+            {queueBlock(state.data.queue || [])}
 
             {error && (
               <p className="mt-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-[13px] text-red-700">{error}</p>

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServiceClient } from "@/lib/supabase-server";
-import { verifyApproveToken } from "@/lib/wa-link";
+import { verifyApproveToken, approveToken } from "@/lib/wa-link";
 import { matchRole } from "@/lib/wa-match";
 import { fetchClaimFresh, processWebhookReply } from "@/lib/wa-flow";
 import { errorMessage } from "@/lib/utils";
@@ -14,6 +14,37 @@ export const maxDuration = 60;
 function tokenFrom(request: NextRequest, body?: Record<string, unknown>): string {
   const fromQuery = new URL(request.url).searchParams.get("t");
   return String(fromQuery || (body && body.token) || "");
+}
+
+/** Antrean klaim LAIN yang sedang menunggu approver ini — manager/HR cuma
+ *  beberapa orang menangani puluhan klaim; dari satu link mereka bisa
+ *  memproses semuanya tanpa balas chat satu per satu. Pemegang link yang
+ *  valid bertindak sebagai orangnya (trust model sama dengan wa-link). */
+async function approverQueue(
+  supabase: ReturnType<typeof createServiceClient>,
+  claimId: string,
+  phone: string,
+  role: "MANAGER" | "HR"
+) {
+  const { data } = await supabase
+    .from("claims")
+    .select(`
+      *,
+      employee:employees!claims_employee_id_fkey(*),
+      manager:employees!claims_manager_id_fkey(*),
+      hr:employees!claims_hr_id_fkey(*)
+    `)
+    .in("status", ["SENT", "NEED_REVIEW"]);
+  return (data || [])
+    .filter((c) => c.id !== claimId && matchRole(c, phone) === role)
+    .slice(0, 50)
+    .map((c) => ({
+      token: approveToken(c.id, phone, role),
+      employee_name: c.employee?.employee_name || "Karyawan",
+      period: c.period,
+      total_amount: c.total_amount,
+      trip_count: c.trip_count ?? 0,
+    }));
 }
 
 export async function GET(request: NextRequest) {
@@ -30,9 +61,14 @@ export async function GET(request: NextRequest) {
 
   // Tahap sudah lewat (sudah di-approve / bukan gilirannya lagi) → halaman
   // menampilkan info, bukan tombol — tautan lama tidak bisa dipakai dua kali.
+  // Antrean tetap dikirim: link dibuka setelah klaim ini diproses pun masih
+  // berguna untuk klaim-klaim lain yang menunggu.
   const role = matchRole(claim, v.phone);
   if (role !== v.role) {
-    return NextResponse.json({ success: true, stale: true, role: v.role });
+    const queue = v.role === "MANAGER" || v.role === "HR"
+      ? await approverQueue(supabase, v.claimId, v.phone, v.role)
+      : [];
+    return NextResponse.json({ success: true, stale: true, role: v.role, queue });
   }
 
   // Mode revisi (karyawan): klaim dikembalikan oleh Manager/HR — halaman
@@ -64,6 +100,9 @@ export async function GET(request: NextRequest) {
   return NextResponse.json({
     success: true,
     role: v.role,
+    queue: v.role === "MANAGER" || v.role === "HR"
+      ? await approverQueue(supabase, v.claimId, v.phone, v.role)
+      : [],
     in_revision: inRevision,
     revision_reason,
     refunds: (refundRows || []).map((r) => ({
