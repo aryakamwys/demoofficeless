@@ -66,6 +66,40 @@ export async function PUT(
   return NextResponse.json({ success: true, data });
 }
 
+// Aksi cepat ganti kategori (template chat WA) dari tabel — bukan form penuh
+export async function PATCH(
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  const { id } = await params;
+  const body = await request.json();
+  if (body?.category !== "ENGINEER" && body?.category !== "SALES") {
+    return NextResponse.json(
+      { success: false, error: "Kategori harus ENGINEER atau SALES" },
+      { status: 400 }
+    );
+  }
+
+  const supabase = createServiceClient();
+  const { data, error } = await supabase
+    .from("employees")
+    .update({ category: body.category })
+    .eq("id", id)
+    .select("id, category")
+    .single();
+
+  if (error) {
+    return NextResponse.json(
+      { success: false, error: error.message },
+      { status: 500 }
+    );
+  }
+
+  await bump(EMPLOYEES_VER);
+
+  return NextResponse.json({ success: true, data });
+}
+
 export async function DELETE(
   _request: NextRequest,
   { params }: { params: Promise<{ id: string }> }

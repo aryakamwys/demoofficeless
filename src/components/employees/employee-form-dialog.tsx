@@ -216,22 +216,6 @@ export function EmployeeFormDialog({
                 </SelectContent>
               </Select>
             </div>
-
-            <div className="space-y-2">
-              <Label>Kategori (template chat)</Label>
-              <Select
-                value={form.watch("category")}
-                onValueChange={(v) => form.setValue("category", v as "ENGINEER" | "SALES")}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Pilih kategori" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="ENGINEER">Engineer — chat lengkap (ada command ticket)</SelectItem>
-                  <SelectItem value="SALES">Sales — chat sederhana</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
           </div>
 
           <div className="space-y-2">

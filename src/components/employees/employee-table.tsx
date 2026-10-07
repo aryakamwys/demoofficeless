@@ -17,7 +17,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { MoreHorizontal, Pencil, Trash2 } from "lucide-react";
+import { ArrowLeftRight, MoreHorizontal, Pencil, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { confirmAction } from "@/components/confirm-dialog";
 
@@ -51,6 +51,36 @@ export function EmployeeTable({
       onRefresh();
     } else {
       toast.error(result.error || "Gagal menghapus");
+    }
+  };
+
+  // Ganti kategori (template chat WA) — aksi cepat, tanpa buka form
+  const handleToggleCategory = async (emp: Employee) => {
+    const next = emp.category === "SALES" ? "ENGINEER" : "SALES";
+    const label = next === "SALES"
+      ? "Sales — chat sederhana (tanpa command ticket)"
+      : "Engineer — chat lengkap (ada command ticket)";
+    if (
+      !(await confirmAction({
+        title: `Jadikan ${next === "SALES" ? "Sales" : "Engineer"}?`,
+        description: `${emp.employee_name} → ${label}`,
+        confirmText: "Ubah",
+      }))
+    )
+      return;
+
+    const res = await fetch(`/api/employees/${emp.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ category: next }),
+    });
+    const result = await res.json();
+
+    if (result.success) {
+      toast.success(`Kategori ${emp.employee_name} kini ${next === "SALES" ? "Sales" : "Engineer"}`);
+      onRefresh();
+    } else {
+      toast.error(result.error || "Gagal mengubah kategori");
     }
   };
 
@@ -112,6 +142,12 @@ export function EmployeeTable({
                   <DropdownMenuItem onClick={() => onEdit(emp)}>
                     <Pencil className="mr-2 h-4 w-4" />
                     Edit
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => handleToggleCategory(emp)}>
+                    <ArrowLeftRight className="mr-2 h-4 w-4" />
+                    {emp.category === "SALES"
+                      ? "Kategori: Sales → Jadikan Engineer"
+                      : "Kategori: Engineer → Jadikan Sales"}
                   </DropdownMenuItem>
                   <DropdownMenuItem
                     onClick={() => handleDelete(emp.id)}
