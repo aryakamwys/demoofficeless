@@ -1308,7 +1308,16 @@ export async function processWebhookReply(
 
       } else {
         const cmd = parseWaCommand(reply);
-        if (cmd.type === "REVISE") {
+        // LIST/DETAIL — approver bisa melihat ulang daftar perjalanan
+        // bernomor kapan saja (chat gantung, lupa konteks klaim).
+        if (cmd.type === "LIST" || cmd.type === "DETAIL") {
+          const { data: trips } = await supabase.from("trips").select("*").eq("claim_id", claim.id).order("trip_date", { ascending: true });
+          await sendAndLog(
+            supabase, claim.id, phoneNumber,
+            buildRevisionTripListMessage(trips || [], claim.total_amount, claim.period, claim.employee?.category ?? null, "APPROVER"),
+            "APPROVER_LIST"
+          );
+        } else if (cmd.type === "REVISE") {
           await handleRevisionRequest(supabase, claim, "MANAGER", cmd.reason, phoneNumber, employeePhone);
         } else {
           await sendAndLog(
@@ -1360,7 +1369,15 @@ export async function processWebhookReply(
         }
       } else {
         const cmd = parseWaCommand(reply);
-        if (cmd.type === "REVISE") {
+        // LIST/DETAIL — sama seperti Manager: bisa minta daftar kapan saja
+        if (cmd.type === "LIST" || cmd.type === "DETAIL") {
+          const { data: trips } = await supabase.from("trips").select("*").eq("claim_id", claim.id).order("trip_date", { ascending: true });
+          await sendAndLog(
+            supabase, claim.id, phoneNumber,
+            buildRevisionTripListMessage(trips || [], claim.total_amount, claim.period, claim.employee?.category ?? null, "APPROVER"),
+            "APPROVER_LIST"
+          );
+        } else if (cmd.type === "REVISE") {
           await handleRevisionRequest(supabase, claim, "HR", cmd.reason, phoneNumber, employeePhone);
         } else {
           await sendAndLog(

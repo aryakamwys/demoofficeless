@@ -144,10 +144,15 @@ function ticketChip(ticketId?: string | null): string {
 
 function tripLine(t: WaTripLine, full: boolean, no?: number): string {
   const addr = (s: string) => (full ? (s || "").trim() : shortAddr(s));
-  const costCode = t.cost_code ? `, code ${t.cost_code}` : "";
+  const costCode = t.cost_code ? ` · code ${t.cost_code}` : "";
   // Bernomor (1. 2. …) supaya nyambung dengan command TICKET dan catatan.
+  // Dua baris per trip: tanggal+nominal di atas, rute di bawah — di layar HP
+  // jauh lebih mudah dibaca daripada satu baris panjang yang terlipat lipat.
   const prefix = no != null ? `${no}. ` : "";
-  return `${prefix}${formatTripDate(t.trip_date)}, dari ${addr(t.pickup)} ke ${addr(t.dropoff)}, ${formatAmount(t.fare)}${costCode}${ticketChip(t.ticket_id)}`;
+  return [
+    `${prefix}${formatTripDate(t.trip_date)} — *${formatAmount(t.fare)}*${costCode}`,
+    `${addr(t.pickup)} → ${addr(t.dropoff)}${ticketChip(t.ticket_id)}`,
+  ].join("\n");
 }
 
 /** Menu karyawan — gaya percakapan, tiap opsi dijelaskan singkat.
@@ -179,6 +184,8 @@ function approverMenuLines(next: string): string[] {
     "Contoh:",
     "2 nominal perjalanan nomor 3 masih kurang tepat",
     "",
+    "Mau lihat daftar perjalanan bernomor? Ketik *LIST*.",
+    "",
     "Mau tahu posisi klaim sekarang? Ketik *INFO*.",
   ];
 }
@@ -202,7 +209,7 @@ export function buildClaimMessage(params: {
     ``,
     `Ini rincian klaim Grab Anda untuk periode ${period}. Mohon dicek dulu sebelum diproses ya.`,
     ``,
-    ...trips.map((t, i) => tripLine(t, false, i + 1)),
+    trips.map((t, i) => tripLine(t, false, i + 1)).join("\n\n"),
     ``,
     `Totalnya ${trip_count} perjalanan, *${formatAmount(total_amount)}*.`,
     ``,
@@ -230,7 +237,7 @@ export function buildDetailMessage(
     ``,
     `Ini detail alamat lengkapnya.`,
     ``,
-    ...trips.map((t, i) => tripLine(t, true, i + 1)),
+    trips.map((t, i) => tripLine(t, true, i + 1)).join("\n\n"),
     ``,
     `Total biayanya *${formatAmount(total_amount)}*.`,
     ``,
@@ -302,7 +309,7 @@ export function buildManagerApprovalMessage(params: {
     ``,
     `${employee_name} mengajukan klaim Grab untuk periode ${period}. Datanya sudah dicek dan dikonfirmasi oleh karyawan tersebut.`,
     ``,
-    ...trips.map((t, i) => tripLine(t, false, i + 1)),
+    trips.map((t, i) => tripLine(t, false, i + 1)).join("\n\n"),
     ``,
     `Totalnya ${trips.length} perjalanan, *${formatAmount(total_amount)}*.`,
     ``,
@@ -332,7 +339,7 @@ export function buildHrApprovalMessage(params: {
     ``,
     `${employee_name} mengajukan klaim Grab untuk periode ${period}. Managernya (${manager_name}) sudah menyetujui, tinggal persetujuan terakhir dari Anda.`,
     ``,
-    ...trips.map((t, i) => tripLine(t, false, i + 1)),
+    trips.map((t, i) => tripLine(t, false, i + 1)).join("\n\n"),
     ``,
     `Totalnya ${trips.length} perjalanan, *${formatAmount(total_amount)}*.`,
     ``,
@@ -678,31 +685,45 @@ export function buildRevisionTripListMessage(
   trips: WaTripLine[],
   total_amount: number,
   period: string,
-  category?: string | null
+  category?: string | null,
+  /** Approver (Manager/HR) melihat hint keputusan, bukan hint revisi karyawan. */
+  viewer?: "EMPLOYEE" | "APPROVER"
 ): string {
-  const lines = trips.map((t, i) => tripLine(t, false, i + 1));
+  const lines = trips.map((t, i) => tripLine(t, false, i + 1)).join("\n\n");
+  const closing =
+    viewer === "APPROVER"
+      ? [
+          `Ketik *1* untuk menyetujui klaim ini.`,
+          ``,
+          `Ketik *2* diikuti alasan untuk meminta revisi.`,
+          ``,
+          `Mau tahu posisi klaim sekarang? Ketik *INFO*.`,
+        ]
+      : [
+          `Ada yang perlu diluruskan? Balas dengan catatan untuk HR, sebutkan nomor perjalanannya.`,
+          `Contoh: perjalanan nomor 3 bukan perjalanan saya`,
+          ``,
+          ...(category === "SALES"
+            ? []
+            : [
+                `Ketik TICKET lalu nomor perjalanan dan nomor ticketnya. Contoh: TICKET 3 PIM-34285`,
+                ``,
+                `Ketik TICKET SEMUA kalau mau mengisi ticket banyak perjalanan sekaligus, dipandu satu per satu.`,
+                ``,
+              ]),
+          `Kalau sudah beres, ketik *SELESAI* ya, nanti klaimnya dikirim ulang ke approver.`,
+          ``,
+          `Ketik INFO untuk melihat posisi klaim.`,
+        ];
   return [
     `*Daftar Perjalanan*`,
     ``,
     `Klaim periode ${period}:`,
-    ...lines,
+    lines,
     ``,
     `Totalnya *${formatAmount(total_amount)}*.`,
     ``,
-    `Ada yang perlu diluruskan? Balas dengan catatan untuk HR, sebutkan nomor perjalanannya.`,
-    `Contoh: perjalanan nomor 3 bukan perjalanan saya`,
-    ``,
-    ...(category === "SALES"
-      ? []
-      : [
-          `Ketik TICKET lalu nomor perjalanan dan nomor ticketnya. Contoh: TICKET 3 PIM-34285`,
-          ``,
-          `Ketik TICKET SEMUA kalau mau mengisi ticket banyak perjalanan sekaligus, dipandu satu per satu.`,
-          ``,
-        ]),
-    `Kalau sudah beres, ketik *SELESAI* ya, nanti klaimnya dikirim ulang ke approver.`,
-    ``,
-    `Ketik INFO untuk melihat posisi klaim.`,
+    ...closing,
   ].join("\n");
 }
 
