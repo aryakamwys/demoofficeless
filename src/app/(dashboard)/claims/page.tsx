@@ -60,6 +60,20 @@ export default function ClaimsPage() {
   const bulkClaims = claims.filter(
     (c) => c.employee?.phone_number && c.status === "PENDING"
   );
+  const bulkEligibleIds = new Set(bulkClaims.map((c) => c.id));
+
+  // Pilihan manual via checkbox — kosong = kirim semua yang eligible
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const allSelected = bulkClaims.length > 0 && bulkClaims.every((c) => selectedIds.has(c.id));
+  const toggleAll = () => setSelectedIds(allSelected ? new Set() : new Set(bulkEligibleIds));
+  const toggleOne = (id: string) =>
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  const bulkTargets = bulkClaims.filter((c) => selectedIds.has(c.id));
 
   const fetchClaims = useCallback(async (opts?: { silent?: boolean }) => {
     // Batalkan request lama supaya respons stale tidak menimpa hasil baru
@@ -211,10 +225,16 @@ export default function ClaimsPage() {
             className="bg-[#00B14F] text-white hover:bg-[#009040]"
             disabled={bulkClaims.length === 0}
             onClick={() => setBulkOpen(true)}
-            title="Kirim WhatsApp ke semua klaim ter-map sekaligus"
+            title={
+              bulkTargets.length > 0
+                ? `Kirim ${bulkTargets.length} klaim terpilih`
+                : "Kirim WhatsApp ke semua klaim ter-map sekaligus"
+            }
           >
             <Send className="mr-2 h-4 w-4" />
-            Kirim Semua ({bulkClaims.length})
+            {bulkTargets.length > 0
+              ? `Kirim Terpilih (${bulkTargets.length})`
+              : `Kirim Semua (${bulkClaims.length})`}
           </Button>
           <Button variant="outline" onClick={handleExport} disabled={exporting}>
             {exporting ? (
@@ -257,6 +277,17 @@ export default function ClaimsPage() {
               <table className="w-full text-sm min-w-[1000px] border-collapse">
                 <thead>
                   <tr className="bg-white border-b-2 border-slate-200">
+                    <th className="w-10 px-4 py-4">
+                      <input
+                        type="checkbox"
+                        className="h-4 w-4 accent-[#00B14F]"
+                        checked={allSelected}
+                        disabled={bulkClaims.length === 0}
+                        onChange={toggleAll}
+                        title="Pilih semua klaim siap kirim"
+                        aria-label="Pilih semua klaim siap kirim"
+                      />
+                    </th>
                     <th className="px-4 py-4 text-left font-semibold text-slate-600 whitespace-nowrap">Date & Time (GMT+7)</th>
                     <th className="px-4 py-4 text-left font-semibold text-slate-600 whitespace-nowrap">Employee Name</th>
                     <th className="px-4 py-4 text-left font-semibold text-slate-600 whitespace-nowrap">Phone</th>
@@ -271,6 +302,21 @@ export default function ClaimsPage() {
                 <tbody>
                   {claims.map((claim) => (
                     <tr key={claim.id} className="hover:bg-slate-50/50 transition-colors border-b border-slate-100">
+                      <td className="px-4 py-4 align-middle">
+                        <input
+                          type="checkbox"
+                          className="h-4 w-4 accent-[#00B14F]"
+                          checked={selectedIds.has(claim.id)}
+                          disabled={!bulkEligibleIds.has(claim.id)}
+                          onChange={() => toggleOne(claim.id)}
+                          title={
+                            bulkEligibleIds.has(claim.id)
+                              ? "Pilih untuk kirim massal"
+                              : "Hanya klaim PENDING yang ter-map karyawan yang bisa di-blast"
+                          }
+                          aria-label={`Pilih klaim ${claim.employee?.employee_name || claim.id}`}
+                        />
+                      </td>
                       <td className="px-4 py-4 align-middle text-slate-500 text-xs">
                         {dayjs(claim.updated_at).format("DD MMM YYYY,")}
                         <br />
@@ -343,7 +389,7 @@ export default function ClaimsPage() {
       <BulkSendDialog
         open={bulkOpen}
         onOpenChange={setBulkOpen}
-        claims={bulkClaims}
+        claims={bulkTargets.length > 0 ? bulkTargets : bulkClaims}
         onDone={() => fetchClaims({ silent: true })}
       />
     </div>
