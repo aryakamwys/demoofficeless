@@ -1,13 +1,12 @@
 "use client";
 
-// Halaman aksi klaim lewat link di pesan WhatsApp — TANPA login:
-// token di link (?t=...) adalah kuncinya. Penerima tinggal tekan tombol.
-// Untuk karyawan yang diminta revisi, halaman ini jadi daftar kerja:
-// hapus trip, ubah nominal, pasang ticket — logikanya sama dengan
-// perintah chat (HAPUS/UBAH/TICKET/SELESAI).
+// Halaman keputusan approver (Manager/HR) lewat link di pesan WhatsApp —
+// tanpa login: token di link adalah kuncinya. Gaya disamakan dengan portal
+// karyawan: putih bersih, satu CTA hijau solid, ikon lucide, konfirmasi modal.
 import { useEffect, useRef, useState } from "react";
 import Image from "next/image";
-import { cn } from "@/lib/utils";
+import { Circle, Square, Ticket } from "lucide-react";
+import { ConfirmModal } from "@/components/ui/confirm-modal";
 
 type Trip = {
   no: number;
@@ -72,44 +71,39 @@ const DROP_REASONS = [
   "Trip ini bukan milik saya",
 ];
 
-/** Badge penggantian untuk trip yang ditandai HR "tidak sesuai". */
-function RefundBadge({ status, amount }: { status: string; amount: number }) {
-  if (status === "CLAIMED") {
-    return (
-      <span className="mt-1 inline-block rounded bg-blue-50 px-1.5 py-0.5 text-[10px] font-semibold text-blue-700">
-        ✓ sudah TF {rupiah(amount)} — menunggu cek HR
-      </span>
-    );
-  }
-  return (
-    <span className="mt-1 inline-block rounded bg-amber-50 px-1.5 py-0.5 text-[10px] font-semibold text-amber-700">
-      ⚠ ganti {rupiah(amount)} ke rekening kantor
-    </span>
-  );
-}
-
-function rupiah(n: number | string): string {
+function rupiah(n: number | string) {
   return `Rp${Number(n || 0).toLocaleString("id-ID")}`;
 }
 
-function pad2(n: number): string {
+function pad2(n: number) {
   return n.toString().padStart(2, "0");
 }
 
-/** "02 Jul" atau "02 Jul · 17:05" (jam disembunyikan kalau datanya tanpa jam). */
-function dateTimeLabel(iso: string): string {
+/** "02 Jul 2026" atau "02 Jul 2026 · 17:05" (jam disembunyikan kalau datanya tanpa jam). */
+function dateTimeLabel(iso: string) {
   const d = new Date(iso);
   if (isNaN(d.getTime())) return "";
   const t = `${pad2(d.getHours())}:${pad2(d.getMinutes())}`;
   return (
-    d.toLocaleDateString("id-ID", { day: "2-digit", month: "short" }) +
+    d.toLocaleDateString("id-ID", { day: "2-digit", month: "short", year: "numeric" }) +
     (t === "00:00" ? "" : ` · ${t}`)
   );
 }
 
-function shortPlace(s: string): string {
-  const t = (s || "").trim();
-  return t.length > 28 ? t.slice(0, 28).replace(/\s+\S*$/, "") + "…" : t;
+/** Badge penggantian untuk trip yang ditandai HR "tidak sesuai". */
+function RefundBadge({ status, amount }: { status: string; amount: number }) {
+  if (status === "CLAIMED") {
+    return (
+      <span className="mt-1.5 inline-block rounded-lg bg-blue-50 px-2 py-0.5 text-[11px] font-semibold text-blue-700">
+        Sudah transfer {rupiah(amount)} — dicek HR
+      </span>
+    );
+  }
+  return (
+    <span className="mt-1.5 inline-block rounded-lg bg-amber-50 px-2 py-0.5 text-[11px] font-semibold text-amber-700">
+      Ganti {rupiah(amount)} ke rekening kantor
+    </span>
+  );
 }
 
 export default function ApprovePage() {
@@ -118,7 +112,7 @@ export default function ApprovePage() {
   // render berantai dari dalam effect (react-hooks/set-state-in-effect).
   const tokenRef = useRef("");
   const [error, setError] = useState("");
-  const [confirming, setConfirming] = useState(false);
+  const [confirmOpen, setConfirmOpen] = useState(false);
   const [showReject, setShowReject] = useState(false);
   const [reason, setReason] = useState("");
   const [dialog, setDialog] = useState<
@@ -158,7 +152,6 @@ export default function ApprovePage() {
     tokenRef.current = t;
     if (!t) {
       // Di luar jalur sinkron effect — hindari render berantai
-      // (react-hooks/set-state-in-effect).
       queueMicrotask(() =>
         setState({ phase: "error", message: "Link-nya kurang lengkap. Buka ulang dari pesan WhatsApp." })
       );
@@ -180,31 +173,31 @@ export default function ApprovePage() {
 
   const post = (payload: Record<string, unknown>) => postWith(tokenRef.current, payload);
 
-  /** Aksi keputusan (SETUJU / revisi / catatan). */
+  /** Aksi keputusan (SETUJU / revisi / catatan) — respons instan, WA menyusul. */
   const submit = async (action: "APPROVE" | "REVISE" | "NOTE", text?: string) => {
     if (state.phase !== "ready") return;
     setError("");
-    setState({ ...state, busy: "Memproses…" });
+    setState({ ...state, busy: "Menyimpan…" });
     try {
       await post({ action, reason: text || "" });
       setState({
         phase: "done",
         title:
           action === "APPROVE"
-            ? "Terima kasih — sudah tercatat SETUJU."
+            ? "Klaim disetujui."
             : action === "REVISE"
-              ? "Permintaan revisi sudah dikirim ke karyawan."
-              : "Catatan sudah tersimpan untuk HR.",
+              ? "Permintaan revisi terkirim ke karyawan."
+              : "Catatan tersimpan untuk HR.",
       });
     } catch (e) {
       setError(e instanceof Error ? e.message : "Gagal memproses. Coba lagi.");
       setState({ ...state, busy: null });
-      setConfirming(false);
+      setShowReject(false);
     }
   };
 
   /** Perintah revisi dari tombol (HAPUS/UBAH/TICKET/SELESAI) — jalur yang
-   *  sama dengan perintah chat, lalu data dimuat ulang supaya kelihatan hasilnya. */
+   *  sama dengan tombol web lama, lalu data dimuat ulang. */
   const runCommand = async (texts: string[], busyLabel: string, after?: () => void) => {
     if (state.phase !== "ready") return;
     setError("");
@@ -214,7 +207,9 @@ export default function ApprovePage() {
       if (after) {
         after();
       } else {
-        await load(tokenRef.current); // tampilkan kondisi terbaru (±7 detik; sabar ya)
+        // Beri jeda singkat supaya pembaruan status (background) sudah masuk DB
+        await new Promise((r) => setTimeout(r, 1500));
+        await load(tokenRef.current);
       }
     } catch (e) {
       setError(e instanceof Error ? e.message : "Gagal memproses. Coba lagi.");
@@ -230,7 +225,7 @@ export default function ApprovePage() {
           key={r}
           type="button"
           onClick={() => onPick(r)}
-          className="rounded-full border border-slate-300 bg-white px-3 py-1.5 text-[12px] font-medium text-slate-700 transition-colors hover:border-blue-600 hover:text-blue-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-600"
+          className="rounded-full border border-slate-300 bg-white px-3 py-1.5 text-[12px] font-medium text-slate-700 active:bg-slate-50"
         >
           {r}
         </button>
@@ -247,7 +242,7 @@ export default function ApprovePage() {
       await postWith(q.token, { action, reason: reason || "" });
       setQueueDone((d) => ({
         ...d,
-        [q.token]: action === "APPROVE" ? "Disetujui ✓" : "Revisi diminta ✓",
+        [q.token]: action === "APPROVE" ? "Disetujui" : "Revisi diminta",
       }));
     } catch (e) {
       setError(e instanceof Error ? e.message : "Gagal memproses. Coba lagi.");
@@ -264,7 +259,7 @@ export default function ApprovePage() {
       if (queueDone[q.token]) continue;
       try {
         await postWith(q.token, { action: "APPROVE" });
-        setQueueDone((d) => ({ ...d, [q.token]: "Disetujui ✓" }));
+        setQueueDone((d) => ({ ...d, [q.token]: "Disetujui" }));
       } catch (e) {
         setError(`${name} (${q.period}): ${e instanceof Error ? e.message : "gagal"}`);
         break; // berhenti di kegagalan — sisanya belum diproses
@@ -287,24 +282,24 @@ export default function ApprovePage() {
       }
     }
     return (
-      <div className="mt-4 rounded-xl border border-slate-200 bg-white p-4">
-        <p className="text-[14px] font-bold text-slate-800">
+      <div className="mt-3 rounded-2xl bg-white p-4">
+        <p className="text-[14px] font-bold text-slate-900">
           Klaim lain menunggu Anda ({items.length})
         </p>
-        <p className="mt-0.5 text-[12px] leading-relaxed text-slate-600">
-          Dikelompokkan per karyawan. Tiap persetujuan butuh ± 10 detik (mengirim WhatsApp).
+        <p className="mt-0.5 text-[12px] leading-relaxed text-slate-500">
+          Dikelompokkan per karyawan — bisa disetujui sekaligus.
         </p>
-        <div className="mt-3 space-y-4">
+        <div className="mt-3 space-y-3">
           {groups.map((g) => {
             const remaining = g.claims.filter((q) => !queueDone[q.token]);
             const groupBusy = queueBusy === `group:${g.name}`;
             return (
-              <div key={g.name} className="rounded-lg border border-slate-100 p-3">
+              <div key={g.name} className="rounded-xl bg-[#F5F6F7] p-3">
                 <div className="flex items-center justify-between gap-2">
                   <div className="min-w-0">
-                    <p className="truncate text-[13px] font-bold text-slate-800">{g.name}</p>
+                    <p className="truncate text-[13px] font-bold text-slate-900">{g.name}</p>
                     <p className="text-[12px] text-slate-500">
-                      {g.claims.length} klaim · total {rupiah(g.total)}
+                      {g.claims.length} klaim · {rupiah(g.total)}
                     </p>
                   </div>
                   {remaining.length > 0 ? (
@@ -312,36 +307,31 @@ export default function ApprovePage() {
                       type="button"
                       disabled={!!queueBusy}
                       onClick={() => approveAll(g.name, g.claims)}
-                      className="shrink-0 rounded-lg bg-emerald-600 px-3 py-1.5 text-[12px] font-bold text-white transition-colors hover:bg-emerald-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-600 disabled:opacity-50"
+                      className="shrink-0 rounded-xl bg-[#00B14F] px-3.5 py-2 text-[12px] font-semibold text-white hover:bg-[#009040] disabled:opacity-50"
                     >
-                      {groupBusy ? "Memproses…" : `Setujui semua (${remaining.length})`}
+                      {groupBusy ? <span className="loading loading-spinner loading-xs" /> : `Setujui semua (${remaining.length})`}
                     </button>
                   ) : (
-                    <span className="shrink-0 text-[12px] font-bold text-emerald-700">
-                      Semua diproses ✓
-                    </span>
+                    <span className="shrink-0 text-[12px] font-semibold text-emerald-700">Selesai</span>
                   )}
                 </div>
-                <ul className="mt-2 space-y-2">
+                <ul className="mt-2 space-y-1.5">
                   {g.claims.map((q) => {
                     const done = queueDone[q.token];
                     return (
-                      <li
-                        key={q.token}
-                        className="flex items-center justify-between gap-3 border-t border-slate-100 pt-2"
-                      >
+                      <li key={q.token} className="flex items-center justify-between gap-2 border-t border-white pt-1.5">
                         <p className="min-w-0 truncate text-[12px] text-slate-600">
-                          {q.period} · {rupiah(q.total_amount)} · {q.trip_count} trip
+                          {q.period} · {rupiah(q.total_amount)}
                         </p>
                         {done ? (
-                          <span className="shrink-0 text-[12px] font-bold text-emerald-700">{done}</span>
+                          <span className="shrink-0 text-[12px] font-semibold text-emerald-700">{done}</span>
                         ) : (
                           <div className="flex shrink-0 gap-1.5">
                             <button
                               type="button"
                               disabled={!!queueBusy}
                               onClick={() => queueAction(q, "APPROVE")}
-                              className="rounded-lg bg-emerald-600 px-3 py-1 text-[11px] font-bold text-white transition-colors hover:bg-emerald-700 disabled:opacity-50"
+                              className="rounded-lg border border-slate-300 bg-white px-2.5 py-1 text-[11px] font-semibold text-slate-700 active:bg-slate-100 disabled:opacity-50"
                             >
                               {queueBusy === q.token ? "…" : "Setujui"}
                             </button>
@@ -352,7 +342,7 @@ export default function ApprovePage() {
                                 const r = window.prompt(`Alasan revisi untuk ${q.employee_name} (${q.period}):`);
                                 if (r && r.trim().length >= 5) queueAction(q, "REVISE", r.trim());
                               }}
-                              className="rounded-lg border border-amber-300 bg-amber-50 px-3 py-1 text-[11px] font-bold text-amber-700 transition-colors hover:bg-amber-100 disabled:opacity-50"
+                              className="rounded-lg border border-slate-300 bg-white px-2.5 py-1 text-[11px] font-semibold text-slate-700 active:bg-slate-100 disabled:opacity-50"
                             >
                               Revisi
                             </button>
@@ -371,52 +361,54 @@ export default function ApprovePage() {
   };
 
   return (
-    <div className="min-h-screen bg-slate-50">
-      <header className="border-b border-slate-200 bg-white">
+    <div className="min-h-screen bg-[#F5F6F7] pb-16">
+      <header className="sticky top-0 z-10 border-b border-slate-200 bg-white">
         <div className="mx-auto flex h-14 max-w-md items-center gap-2.5 px-4">
-          <Image src="/ogoperkom.png" alt="Perkom" width={32} height={32} className="h-8 w-8 object-contain" />
-          <div>
-            <p className="text-[15px] font-bold leading-tight text-slate-800">Klaim Grab Perkom</p>
-            <p className="text-[11px] leading-tight text-slate-500">Balas lewat WhatsApp — atau tekan tombol di sini</p>
+          <Image src="/ogoperkom.png" alt="Perkom" width={28} height={28} className="h-7 w-7 object-contain" />
+          <div className="min-w-0 flex-1">
+            <p className="truncate text-[15px] font-bold leading-tight text-slate-900">Klaim Grab Perkom</p>
+            <p className="text-[11px] leading-tight text-slate-500">Keputusan persetujuan klaim</p>
           </div>
         </div>
       </header>
 
-      <main className="mx-auto max-w-md px-4 py-5">
+      <main className="mx-auto max-w-md px-4 py-4">
         {state.phase === "loading" && (
-          <p className="py-16 text-center text-[14px] text-slate-500">Memuat klaim…</p>
+          <div className="space-y-3">
+            <div className="h-28 animate-pulse rounded-2xl bg-slate-200/60" />
+            <div className="h-40 animate-pulse rounded-2xl bg-slate-200/60" />
+          </div>
         )}
 
         {state.phase === "error" && (
-          <div className="rounded-xl border border-slate-200 bg-white p-6 text-center">
-            <p className="text-3xl">🔗</p>
-            <p className="mt-3 text-[15px] font-semibold text-slate-800">Link ini tidak bisa dipakai</p>
-            <p className="mt-1 text-[13px] leading-relaxed text-slate-600">{state.message}</p>
-          </div>
+          <>
+            <div className="rounded-2xl bg-white p-6 text-center">
+              <p className="text-[15px] font-semibold text-slate-900">Link tidak bisa dibuka</p>
+              <p className="mt-1.5 text-[13px] leading-relaxed text-slate-600">{state.message}</p>
+            </div>
+          </>
         )}
 
         {state.phase === "stale" && (
           <>
-            <div className="rounded-xl border border-slate-200 bg-white p-6 text-center">
-              <p className="text-3xl">✅</p>
-              <p className="mt-3 text-[15px] font-semibold text-slate-800">Klaim ini sudah diproses</p>
-              <p className="mt-1 text-[13px] leading-relaxed text-slate-600">
+            <div className="rounded-2xl bg-white p-6 text-center">
+              <p className="text-[15px] font-semibold text-slate-900">Klaim ini sudah diproses</p>
+              <p className="mt-1.5 text-[13px] leading-relaxed text-slate-600">
                 Keputusannya sudah tercatat. Tidak ada yang perlu dilakukan lagi di sini.
               </p>
             </div>
             {queueBlock(state.queue)}
             {error && (
-              <p className="mt-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-[13px] text-red-700">{error}</p>
+              <p className="mt-3 rounded-xl bg-red-50 px-3 py-2.5 text-[13px] font-medium text-red-700">{error}</p>
             )}
           </>
         )}
 
         {state.phase === "done" && (
-          <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-6 text-center">
-            <p className="text-4xl">✅</p>
-            <p className="mt-3 text-[15px] font-bold text-emerald-800">{state.title}</p>
-            <p className="mt-1 text-[13px] leading-relaxed text-emerald-800">
-              Konfirmasinya juga masuk ke WhatsApp Anda. Tidak perlu membalas pesan klaim lagi.
+          <div className="rounded-2xl bg-white p-8 text-center">
+            <p className="text-[16px] font-bold text-emerald-700">{state.title}</p>
+            <p className="mt-1.5 text-[13px] leading-relaxed text-slate-600">
+              Konfirmasinya juga dikirim ke WhatsApp Anda. Tidak perlu membalas pesan klaim lagi.
             </p>
           </div>
         )}
@@ -424,148 +416,159 @@ export default function ApprovePage() {
         {state.phase === "ready" && (
           <>
             {state.busy && (
-              <div className="mb-3 flex items-center gap-2 rounded-lg border border-blue-200 bg-blue-50 px-3 py-2.5 text-[13px] font-medium text-blue-800">
-                <span className="h-3 w-3 animate-spin rounded-full border-2 border-blue-600 border-t-transparent" />
-                {state.busy} <span className="text-blue-600">(± 7 detik, tunggu ya)</span>
+              <div className="mb-3 flex items-center gap-2 text-[13px] font-medium text-slate-600">
+                <span className="loading loading-spinner loading-sm text-slate-400" />
+                {state.busy}
               </div>
             )}
 
-            {/* ==== Banner alasan revisi (karyawan dalam fase revisi) ==== */}
+            {/* Banner alasan revisi (karyawan dalam fase revisi) */}
             {state.data.in_revision && (
-              <div className="mb-3 rounded-xl border border-amber-300 bg-amber-50 p-4">
-                <p className="text-[13px] font-bold text-amber-800">Klaim ini diminta REVISI</p>
+              <div className="mb-3 rounded-2xl bg-amber-50 p-4">
+                <p className="text-[13px] font-bold text-amber-800">Klaim diminta revisi</p>
                 <p className="mt-1 text-[13px] leading-relaxed text-amber-900">
-                  Alasannya: “{state.data.revision_reason || "-"}”
+                  {state.data.revision_reason || "-"}
                 </p>
-                <p className="mt-2 text-[12px] leading-relaxed text-amber-800">
-                  Bereskan di bawah — hapus trip yang salah, ubah nominal, atau pasang ticket. Kalau sudah, tekan tombol kirim ulang.
+                <p className="mt-1.5 text-[12px] leading-relaxed text-amber-800">
+                  Bereskan di bawah — hapus trip yang salah, ubah nominal, atau pasang ticket. Kalau sudah,
+                  tekan tombol kirim ulang.
                 </p>
               </div>
             )}
 
-            {/* ==== Kartu klaim ==== */}
-            <div className="rounded-xl border border-slate-200 bg-white p-5">
+            {/* Kartu klaim */}
+            <div className="rounded-2xl bg-white p-4">
               <div className="flex items-center justify-between gap-2">
-                <span className="rounded-full bg-blue-50 px-2.5 py-1 text-[11px] font-semibold text-blue-700">
+                <p className="text-[15px] font-bold text-slate-900">
+                  {state.data.role === "EMPLOYEE"
+                    ? `Periode ${state.data.claim.period}`
+                    : `${state.data.claim.employee_name} — ${state.data.claim.period}`}
+                </p>
+                <span className="shrink-0 rounded-full bg-slate-100 px-2.5 py-1 text-[11px] font-semibold text-slate-600">
                   Anda: {ROLE_LABEL[state.data.role] || state.data.role}
                 </span>
               </div>
-
-              <h1 className="mt-3 text-lg font-bold leading-snug text-slate-900">
-                {state.data.role === "EMPLOYEE" ? "Klaim periode" : `${state.data.claim.employee_name} — periode`}{" "}
-                <span className="text-blue-700">{state.data.claim.period}</span>
-              </h1>
-              {state.data.role === "EMPLOYEE" && (
-                <p className="mt-0.5 text-[13px] text-slate-600">Atas nama Anda sendiri.</p>
-              )}
-              <p className="mt-0.5 text-[13px] leading-relaxed text-slate-600">
+              <p className="mt-1 text-[13px] leading-relaxed text-slate-600">
                 {state.data.role === "EMPLOYEE"
                   ? state.data.in_revision
-                    ? `Klaim Grab Anda (${state.data.claim.trip_count} perjalanan) — menunggu dibereskan.`
-                    : `Klaim Grab Anda (${state.data.claim.trip_count} perjalanan). Cek dulu, baru tekan SETUJU.`
-                  : `Mengajukan klaim Grab (${state.data.claim.trip_count} perjalanan). Karyawan sudah mengecek datanya.`}
+                    ? "Klaim Grab Anda — menunggu dibereskan."
+                    : "Klaim Grab Anda. Cek dulu, baru setujui."
+                  : `Mengajukan klaim Grab. Karyawan sudah mengecek datanya.`}
               </p>
 
-              <div className="mt-4 grid grid-cols-2 gap-2">
-                <div className="rounded-lg bg-slate-50 px-3 py-2">
-                  <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">Total biaya</p>
-                  <p className="text-[15px] font-bold text-slate-900">{rupiah(state.data.claim.total_amount)}</p>
+              <div className="mt-3 grid grid-cols-2 gap-2.5">
+                <div>
+                  <p className="text-[11px] font-medium text-slate-400">Total</p>
+                  <p className="text-[17px] font-bold text-slate-900">{rupiah(state.data.claim.total_amount)}</p>
                 </div>
-                <div className="rounded-lg bg-slate-50 px-3 py-2">
-                  <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">Perjalanan</p>
-                  <p className="text-[15px] font-bold text-slate-900">{state.data.claim.trip_count} trip</p>
+                <div>
+                  <p className="text-[11px] font-medium text-slate-400">Perjalanan</p>
+                  <p className="text-[17px] font-bold text-slate-900">{state.data.claim.trips.length}</p>
                 </div>
               </div>
+            </div>
 
-              <p className="mt-4 text-[11px] font-semibold uppercase tracking-wide text-slate-500">
-                Daftar perjalanan
+            {/* Daftar perjalanan */}
+            <div className="mt-2.5 rounded-2xl bg-white p-4">
+              <p className="text-[14px] font-bold text-slate-900">
+                Daftar perjalanan ({state.data.claim.trips.length})
               </p>
-              <ul className="mt-1.5 space-y-2.5">
+              <ul className="mt-2 divide-y divide-slate-100">
                 {state.data.claim.trips.map((t) => {
                   const rf = state.data.refunds?.find((x) => x.no === t.no);
                   return (
-                  <li key={t.no} className="border-b border-slate-100 pb-2.5 last:border-0 last:pb-0">
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="min-w-0">
-                        <p className="text-[13px] font-medium leading-snug text-slate-700">
-                          <span className="text-slate-400">{t.no}.</span> {dateTimeLabel(t.date)} · {shortPlace(t.pickup)} → {shortPlace(t.dropoff)}
+                    <li key={t.no} className="py-3.5 first:pt-2.5 last:pb-0">
+                      <div className="flex items-baseline justify-between gap-2">
+                        <p className="text-[13px] font-semibold text-slate-900">
+                          <span className="mr-1.5 text-slate-300">{t.no}.</span>
+                          {dateTimeLabel(t.date)}
                         </p>
-                        <p className="mt-0.5 text-[13px] font-semibold text-slate-800">{rupiah(t.fare)}</p>
-                        {rf && <RefundBadge status={rf.status} amount={rf.amount} />}
-                        {t.ticket_id ? (
-                          <span className="mt-1 inline-block rounded bg-blue-50 px-1.5 py-0.5 text-[10px] font-semibold text-blue-700">
-                            ✓ Ticket #PIM-{t.ticket_id}
-                          </span>
-                        ) : state.data.in_revision ? (
-                          <span className="mt-1 inline-block rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-medium text-slate-500">
-                            belum ada ticket
-                          </span>
-                        ) : null}
-                        {state.data.role === "EMPLOYEE" && rf && rf.status === "REQUESTED" && (
-                          <p className="mt-1 text-[11px] leading-relaxed text-amber-700">
-                            Transfer ke rekening kantor, lalu tekan tombol Sudah TF.
-                          </p>
-                        )}
+                        <p className="text-[13px] font-bold text-slate-900">{rupiah(t.fare)}</p>
                       </div>
-                      <div className="flex shrink-0 flex-col gap-1">
-                        {state.data.in_revision && !state.busy && (
-                          <>
-                            <button
-                              type="button"
-                              disabled={state.data.claim.trips.length <= 1 || !!rf}
-                              title={
-                                rf
-                                  ? "Trip ini menunggu penggantian — selesaikan lewat transfer"
-                                  : state.data.claim.trips.length <= 1
-                                    ? "Satu-satunya trip tidak boleh dihapus"
-                                    : ""
-                              }
-                              onClick={() => setDialog({ kind: "drop", no: t.no, reason: "" })}
-                              className="rounded-lg border border-red-200 bg-red-50 px-2.5 py-1 text-[11px] font-bold text-red-700 transition-colors hover:bg-red-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-red-500 disabled:opacity-40"
-                            >
-                              Hapus
-                            </button>
-                            <button
-                              type="button"
-                              disabled={!!rf}
-                              title={rf ? "Nominal terkunci sampai penggantian selesai" : ""}
-                              onClick={() => setDialog({ kind: "fare", no: t.no, fare: String(t.fare) })}
-                              className="rounded-lg border border-slate-300 bg-white px-2.5 py-1 text-[11px] font-bold text-slate-700 transition-colors hover:border-blue-600 hover:text-blue-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 disabled:opacity-40"
-                            >
-                              Ubah Rp
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => setDialog({ kind: "ticket", no: t.no, ticket: "" })}
-                              className="rounded-lg border border-slate-300 bg-white px-2.5 py-1 text-[11px] font-bold text-slate-700 transition-colors hover:border-blue-600 hover:text-blue-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-600"
-                            >
-                              Ticket
-                            </button>
-                          </>
-                        )}
-                        {state.data.role === "EMPLOYEE" && rf && rf.status === "REQUESTED" && !state.busy && (
+                      <div className="mt-2 flex gap-2.5">
+                        <div className="flex flex-col items-center pt-1">
+                          <Circle className="h-2.5 w-2.5 fill-current text-slate-400" />
+                          <span className="my-0.5 w-px flex-1 bg-slate-200" />
+                          <Square className="h-2.5 w-2.5 text-slate-400" />
+                        </div>
+                        <div className="min-w-0 flex-1 space-y-2">
+                          <p className="text-[12px] leading-relaxed text-slate-600">{t.pickup}</p>
+                          <p className="text-[12px] leading-relaxed text-slate-600">{t.dropoff}</p>
+                        </div>
+                      </div>
+                      {t.ticket_id && (
+                        <p className="mt-2 inline-flex items-center gap-1.5 rounded-lg bg-emerald-50 px-2 py-1 text-[12px] font-semibold text-emerald-700">
+                          <Ticket className="h-3.5 w-3.5" />
+                          Ticket #{t.ticket_id}
+                        </p>
+                      )}
+                      {rf && <RefundBadge status={rf.status} amount={rf.amount} />}
+                      {state.data.role === "EMPLOYEE" && rf && rf.status === "REQUESTED" && (
+                        <p className="mt-1 text-[11px] leading-relaxed text-amber-700">
+                          Transfer ke rekening kantor, lalu tekan tombol Sudah Transfer.
+                        </p>
+                      )}
+
+                      {/* Aksi revisi per-trip (karyawan) */}
+                      {state.data.in_revision && !state.busy && (
+                        <div className="mt-2 flex gap-1.5">
                           <button
                             type="button"
-                            onClick={() => runCommand(["SUDAH TF"], "Mencatat penggantian…")}
-                            className="rounded-lg border border-emerald-300 bg-emerald-50 px-2.5 py-1.5 text-[11px] font-bold text-emerald-700 transition-colors hover:bg-emerald-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-600"
+                            disabled={state.data.claim.trips.length <= 1 || !!rf}
+                            title={
+                              rf
+                                ? "Trip ini menunggu penggantian — selesaikan lewat transfer"
+                                : state.data.claim.trips.length <= 1
+                                  ? "Satu-satunya trip tidak boleh dihapus"
+                                  : ""
+                            }
+                            onClick={() => setDialog({ kind: "drop", no: t.no, reason: "" })}
+                            className="rounded-lg border border-slate-300 bg-white px-2.5 py-1.5 text-[11px] font-semibold text-red-600 active:bg-slate-50 disabled:opacity-40"
                           >
-                            Sudah TF ✓
+                            Hapus
                           </button>
-                        )}
-                      </div>
-                    </div>
-                  </li>
+                          <button
+                            type="button"
+                            disabled={!!rf}
+                            title={rf ? "Nominal terkunci sampai penggantian selesai" : ""}
+                            onClick={() => setDialog({ kind: "fare", no: t.no, fare: String(t.fare) })}
+                            className="rounded-lg border border-slate-300 bg-white px-2.5 py-1.5 text-[11px] font-semibold text-slate-700 active:bg-slate-50 disabled:opacity-40"
+                          >
+                            Ubah Rp
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setDialog({ kind: "ticket", no: t.no, ticket: "" })}
+                            className="rounded-lg border border-slate-300 bg-white px-2.5 py-1.5 text-[11px] font-semibold text-slate-700 active:bg-slate-50"
+                          >
+                            Ticket
+                          </button>
+                        </div>
+                      )}
+                    </li>
                   );
                 })}
               </ul>
+
+              {state.data.role === "EMPLOYEE" &&
+                state.data.refunds?.some((x) => x.status === "REQUESTED") &&
+                !state.busy && (
+                  <button
+                    type="button"
+                    onClick={() => runCommand(["SUDAH TF"], "Mencatat penggantian…")}
+                    className="mt-3 w-full rounded-xl bg-[#00B14F] px-4 py-3.5 text-[14px] font-semibold text-white hover:bg-[#009040]"
+                  >
+                    Saya sudah transfer semua
+                  </button>
+                )}
             </div>
 
-            {/* ==== Dialog per-trip (revisi) ==== */}
+            {/* Dialog per-trip (revisi) */}
             {dialog && (
-              <div className="mt-3 rounded-xl border border-slate-300 bg-white p-4 shadow-sm">
+              <div className="mt-3 rounded-2xl bg-white p-4">
                 {dialog.kind === "drop" && (
                   <>
-                    <p className="text-[14px] font-bold text-slate-800">Hapus trip no {dialog.no}?</p>
+                    <p className="text-[14px] font-bold text-slate-900">Hapus trip no {dialog.no}?</p>
                     <p className="mt-1 text-[12px] leading-relaxed text-slate-600">
                       Trip ini keluar dari klaim dan tidak dihitung lagi. Pilih alasan (bisa diedit):
                     </p>
@@ -576,21 +579,21 @@ export default function ApprovePage() {
                       rows={2}
                       maxLength={200}
                       placeholder="Alasan hapus…"
-                      className="mt-2 w-full rounded-lg border border-slate-300 px-3 py-2 text-[13px] focus:border-blue-600 focus:outline-none"
+                      className="mt-2 w-full rounded-xl border border-slate-300 px-3 py-2 text-[13px] focus:border-slate-500 focus:outline-none"
                     />
                     <div className="mt-2 flex gap-2">
                       <button
                         type="button"
                         disabled={dialog.reason.trim().length < 4}
                         onClick={() => runCommand([`HAPUS ${dialog.no} ${dialog.reason.trim()}`, "YA"], "Menghapus trip…")}
-                        className="flex-1 rounded-lg bg-red-600 px-4 py-2.5 text-[14px] font-bold text-white transition-colors hover:bg-red-700 disabled:opacity-50"
+                        className="flex-1 rounded-xl bg-red-600 px-4 py-3 text-[14px] font-semibold text-white hover:bg-red-700 disabled:opacity-40"
                       >
                         Ya, hapus trip ini
                       </button>
                       <button
                         type="button"
                         onClick={() => setDialog(null)}
-                        className="rounded-lg border border-slate-300 px-4 py-2.5 text-[13px] font-semibold text-slate-600 hover:bg-slate-50"
+                        className="rounded-xl border border-slate-300 bg-white px-4 py-3 text-[13px] font-semibold text-slate-700"
                       >
                         Batal
                       </button>
@@ -600,15 +603,17 @@ export default function ApprovePage() {
 
                 {dialog.kind === "fare" && (
                   <>
-                    <p className="text-[14px] font-bold text-slate-800">Ubah nominal trip no {dialog.no}</p>
-                    <p className="mt-1 text-[12px] text-slate-600">Sekarang: {rupiah(state.data.claim.trips[dialog.no - 1]?.fare || 0)}</p>
+                    <p className="text-[14px] font-bold text-slate-900">Ubah nominal trip no {dialog.no}</p>
+                    <p className="mt-1 text-[12px] text-slate-600">
+                      Sekarang: {rupiah(state.data.claim.trips[dialog.no - 1]?.fare || 0)}
+                    </p>
                     <input
                       type="text"
                       inputMode="numeric"
                       value={dialog.fare}
                       onChange={(e) => setDialog({ ...dialog, fare: e.target.value.replace(/[^\d.]/g, "") })}
                       placeholder="Contoh: 75000"
-                      className="mt-2 w-full rounded-lg border border-slate-300 px-3 py-2.5 text-[15px] font-semibold focus:border-blue-600 focus:outline-none"
+                      className="mt-2 w-full rounded-xl border border-slate-300 px-3 py-2.5 text-[15px] font-semibold focus:border-slate-500 focus:outline-none"
                     />
                     <div className="mt-2 flex gap-2">
                       <button
@@ -620,14 +625,14 @@ export default function ApprovePage() {
                             "Menyimpan nominal baru…"
                           )
                         }
-                        className="flex-1 rounded-lg bg-blue-600 px-4 py-2.5 text-[14px] font-bold text-white transition-colors hover:bg-blue-700 disabled:opacity-50"
+                        className="flex-1 rounded-xl bg-slate-900 px-4 py-3 text-[14px] font-semibold text-white disabled:opacity-40"
                       >
                         Simpan nominal
                       </button>
                       <button
                         type="button"
                         onClick={() => setDialog(null)}
-                        className="rounded-lg border border-slate-300 px-4 py-2.5 text-[13px] font-semibold text-slate-600 hover:bg-slate-50"
+                        className="rounded-xl border border-slate-300 bg-white px-4 py-3 text-[13px] font-semibold text-slate-700"
                       >
                         Batal
                       </button>
@@ -637,30 +642,31 @@ export default function ApprovePage() {
 
                 {dialog.kind === "ticket" && (
                   <>
-                    <p className="text-[14px] font-bold text-slate-800">Pasang ticket untuk trip no {dialog.no}</p>
+                    <p className="text-[14px] font-bold text-slate-900">Pasang ticket untuk trip no {dialog.no}</p>
                     <p className="mt-1 text-[12px] leading-relaxed text-slate-600">
-                      Tulis nomor ticket EnvGate (contoh: <b>PIM-34285</b>). Nomornya dicek dulu ke EnvGate — kalau tidak ada, gagal tersimpan.
+                      Tulis nomor ticket EnvGate (contoh: <b>PIM-34285</b>). Nomornya dicek dulu ke EnvGate —
+                      kalau tidak ada, gagal tersimpan.
                     </p>
                     <input
                       type="text"
                       value={dialog.ticket}
                       onChange={(e) => setDialog({ ...dialog, ticket: e.target.value })}
                       placeholder="PIM-34285"
-                      className="mt-2 w-full rounded-lg border border-slate-300 px-3 py-2.5 text-[15px] font-semibold focus:border-blue-600 focus:outline-none"
+                      className="mt-2 w-full rounded-xl border border-slate-300 px-3 py-2.5 text-[15px] font-semibold focus:border-slate-500 focus:outline-none"
                     />
                     <div className="mt-2 flex gap-2">
                       <button
                         type="button"
                         disabled={!/^\s*#?\s*pim\s*[-:]?\s*\d{2,10}\s*$/i.test(dialog.ticket)}
                         onClick={() => runCommand([`TICKET ${dialog.no} ${dialog.ticket.trim()}`], "Memeriksa ticket ke EnvGate…")}
-                        className="flex-1 rounded-lg bg-blue-600 px-4 py-2.5 text-[14px] font-bold text-white transition-colors hover:bg-blue-700 disabled:opacity-50"
+                        className="flex-1 rounded-xl bg-slate-900 px-4 py-3 text-[14px] font-semibold text-white disabled:opacity-40"
                       >
                         Pasang ticket
                       </button>
                       <button
                         type="button"
                         onClick={() => setDialog(null)}
-                        className="rounded-lg border border-slate-300 px-4 py-2.5 text-[13px] font-semibold text-slate-600 hover:bg-slate-50"
+                        className="rounded-xl border border-slate-300 bg-white px-4 py-3 text-[13px] font-semibold text-slate-700"
                       >
                         Batal
                       </button>
@@ -670,49 +676,34 @@ export default function ApprovePage() {
               </div>
             )}
 
-            {/* ==== Tombol utama ==== */}
+            {/* Tombol utama */}
             {!state.data.in_revision && !showReject && (
               <div className="mt-4 space-y-2">
                 <button
                   type="button"
                   disabled={!!state.busy}
-                  onClick={() => {
-                    if (!confirming) {
-                      setConfirming(true);
-                      return;
-                    }
-                    submit("APPROVE");
-                  }}
-                  className={cn(
-                    "w-full rounded-xl px-4 py-4 text-[16px] font-bold shadow-sm transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-600",
-                    confirming ? "bg-emerald-700 text-white hover:bg-emerald-800" : "bg-emerald-600 text-white hover:bg-emerald-700",
-                    state.busy && "opacity-60"
-                  )}
+                  onClick={() => setConfirmOpen(true)}
+                  className="w-full rounded-xl bg-[#00B14F] px-4 py-4 text-[15px] font-semibold text-white transition-colors hover:bg-[#009040] disabled:opacity-50"
                 >
-                  {confirming
-                    ? "Yakin? tekan sekali lagi ✓"
-                    : state.data.role === "EMPLOYEE"
-                      ? "SEMUA BENAR — SETUJU ✓"
-                      : "SETUJU ✓"}
+                  {state.data.role === "EMPLOYEE" ? "Setujui Klaim" : "Setujui Klaim"}
                 </button>
                 <button
                   type="button"
                   disabled={!!state.busy}
                   onClick={() => {
                     setShowReject(true);
-                    setConfirming(false);
                   }}
-                  className="w-full rounded-xl border border-amber-300 bg-amber-50 px-4 py-3.5 text-[14px] font-bold text-amber-700 transition-colors hover:bg-amber-100 disabled:opacity-60"
+                  className="w-full rounded-xl border border-slate-300 bg-white px-4 py-3.5 text-[14px] font-semibold text-slate-700 active:bg-slate-50 disabled:opacity-50"
                 >
-                  {state.data.role === "EMPLOYEE" ? "Ada yang salah ✎" : "Minta revisi ✎"}
+                  {state.data.role === "EMPLOYEE" ? "Ada yang salah" : "Minta revisi"}
                 </button>
               </div>
             )}
 
-            {/* ==== Form alasan (revisi / catatan) ==== */}
+            {/* Form alasan (revisi / catatan) */}
             {!state.data.in_revision && showReject && (
-              <div className="mt-4 rounded-xl border border-amber-200 bg-white p-4">
-                <p className="text-[14px] font-bold text-slate-800">
+              <div className="mt-3 rounded-2xl bg-white p-4">
+                <p className="text-[14px] font-bold text-slate-900">
                   {state.data.role === "EMPLOYEE" ? "Apa yang salah?" : "Apa yang perlu direvisi karyawan?"}
                 </p>
                 <p className="mt-0.5 text-[12px] text-slate-600">
@@ -733,14 +724,14 @@ export default function ApprovePage() {
                       ? "Contoh: trip 10 Juli bukan perjalanan saya"
                       : "Contoh: trip 5 pulang ke rumah di jam kantor, cek ya"
                   }
-                  className="mt-2 w-full rounded-lg border border-slate-300 px-3 py-2.5 text-[14px] focus:border-blue-600 focus:outline-none"
+                  className="mt-2 w-full rounded-xl border border-slate-300 px-3 py-2.5 text-[14px] focus:border-slate-500 focus:outline-none"
                 />
                 <div className="mt-2 flex gap-2">
                   <button
                     type="button"
                     disabled={!!state.busy || reason.trim().length < 5}
                     onClick={() => submit(state.data.role === "EMPLOYEE" ? "NOTE" : "REVISE", reason.trim())}
-                    className="flex-1 rounded-lg bg-amber-600 px-4 py-3 text-[14px] font-bold text-white transition-colors hover:bg-amber-700 disabled:opacity-50"
+                    className="flex-1 rounded-xl bg-slate-900 px-4 py-3 text-[14px] font-semibold text-white disabled:opacity-40"
                   >
                     {state.data.role === "EMPLOYEE" ? "Kirim catatan" : "Kirim permintaan revisi"}
                   </button>
@@ -751,7 +742,7 @@ export default function ApprovePage() {
                       setShowReject(false);
                       setReason("");
                     }}
-                    className="rounded-lg border border-slate-300 px-4 py-3 text-[13px] font-semibold text-slate-600 hover:bg-slate-50"
+                    className="rounded-xl border border-slate-300 bg-white px-4 py-3 text-[13px] font-semibold text-slate-700"
                   >
                     Batal
                   </button>
@@ -759,7 +750,7 @@ export default function ApprovePage() {
               </div>
             )}
 
-            {/* ==== Selesai revisi ==== */}
+            {/* Selesai revisi */}
             {state.data.in_revision && (
               <button
                 type="button"
@@ -769,22 +760,35 @@ export default function ApprovePage() {
                     setState({ phase: "done", title: "Revisi sudah dikirim ulang ke approver." })
                   )
                 }
-                className="mt-4 w-full rounded-xl bg-blue-600 px-4 py-4 text-[16px] font-bold text-white shadow-sm transition-colors hover:bg-blue-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 disabled:opacity-60"
+                className="mt-4 w-full rounded-xl bg-[#00B14F] px-4 py-4 text-[15px] font-semibold text-white transition-colors hover:bg-[#009040] disabled:opacity-50"
               >
-                SUDAH BERES — KIRIM ULANG ✓
+                Kirim Ulang Klaim
               </button>
             )}
 
+            {/* Antrean klaim lain */}
             {queueBlock(state.data.queue || [])}
 
             {error && (
-              <p className="mt-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-[13px] text-red-700">{error}</p>
+              <p className="mt-3 rounded-xl bg-red-50 px-3 py-2.5 text-[13px] font-medium text-red-700">{error}</p>
             )}
 
-            <p className="mt-4 px-1 text-center text-[11px] leading-relaxed text-slate-400">
+            <p className="mt-4 text-center text-[11px] leading-relaxed text-slate-400">
               Link ini khusus untuk Anda — jangan diteruskan ke orang lain.
-              Lebih nyaman lewat chat? Balas pesannya saja: 1 = setuju, 2 = minta revisi.
             </p>
+
+            <ConfirmModal
+              open={confirmOpen}
+              title={`Setujui klaim ${state.data.claim.employee_name} — ${state.data.claim.period}?`}
+              desc={`${state.data.claim.trips.length} perjalanan · ${rupiah(state.data.claim.total_amount)}.`}
+              confirmLabel="Ya, Setujui"
+              busy={!!state.busy}
+              onCancel={() => setConfirmOpen(false)}
+              onConfirm={() => {
+                setConfirmOpen(false);
+                submit("APPROVE");
+              }}
+            />
           </>
         )}
       </main>

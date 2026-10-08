@@ -305,19 +305,17 @@ export function buildManagerApprovalMessage(params: {
     ``,
     `Halo Manager,`,
     ``,
-    `${employee_name} mengajukan klaim Grab untuk periode ${period}. Datanya sudah dicek dan dikonfirmasi oleh karyawan tersebut.`,
+    `${employee_name} mengajukan klaim Grab periode ${period}: ${trips.length} perjalanan, total *${formatAmount(total_amount)}*. Datanya sudah dikonfirmasi karyawan.`,
+    ...(params.revised ? [`Klaim ini pernah direvisi oleh karyawannya.`] : []),
     ``,
-    trips.map((t, i) => tripLine(t, false, i + 1)).join("\n\n"),
-    ``,
-    `Totalnya ${trips.length} perjalanan, *${formatAmount(total_amount)}*.`,
-    ``,
-    ...(params.revised
-      ? [`Oh iya, klaim ini pernah direvisi oleh karyawannya.`, ``]
-      : []),
     ...(params.link
-      ? [`Ada banyak klaim menunggu? Semuanya bisa diproses dari satu halaman:`, params.link, ``]
-      : []),
-    ...approverMenuLines("diteruskan ke HR"),
+      ? [
+          `Periksa rinciannya dan putuskan lewat link ini:`,
+          params.link,
+          ``,
+          `Semua klaim yang menunggu Anda juga ada di halaman yang sama. Tidak perlu membalas chat ini.`,
+        ]
+      : approverMenuLines("diteruskan ke HR")),
   ].join("\n");
 }
 
@@ -340,19 +338,17 @@ export function buildHrApprovalMessage(params: {
     ``,
     `Halo HR,`,
     ``,
-    `${employee_name} mengajukan klaim Grab untuk periode ${period}. Managernya (${manager_name}) sudah menyetujui, tinggal persetujuan terakhir dari Anda.`,
+    `${employee_name} mengajukan klaim Grab periode ${period}: ${trips.length} perjalanan, total *${formatAmount(total_amount)}*. Manager (${manager_name}) sudah menyetujui — tinggal persetujuan terakhir dari Anda.`,
+    ...(params.revised ? [`Klaim ini pernah direvisi oleh karyawannya.`] : []),
     ``,
-    trips.map((t, i) => tripLine(t, false, i + 1)).join("\n\n"),
-    ``,
-    `Totalnya ${trips.length} perjalanan, *${formatAmount(total_amount)}*.`,
-    ``,
-    ...(params.revised
-      ? [`Oh iya, klaim ini pernah direvisi oleh karyawannya.`, ``]
-      : []),
     ...(params.link
-      ? [`Ada banyak klaim menunggu? Semuanya bisa diproses dari satu halaman:`, params.link, ``]
-      : []),
-    ...approverMenuLines("klaimnya selesai"),
+      ? [
+          `Periksa rinciannya dan putuskan lewat link ini:`,
+          params.link,
+          ``,
+          `Semua klaim yang menunggu Anda juga ada di halaman yang sama. Tidak perlu membalas chat ini.`,
+        ]
+      : approverMenuLines("klaimnya selesai")),
   ].join("\n");
 }
 

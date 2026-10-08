@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest, NextResponse, after } from "next/server";
 import { createServiceClient } from "@/lib/supabase-server";
 import { verifyApproveToken, approveToken } from "@/lib/wa-link";
 import { matchRole } from "@/lib/wa-match";
@@ -195,7 +195,10 @@ export async function POST(request: NextRequest) {
         : action === "COMMAND"
           ? commandText
           : reason;
-    await processWebhookReply(claim, v.role, reply, v.phone);
+    // Proses di background — pengiriman WA (jeda anti-limit 2-5 detik/pesan)
+    // tidak boleh menahan tombol approver. Respons < 1 detik; karyawan dan
+    // tahap berikutnya dikabari setelahnya.
+    after(() => processWebhookReply(claim, v.role, reply, v.phone));
 
     return NextResponse.json({ success: true });
   } catch (error) {

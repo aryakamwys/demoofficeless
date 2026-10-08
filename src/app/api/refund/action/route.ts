@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest, NextResponse, after } from "next/server";
 import { createServiceClient } from "@/lib/supabase-server";
 import { verifyRefundToken, portalLink } from "@/lib/wa-link";
 import { normalizePhone, buildRefundRequestMessage } from "@/lib/whatsapp";
@@ -198,39 +198,44 @@ export async function POST(request: NextRequest) {
       author_role: "MANAGER",
     });
 
-    if (!employeePhone) {
-      await flowAlert(supabase, claim.id, "Manager sudah menyetujui penggantian, tapi karyawan tidak punya nomor WhatsApp — minta transfer secara manual.");
-      return NextResponse.json({ success: true });
-    }
-
-    const bank = await getCompanyBank(supabase);
-    if (!bank) {
-      // Mark sudah mewajibkan rekening kantor terisi — ini pengaman saja
-      await flowAlert(supabase, claim.id, "Rekening kantor belum terisi — pesan penggantian ke karyawan belum bisa dikirim. Isi di Settings lalu kirim ulang dari detail klaim.");
-      return NextResponse.json({ success: true });
-    }
-    const sent = await sendAndLog(
-      supabase, claim.id, employeePhone,
-      buildRefundRequestMessage({
-        employee_name: emp?.employee_name || "Karyawan",
-        period: claim.period,
-        trip_no: refund.trip_no,
-        trip: {
-          trip_date: refund.trip_date || new Date().toISOString(),
-          pickup: refund.pickup || "",
-          dropoff: refund.dropoff || "",
-          fare: Number(refund.amount),
-        },
-        amount: Number(refund.amount),
-        reason: refund.reason,
-        bank,
-        link: emp ? portalLink(emp.id, employeePhone || "") : "",
+    // Kirim WA di background — jeda anti-limit tidak boleh menahan tombol
+    // keputusan manager (respons < 1 detik).
+    const phone = employeePhone;
+    after(async () => {
+      if (!phone) {
+        await flowAlert(supabase, claim.id, "Manager sudah menyetujui penggantian, tapi karyawan tidak punya nomor WhatsApp — minta transfer secara manual.");
+        return;
+      }
+      const bank = await getCompanyBank(supabase);
+      if (!bank) {
+        // Mark sudah mewajibkan rekening kantor terisi — ini pengaman saja
+        await flowAlert(supabase, claim.id, "Rekening kantor belum terisi — pesan penggantian ke karyawan belum bisa dikirim. Isi di Settings lalu kirim ulang dari detail klaim.");
+        return;
+      }
+      const sent = await sendAndLog(
+        supabase, claim.id, phone,
+        buildRefundRequestMessage({
+          employee_name: emp?.employee_name || "Karyawan",
+          period: claim.period,
+          trip_no: refund.trip_no,
+          trip: {
+            trip_date: refund.trip_date || new Date().toISOString(),
+            pickup: refund.pickup || "",
+            dropoff: refund.dropoff || "",
+            fare: Number(refund.amount),
+          },
+          amount: Number(refund.amount),
+          reason: refund.reason,
+          bank,
+          link: emp ? portalLink(emp.id, phone) : "",
       }),
-      "REFUND_REQUEST"
-    );
-    if (!sent) {
-      await flowAlert(supabase, claim.id, "Pesan penggantian ke karyawan gagal terkirim setelah paraf manager — kirim ulang dari detail klaim.");
-    }
+        "REFUND_REQUEST"
+      );
+      if (!sent) {
+        await flowAlert(supabase, claim.id, "Pesan penggantian ke karyawan gagal terkirim setelah paraf manager — kirim ulang dari detail klaim.");
+      }
+    });
+
     return NextResponse.json({ success: true });
   } catch (error) {
     console.error("Unhandled error in /api/refund/action:", error);

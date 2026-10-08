@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest, NextResponse, after } from "next/server";
 import { createServiceClient } from "@/lib/supabase-server";
 import { verifyPortalToken } from "@/lib/wa-link";
 import { normalizePhone } from "@/lib/whatsapp";
@@ -197,6 +197,7 @@ export async function POST(request: NextRequest) {
             pickup: t.pickup,
             dropoff: t.dropoff,
             fare: Number(t.fare || 0),
+            service_type: t.service_type || null,
             ticket_id: t.ticket_id || null,
           })),
           refunds: refunds.map((r) => ({
@@ -257,7 +258,10 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ success: false, error: "Aksi tidak dikenal" }, { status: 400 });
     }
 
-    await processWebhookReply(claim, "EMPLOYEE", reply, phone);
+    // Simpan & proses klaim di background — pengiriman WA (jeda anti-limit
+    // 2-5 detik/pesan) tidak boleh menahan respons web. Respon < 1 detik;
+    // kabar WhatsApp menyusul setelahnya.
+    after(() => processWebhookReply(claim, "EMPLOYEE", reply, phone));
     return NextResponse.json({ success: true });
   } catch (error) {
     console.error("Unhandled error in /api/portal:", error);
