@@ -168,6 +168,10 @@ export interface TripRefund {
   manager_signature?: string | null;
   manager_reason?: string | null;
   manager_decided_at?: string | null;
+  /** Justifikasi karyawan saat trip ditandai "tidak sesuai" — dikirim ke
+   *  manager untuk diputuskan (setujui = sah, tolak = wajib ganti). */
+  employee_reason?: string | null;
+  employee_explained_at?: string | null;
   /** Signed URL proof_path (dibuat server untuk web) */
   proof_url?: string | null;
   employee_note?: string | null;

@@ -374,26 +374,34 @@ const CONTENT: Record<string, ReactNode> = {
         biayanya diganti karyawan ke rekening kantor, dan trip keluar dari klaim setelah
         pembayaran dikonfirmasi.
       </P>
-      <Diagram caption="State penggantian (tabel trip_refunds): REQUESTED → CLAIMED → CONFIRMED, plus jalur batal.">{`
+      <Diagram caption="State penggantian (tabel trip_refunds): karyawan diminta alasan dulu; manager hanya memutus kalau karyawan membela perjalanan.">{`
     HR menandai trip "tidak sesuai" di web
-    (alasan + nominal + rekening kantor dikirim ke WA karyawan)
+    (alasan + nominal dikirim ke WA karyawan → portal)
                       │
                       ▼
-         ┌────────────────────┐    SUDAH TF    ┌────────────────────┐
-         │     REQUESTED      │ ─────────────► │      CLAIMED       │
-         │  menunggu transfer │                │ karyawan bilang    │
-         │                    │ ◄───────────── │ sudah transfer     │
-         └────────────────────┘  BELUM TF /    │ (menunggu HR cek   │
-              │                HR: belum masuk │  mutasi rekening)  │
-              │ HR: batalkan                   └─────────┬──────────┘
-              ▼                                          │ HR: "Pembayaran
-         ┌────────────────────┐                          ▼    diterima" (web)
-         │     CANCELLED      │                ┌────────────────────┐
-         │ trip tetap di      │                │     CONFIRMED      │
-         │ klaim, tidak perlu │                │ trip keluar klaim, │
-         │ diganti            │                │ total dihitung     │
-         └────────────────────┘                │ ulang otomatis     │
-                                               └────────────────────┘
+              karyawan punya 2 jalan
+                      │
+        ┌─────────────┴───────────────┐
+        │ transfer + bukti            │ kirim alasan (employee_reason)
+        ▼                             ▼
+  ┌────────────────────┐   manager_status=PENDING (menunggu keputusan)
+  │      REQUESTED     │ ──────────────┬──────────────────┐
+  │ menunggu transfer  │               │ manager SETUJU   │ manager TOLAK
+  └─────────┬──────────┘               ▼ (alasan sah)     ▼ tetap REQUESTED
+            │ SUDAH TF          ┌──────────────┐    (wajib transfer,
+            ▼                   │  CANCELLED   │    alasan ditolak)
+  ┌────────────────────┐        │ paraf manager│
+  │      CLAIMED       │        │ ttd di trip   │
+  │ menunggu HR cek    │        └──────────────┘
+  └─────────┬──────────┘
+            │ HR: "Pembayaran diterima" (web)
+            ▼
+  ┌────────────────────┐     HR juga bisa membatalkan tandanya
+  │     CONFIRMED      │     sendiri (salah tandai) → CANCELLED.
+  │ trip keluar klaim, │
+  │ total dihitung     │
+  │ ulang otomatis     │
+  └────────────────────┘
 
     Selama ada REQUESTED / CLAIMED: klaim DITAHAN —
     "1", SELESAI, dan approve manual ditolak sampai penggantian beres.

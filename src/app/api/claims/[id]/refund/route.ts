@@ -3,14 +3,13 @@ import { createServerClient, createServiceClient } from "@/lib/supabase-server";
 import { fetchClaimFresh, sendAndLog, flowAlert, activeRefunds, getCompanyBank } from "@/lib/wa-flow";
 import {
   normalizePhone,
-  buildRefundRequestMessage,
+  buildRefundFlaggedMessage,
   buildRefundInfoMessage,
   buildRefundConfirmedMessage,
   buildRefundAskAgainMessage,
   buildRefundCancelledMessage,
-  buildRefundManagerApprovalMessage,
 } from "@/lib/whatsapp";
-import { refundApproveLink, portalLink } from "@/lib/wa-link";
+import { portalLink } from "@/lib/wa-link";
 
 // Aksi HR untuk penggantian trip "tidak sesuai" (karyawan transfer biaya
 // trip ke rekening kantor). Semua aksi hanya untuk HR yang login —
@@ -85,12 +84,9 @@ export async function POST(
     const trip = trips[idx] as {
       id: string; trip_date: string; pickup: string; dropoff: string; fare: number;
     };
-    // Paraf manager dulu (kalau klaim punya manager): karyawan baru diminta
-    // transfer SETELAH manager menyetujui — alasan penggantian ada
-    // penanggung jawabnya. Tanpa manager → flow lama langsung ke karyawan.
-    const mgrPhone = claim.manager ? normalizePhone(claim.manager.phone_number) : null;
-    const needManagerApproval = !!claim.manager_id && !!mgrPhone;
 
+    // Alur v2: KARYAWAN dulu yang diminta alasan — manager hanya dilibatkan
+    // kalau karyawan membela perjalanannya (paraf = perjalanan sah).
     const { data: refund, error: insErr } = await service
       .from("trip_refunds")
       .insert({
@@ -104,7 +100,6 @@ export async function POST(
         reason,
         status: "REQUESTED",
         requested_by: actor,
-        manager_status: needManagerApproval ? "PENDING" : null,
       })
       .select()
       .single();
@@ -122,50 +117,27 @@ export async function POST(
 
     await service.from("comments").insert({
       claim_id: id,
-      message: `Trip ${idx + 1} ditandai TIDAK SESUAI oleh HR — alasan: ${reason}. ${needManagerApproval ? `Menunggu paraf Manager (${claim.manager?.employee_name || "-"}) sebelum karyawan diminta mengganti ${rupiah(amount)}.` : `Karyawan diminta mengganti ${rupiah(amount)} ke rekening kantor.`}`,
+      message: `Trip ${idx + 1} ditandai TIDAK SESUAI oleh HR — alasan: ${reason}. Karyawan diminta memberi alasan (diteruskan ke manager bila membela perjalanan) atau mengganti ${rupiah(amount)} ke rekening kantor.`,
       author_name: actor,
       author_role: "HR",
     });
 
-    if (needManagerApproval) {
-      const link = refundApproveLink(refund.id, mgrPhone!);
-      const sent = await sendAndLog(
-        service, id, mgrPhone!,
-        buildRefundManagerApprovalMessage({
-          employee_name: claim.employee?.employee_name || "Karyawan",
-          period: claim.period,
-          trip_no: idx + 1,
-          pickup: trip.pickup,
-          dropoff: trip.dropoff,
-          amount,
-          reason,
-          link,
-        }),
-        "REFUND_MANAGER_APPROVAL_PROMPT"
-      );
-      if (!sent) {
-        await flowAlert(service, id, "Permintaan paraf manager gagal terkirim — proses manual / kirim ulang setelah device normal.");
-      }
-      return NextResponse.json({ success: true, data: refund, manager_approval: "PENDING" });
-    }
-
     if (employeePhone) {
       const sent = await sendAndLog(
         service, id, employeePhone,
-        buildRefundRequestMessage({
+        buildRefundFlaggedMessage({
           employee_name: claim.employee?.employee_name || "Karyawan",
           period: claim.period,
           trip_no: idx + 1,
           trip,
           amount,
           reason,
-          bank,
           link: claim.employee ? portalLink(claim.employee.id, employeePhone) : "",
         }),
-        "REFUND_REQUEST"
+        "REFUND_FLAGGED"
       );
       if (!sent) {
-        await flowAlert(service, id, "Pesanan penggantian ke karyawan gagal terkirim — kirim ulang dari detail klaim setelah device normal.");
+        await flowAlert(service, id, "Tanda tidak sesuai gagal terkirim ke karyawan — kirim ulang dari detail klaim setelah device normal.");
       }
     } else {
       await flowAlert(service, id, "Karyawan tidak punya nomor WhatsApp — penggantian tidak bisa diminta via chat. Hubungi manual.");
@@ -313,6 +285,7 @@ export async function POST(
           trip_no: refundRow.trip_no,
           amount: Number(refundRow.amount),
           new_total: total,
+          link: claim.employee ? portalLink(claim.employee.id, employeePhone) : "",
         }),
         "REFUND_CONFIRMED"
       );

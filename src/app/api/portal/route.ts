@@ -1,12 +1,14 @@
 import { NextRequest, NextResponse, after } from "next/server";
 import { createServiceClient } from "@/lib/supabase-server";
-import { verifyPortalToken } from "@/lib/wa-link";
-import { normalizePhone } from "@/lib/whatsapp";
+import { verifyPortalToken, refundApproveLink } from "@/lib/wa-link";
+import { normalizePhone, buildRefundManagerApprovalMessage } from "@/lib/whatsapp";
 import {
   fetchClaimFresh,
   processWebhookReply,
   activeRefunds,
   getCompanyBank,
+  sendAndLog,
+  flowAlert,
 } from "@/lib/wa-flow";
 import { getRecentTickets, ticketTitle } from "@/lib/envgate";
 
@@ -207,6 +209,9 @@ export async function POST(request: NextRequest) {
             amount: Number(r.amount),
             reason: r.reason,
             status: r.status,
+            manager_status: (r as Record<string, unknown>).manager_status as string | null,
+            employee_reason: ((r as Record<string, unknown>).employee_reason as string | null) || null,
+            manager_reason: ((r as Record<string, unknown>).manager_reason as string | null) || null,
             proof_url: r.proof_path ? proofUrlByPath.get(r.proof_path) || null : null,
             proof_validated: !!(r as Record<string, unknown>).proof_validated,
           })),
@@ -227,6 +232,94 @@ export async function POST(request: NextRequest) {
         { success: false, error: "Klaim ini sudah selesai." },
         { status: 409 }
       );
+    }
+
+    // ==== Karyawan membela perjalanan: alasan diteruskan ke manager ====
+    if (String(body.action) === "refund_explain") {
+      const text = String(body.text || "").trim().slice(0, 300);
+      if (text.length < 5) {
+        return NextResponse.json(
+          { success: false, error: "Alasan terlalu pendek — tulis minimal 5 karakter." },
+          { status: 400 }
+        );
+      }
+      const { data: refund } = await supabase
+        .from("trip_refunds")
+        .select("id, trip_no, status, manager_status, pickup, dropoff, amount, reason")
+        .eq("id", String(body.refund_id || ""))
+        .eq("claim_id", claim.id)
+        .maybeSingle();
+      if (!refund) {
+        return NextResponse.json({ success: false, error: "Penggantian tidak ditemukan." }, { status: 404 });
+      }
+      // Satu ronde saja: sudah diputuskan manager = tidak bisa membela lagi
+      if (refund.status !== "REQUESTED" || refund.manager_status) {
+        return NextResponse.json(
+          { success: false, error: "Penggantian ini sudah diproses — tidak bisa kirim alasan lagi." },
+          { status: 409 }
+        );
+      }
+      const mgrPhone = claim.manager ? normalizePhone(claim.manager.phone_number) : null;
+      if (!claim.manager_id || !mgrPhone) {
+        return NextResponse.json(
+          { success: false, error: "Klaim ini tidak punya manager — silakan langsung transfer." },
+          { status: 409 }
+        );
+      }
+
+      const { error: updErr } = await supabase
+        .from("trip_refunds")
+        .update({
+          employee_reason: text,
+          employee_explained_at: new Date().toISOString(),
+          manager_status: "PENDING",
+        })
+        .eq("id", refund.id);
+      if (updErr) {
+        return NextResponse.json({ success: false, error: "Gagal menyimpan alasan." }, { status: 500 });
+      }
+
+      await supabase.from("comments").insert({
+        claim_id: claim.id,
+        message: `Karyawan membela trip ${refund.trip_no}: "${text}" — menunggu keputusan manager.`,
+        author_name: claim.employee?.employee_name || "Karyawan",
+        author_role: "EMPLOYEE",
+      });
+
+      // Kirim ke manager di background — tombol karyawan tetap instan
+      const link = refundApproveLink(refund.id, mgrPhone);
+      const claimId = claim.id;
+      const employeeName = claim.employee?.employee_name || "Karyawan";
+      const period = claim.period;
+      const trip = {
+        trip_no: refund.trip_no,
+        pickup: String(refund.pickup || ""),
+        dropoff: String(refund.dropoff || ""),
+        amount: Number(refund.amount),
+        reason: String(refund.reason || ""),
+      };
+      after(async () => {
+        const sent = await sendAndLog(
+          supabase, claimId, mgrPhone,
+          buildRefundManagerApprovalMessage({
+            employee_name: employeeName,
+            period,
+            trip_no: trip.trip_no,
+            pickup: trip.pickup,
+            dropoff: trip.dropoff,
+            amount: trip.amount,
+            reason: trip.reason,
+            employee_reason: text,
+            link,
+          }),
+          "REFUND_MANAGER_APPROVAL_PROMPT"
+        );
+        if (!sent) {
+          await flowAlert(supabase, claimId, "Alasan karyawan gagal terkirim ke manager — kirim ulang dari detail klaim setelah device normal.");
+        }
+      });
+
+      return NextResponse.json({ success: true });
     }
 
     let reply = "";

@@ -459,7 +459,7 @@ export function buildRefundRequestMessage(params: {
 /** Info nominal + rekening kantor (perintah NOREK / kirim ulang dari web). */
 export function buildRefundInfoMessage(params: {
   period: string;
-  refunds: { trip_no: number; amount: number; status: string }[];
+  refunds: { trip_no: number; amount: number; status: string; manager_status?: string | null }[];
   bank: CompanyBank | null;
 }): string {
   const total = params.refunds.reduce((a, r) => a + Number(r.amount), 0);
@@ -468,14 +468,15 @@ export function buildRefundInfoMessage(params: {
     ``,
     `Berikut info penggantian untuk klaim periode ${params.period}.`,
     ``,
-    ...params.refunds.map(
-      (r) =>
-        `Perjalanan nomor ${r.trip_no} sebesar ${formatAmount(r.amount)}, ${
-          r.status === "CLAIMED"
-            ? "sudah Anda transfer, lagi dicek HR."
-            : "masih menunggu transfer Anda."
-        }`
-    ),
+    ...params.refunds.map((r) => {
+      if (r.status === "CLAIMED") {
+        return `Perjalanan nomor ${r.trip_no} sebesar ${formatAmount(r.amount)}, sudah Anda transfer, lagi dicek HR.`;
+      }
+      if (r.manager_status === "PENDING") {
+        return `Perjalanan nomor ${r.trip_no} sebesar ${formatAmount(r.amount)}, menunggu keputusan manager atas alasan Anda.`;
+      }
+      return `Perjalanan nomor ${r.trip_no} sebesar ${formatAmount(r.amount)}, masih menunggu transfer Anda.`;
+    }),
     ``,
     `Total yang perlu diganti *${formatAmount(total)}*.`,
     ``,
@@ -483,7 +484,7 @@ export function buildRefundInfoMessage(params: {
       ? [`Transfer ke rekening kantor:`, ...bankLines(params.bank)]
       : [`Rekening kantor belum diisi HR. Mohon hubungi HR Perkom ya.`]),
     ``,
-    `Kalau sudah transfer, balas *SUDAH TF* ya.`,
+    `Unggah bukti transfer dan konfirmasi lewat link klaim Anda ya.`,
   ].join("\n");
 }
 
@@ -529,6 +530,7 @@ export function buildRefundConfirmedMessage(params: {
   trip_no: number;
   amount: number;
   new_total: number;
+  link?: string;
 }): string {
   return [
     `*Pembayaran Dikonfirmasi*`,
@@ -538,6 +540,10 @@ export function buildRefundConfirmedMessage(params: {
     `Perjalanan nomor ${params.trip_no} sudah keluar dari klaim periode ${params.period}.`,
     ``,
     `Total klaim sekarang *${formatAmount(params.new_total)}*.`,
+    ``,
+    ...(params.link
+      ? [`Lihat progres klaim Anda sampai mana lewat link ini:`, params.link]
+      : []),
   ].join("\n");
 }
 
@@ -686,27 +692,105 @@ export function buildRefundManagerApprovalMessage(params: {
   dropoff: string;
   amount: number;
   reason: string;
+  employee_reason: string;
   link?: string;
 }): string {
   return [
-    `*Perlu Paraf: Penggantian Perjalanan*`,
+    `*Perlu Keputusan: Perjalanan Ditandai Tidak Sesuai*`,
     ``,
     `Halo Manager,`,
     ``,
     `${params.employee_name} (klaim periode ${params.period}) ada perjalanan yang ditandai TIDAK SESUAI oleh HR.`,
     ``,
     `Perjalanan nomor ${params.trip_no}: ${shortAddr(params.pickup, 40)} → ${shortAddr(params.dropoff, 40)}`,
-    `Alasan: ${params.reason}`,
-    `Penggantian: *${formatAmount(params.amount)}* ke rekening kantor.`,
+    `Alasan HR: ${params.reason}`,
+    `Karyawan membela: "${params.employee_reason}"`,
+    `Nilai penggantian bila dipertahankan: *${formatAmount(params.amount)}*.`,
     ``,
     ...(params.link
       ? [
-          `Setujui di sini (paraf otomatis dari tanda tangan Anda yang tersimpan):`,
+          `Putuskan lewat link ini:`,
           params.link,
           ``,
-          `Menolak juga bisa dari halaman yang sama — perjalanan tetap di klaim.`,
+          `Menyetujui = perjalanan dianggap sah, paraf Anda tercatat di trip-nya, karyawan TIDAK perlu membayar.`,
+          `Menolak = karyawan wajib mengganti ke rekening kantor.`,
         ]
       : [`Balas chat ini ke HR Perkom untuk menyampaikan keputusan Anda.`]),
+  ].join("\n");
+}
+
+/** Trip ditandai HR — karyawan diminta alasan / setuju mengganti (alur baru:
+ *  karyawan dulu, manager hanya kalau karyawan membela alasannya). */
+export function buildRefundFlaggedMessage(params: {
+  employee_name: string;
+  period: string;
+  trip_no: number;
+  trip: WaTripLine;
+  amount: number;
+  reason: string;
+  link?: string;
+}): string {
+  const t = params.trip;
+  return [
+    `*Perjalanan Ditandai Tidak Sesuai*`,
+    ``,
+    `Halo ${params.employee_name},`,
+    ``,
+    `Perjalanan nomor ${params.trip_no} pada klaim periode ${params.period} ditandai tidak sesuai oleh HR.`,
+    `${formatTripDate(t.trip_date)}, dari ${t.pickup} ke ${t.dropoff}.`,
+    `Alasan HR: ${params.reason}`,
+    ``,
+    `Ada dua jalan, keduanya lewat link klaim Anda${params.link ? ":" : " (dikirim terpisah):"}`,
+    `1. Kalau perjalanan ini atas izin manager — tulis alasannya, kami teruskan ke manager untuk diputuskan.`,
+    `2. Kalau memang bukan perjalanan tugas — transfer *${formatAmount(params.amount)}* ke rekening kantor, unggah buktinya, lalu tekan sudah transfer.`,
+    ``,
+    ...(params.link ? [params.link] : []),
+  ].join("\n");
+}
+
+/** Alasan karyawan disetujui manager — perjalanan sah, tidak ada penggantian. */
+export function buildRefundReasonApprovedMessage(params: {
+  employee_name: string;
+  period: string;
+  trip_no: number;
+  manager_name: string;
+}): string {
+  return [
+    `*Alasan Diterima Manager*`,
+    ``,
+    `Halo ${params.employee_name},`,
+    ``,
+    `Manager (${params.manager_name}) menyetujui alasan Anda untuk perjalanan nomor ${params.trip_no} pada klaim periode ${params.period}.`,
+    ``,
+    `Perjalanan dianggap sah dan tetap di klaim — Anda tidak perlu membayar apa pun. Paraf manager tercatat di trip-nya.`,
+  ].join("\n");
+}
+
+/** Alasan karyawan ditolak manager — wajib transfer + unggah bukti. */
+export function buildRefundReasonRejectedMessage(params: {
+  employee_name: string;
+  period: string;
+  trip_no: number;
+  amount: number;
+  manager_name: string;
+  manager_reason: string;
+  bank: CompanyBank | null;
+  link?: string;
+}): string {
+  return [
+    `*Alasan Belum Diterima Manager*`,
+    ``,
+    `Halo ${params.employee_name},`,
+    ``,
+    `Manager (${params.manager_name}) belum menyetujui alasan Anda untuk perjalanan nomor ${params.trip_no} pada klaim periode ${params.period}.`,
+    `Alasan manager: ${params.manager_reason}`,
+    ``,
+    `Jadi perjalanan ini perlu Anda ganti sebesar *${formatAmount(params.amount)}*, transfer ke rekening kantor:`,
+    ...bankLines(params.bank),
+    ``,
+    ...(params.link
+      ? [`Unggah bukti transfer dan tekan sudah transfer lewat link ini:`, params.link]
+      : [`Setelah transfer, hubungi HR Perkom untuk konfirmasi.`]),
   ].join("\n");
 }
 

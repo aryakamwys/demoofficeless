@@ -119,6 +119,8 @@ export type RefundRow = {
   amount: number;
   reason: string;
   status: string; // REQUESTED | CLAIMED | CONFIRMED | CANCELLED
+  /** PENDING = karyawan membela perjalanan, menunggu keputusan manager */
+  manager_status?: string | null;
   employee_note: string | null;
   claimed_at: string | null;
   /** Bukti transfer otomatis dari WhatsApp (bucket private) */
@@ -167,14 +169,19 @@ export async function getCompanyBank(
  *  menunggu) — teksnya dibedakan supaya manager tidak disuruh transfer. */
 function refundHoldMessage(refunds: RefundRow[], viewer: "EMPLOYEE" | "APPROVER"): string {
   const total = refunds.reduce((a, r) => a + Number(r.amount), 0);
-  const statusText = (r: RefundRow) =>
-    r.status === "CLAIMED"
-      ? viewer === "EMPLOYEE"
-        ? "lagi dicek HR."
-        : "sedang dicek HR."
-      : viewer === "EMPLOYEE"
-        ? "masih menunggu transfer Anda."
-        : "menunggu transfer karyawan.";
+  const statusText = (r: RefundRow) => {
+    if (r.status === "CLAIMED") {
+      return viewer === "EMPLOYEE" ? "lagi dicek HR." : "sedang dicek HR.";
+    }
+    if (r.manager_status === "PENDING") {
+      return viewer === "EMPLOYEE"
+        ? "menunggu keputusan manager atas alasan Anda."
+        : "menunggu keputusan manager (karyawan membela perjalanan).";
+    }
+    return viewer === "EMPLOYEE"
+      ? "masih menunggu transfer Anda."
+      : "menunggu transfer karyawan.";
+  };
   const lines = refunds.map(
     (r) => `Perjalanan nomor ${r.trip_no} sebesar ${rupiah(r.amount)}, ${statusText(r)}`
   );
@@ -239,7 +246,14 @@ async function handleRefundChat(
 
   if (cmd.type === "REFUND_CLAIM") {
     const claimed = refunds.filter((r) => r.status === "CLAIMED");
-    const requested = refunds.filter((r) => r.status === "REQUESTED");
+    // Yang menunggu keputusan manager (karyawan membela perjalanan) tidak
+    // ikut dicatat transfer — keputusannya belum keluar.
+    const requested = refunds.filter(
+      (r) => r.status === "REQUESTED" && r.manager_status !== "PENDING"
+    );
+    const waitingManager = refunds.filter(
+      (r) => r.status === "REQUESTED" && r.manager_status === "PENDING"
+    );
     if (claimed.length > 0 && requested.length === 0) {
       const at = claimed[0]!.claimed_at
         ? new Date(claimed[0]!.claimed_at!).toLocaleString("id-ID", { dateStyle: "short", timeStyle: "short" })
@@ -260,8 +274,14 @@ async function handleRefundChat(
     if (requested.length === 0) {
       await sendAndLog(
         supabase, claim.id, employeePhone,
-        [`*Tidak Ada Penggantian*`, ``, `Belum ada penggantian yang menunggu untuk klaim ini.`, ``, `Ketik LIST kalau mau melihat daftar perjalanan.`].join("\n"),
-        "REFUND_NONE"
+        waitingManager.length > 0
+          ? [
+              `*Masih Menunggu Keputusan Manager*`,
+              ``,
+              `Alasan Anda untuk trip no ${waitingManager.map((r) => r.trip_no).join(", ")} sedang diputuskan manager. Kalau ditolak, barulah transfer ${rupiah(waitingManager.reduce((a, r) => a + Number(r.amount), 0))} ke rekening kantor.`,
+            ].join("\n")
+          : [`*Tidak Ada Penggantian*`, ``, `Belum ada penggantian yang menunggu untuk klaim ini.`, ``, `Ketik LIST kalau mau melihat daftar perjalanan.`].join("\n"),
+        waitingManager.length > 0 ? "REFUND_WAIT_MANAGER" : "REFUND_NONE"
       );
       return;
     }

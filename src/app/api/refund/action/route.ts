@@ -1,13 +1,20 @@
 import { NextRequest, NextResponse, after } from "next/server";
 import { createServiceClient } from "@/lib/supabase-server";
 import { verifyRefundToken, portalLink } from "@/lib/wa-link";
-import { normalizePhone, buildRefundRequestMessage } from "@/lib/whatsapp";
+import {
+  normalizePhone,
+  buildRefundReasonApprovedMessage,
+  buildRefundReasonRejectedMessage,
+} from "@/lib/whatsapp";
 import { sendAndLog, flowAlert, getCompanyBank } from "@/lib/wa-flow";
 
-// Keputusan manager atas penggantian trip "tidak sesuai" — dari link di
-// pesan WA (token HMAC, tanpa login; trust model sama dengan /api/wa/action).
-// Approve → paraf otomatis dari ttd manager yang tersimpan, LALU karyawan
-// diminta transfer. Reject → tanda dibatalkan, trip tetap di klaim.
+// Keputusan manager atas ALASAN KARYAWAN untuk trip "tidak sesuai" — dari
+// link di pesan WA (token HMAC, tanpa login; trust model sama dengan
+// /api/wa/action). Alur v2: karyawan dibela duluan; manager hanya memutus
+// saat karyawan mengirim alasan.
+//   Setujui = perjalanan SAH: paraf manager tercatat di trip, penggantian
+//             batal, karyawan tidak membayar.
+//   Tolak    = karyawan WAJIB mengganti ke rekening kantor (+ bukti transfer).
 export const maxDuration = 60;
 
 function rupiah(n: number | string): string {
@@ -25,6 +32,7 @@ type RefundRow = {
   reason: string;
   status: string;
   manager_status: string | null;
+  employee_reason: string | null;
 };
 
 async function loadContext(token: string) {
@@ -91,6 +99,7 @@ export async function GET(request: NextRequest) {
       dropoff: refund.dropoff,
       amount: Number(refund.amount),
       reason: refund.reason,
+      employee_reason: refund.employee_reason || "",
       has_signature: !!sig?.signature,
       decision: refund.manager_status,
     },
@@ -125,30 +134,10 @@ export async function POST(request: NextRequest) {
     }
 
     const employeePhone = normalizePhone(emp?.phone_number);
+    const employeeName = emp?.employee_name || "Karyawan";
 
-    if (action === "reject") {
-      const { error } = await supabase
-        .from("trip_refunds")
-        .update({
-          manager_status: "REJECTED",
-          manager_reason: reason,
-          manager_decided_at: new Date().toISOString(),
-          status: "CANCELLED",
-          cancelled_at: new Date().toISOString(),
-        })
-        .eq("id", refund.id);
-      if (error) {
-        return NextResponse.json({ success: false, error: error.message }, { status: 500 });
-      }
-
-      await supabase.from("comments").insert({
-        claim_id: claim.id,
-        message: `Manager (${mgr.employee_name}) MENOLAK tanda tidak sesuai trip ${refund.trip_no}. Alasan: ${reason}. Trip tetap di klaim — karyawan tidak perlu mengganti.`,
-        author_name: mgr.employee_name,
-        author_role: "MANAGER",
-      });
-
-      // HR perlu tahu keputusannya (karyawan belum pernah diminta — aman)
+    // Kabari HR keputusannya (sama untuk setuju/tolak — HR pemilik alur)
+    const notifyHr = async (decision: string, detail: string) => {
       const { data: hrRow } = await supabase
         .from("claims")
         .select("hr:employees!claims_hr_id_fkey(phone_number)")
@@ -163,18 +152,68 @@ export async function POST(request: NextRequest) {
           [
             `*Keputusan Manager*`,
             ``,
-            `${mgr.employee_name} MENOLAK tanda tidak sesuai pada klaim ${emp?.employee_name || "karyawan"} periode ${claim.period} (trip ${refund.trip_no}).`,
-            `Alasannya: ${reason}`,
-            ``,
-            `Trip tetap di klaim — silakan cek detailnya di aplikasi.`,
+            `${mgr.employee_name} ${decision} alasan ${employeeName} untuk trip ${refund.trip_no} (klaim periode ${claim.period}).`,
+            detail,
           ].join("\n"),
-          "REFUND_MANAGER_REJECTED_HR"
+          decision.includes("MENYETUJUI")
+            ? "REFUND_MANAGER_APPROVED_HR"
+            : "REFUND_MANAGER_REJECTED_HR"
         );
       }
+    };
+
+    if (action === "reject") {
+      // Tolak alasan → karyawan wajib mengganti (tetap REQUESTED)
+      const { error } = await supabase
+        .from("trip_refunds")
+        .update({
+          manager_status: "REJECTED",
+          manager_reason: reason,
+          manager_decided_at: new Date().toISOString(),
+        })
+        .eq("id", refund.id);
+      if (error) {
+        return NextResponse.json({ success: false, error: error.message }, { status: 500 });
+      }
+
+      await supabase.from("comments").insert({
+        claim_id: claim.id,
+        message: `Manager (${mgr.employee_name}) MENOLAK alasan karyawan untuk trip ${refund.trip_no}. Alasan manager: ${reason}. Karyawan wajib mengganti ${rupiah(refund.amount)} ke rekening kantor.`,
+        author_name: mgr.employee_name,
+        author_role: "MANAGER",
+      });
+
+      const phone = employeePhone;
+      after(async () => {
+        await notifyHr("MENOLAK", `Alasan manager: ${reason}. Karyawan diminta mengganti ${rupiah(refund.amount)}.`);
+        if (!phone) {
+          await flowAlert(supabase, claim.id, "Manager menolak alasan karyawan, tapi karyawan tidak punya nomor WhatsApp — minta transfer secara manual.");
+          return;
+        }
+        const bank = await getCompanyBank(supabase);
+        const sent = await sendAndLog(
+          supabase, claim.id, phone,
+          buildRefundReasonRejectedMessage({
+            employee_name: employeeName,
+            period: claim.period,
+            trip_no: refund.trip_no,
+            amount: Number(refund.amount),
+            manager_name: mgr.employee_name,
+            manager_reason: reason,
+            bank,
+            link: emp ? portalLink(emp.id, phone) : "",
+          }),
+          "REFUND_REASON_REJECTED"
+        );
+        if (!sent) {
+          await flowAlert(supabase, claim.id, "Pesan hasil keputusan manager gagal terkirim ke karyawan — kirim ulang dari detail klaim.");
+        }
+      });
+
       return NextResponse.json({ success: true });
     }
 
-    // ==== Approve: tempel paraf tersimpan, lalu minta transfer ke karyawan ====
+    // ==== Approve: perjalanan SAH — paraf tercatat, penggantian batal ====
     const { data: sig } = claim.manager_id
       ? await supabase.from("signatures").select("signature").eq("employee_id", claim.manager_id).maybeSingle()
       : { data: null };
@@ -185,6 +224,8 @@ export async function POST(request: NextRequest) {
         manager_status: "APPROVED",
         manager_signature: sig?.signature || null,
         manager_decided_at: new Date().toISOString(),
+        status: "CANCELLED",
+        cancelled_at: new Date().toISOString(),
       })
       .eq("id", refund.id);
     if (error) {
@@ -193,46 +234,30 @@ export async function POST(request: NextRequest) {
 
     await supabase.from("comments").insert({
       claim_id: claim.id,
-      message: `Manager (${mgr.employee_name}) MENYETUJUI penggantian ${rupiah(refund.amount)} untuk trip ${refund.trip_no}. Alasan: ${refund.reason}. Karyawan diminta transfer ke rekening kantor.`,
+      message: `Manager (${mgr.employee_name}) MENYETUJUI alasan karyawan untuk trip ${refund.trip_no} — perjalanan dianggap sah, paraf tercatat di trip. Tidak ada penggantian.`,
       author_name: mgr.employee_name,
       author_role: "MANAGER",
     });
 
-    // Kirim WA di background — jeda anti-limit tidak boleh menahan tombol
-    // keputusan manager (respons < 1 detik).
     const phone = employeePhone;
     after(async () => {
+      await notifyHr("MENYETUJUI", `Perjalanan dianggap sah — paraf tercatat, tidak ada penggantian.`);
       if (!phone) {
-        await flowAlert(supabase, claim.id, "Manager sudah menyetujui penggantian, tapi karyawan tidak punya nomor WhatsApp — minta transfer secara manual.");
-        return;
-      }
-      const bank = await getCompanyBank(supabase);
-      if (!bank) {
-        // Mark sudah mewajibkan rekening kantor terisi — ini pengaman saja
-        await flowAlert(supabase, claim.id, "Rekening kantor belum terisi — pesan penggantian ke karyawan belum bisa dikirim. Isi di Settings lalu kirim ulang dari detail klaim.");
+        await flowAlert(supabase, claim.id, "Manager menyetujui alasan karyawan, tapi karyawan tidak punya nomor WhatsApp — kabari secara manual.");
         return;
       }
       const sent = await sendAndLog(
         supabase, claim.id, phone,
-        buildRefundRequestMessage({
-          employee_name: emp?.employee_name || "Karyawan",
+        buildRefundReasonApprovedMessage({
+          employee_name: employeeName,
           period: claim.period,
           trip_no: refund.trip_no,
-          trip: {
-            trip_date: refund.trip_date || new Date().toISOString(),
-            pickup: refund.pickup || "",
-            dropoff: refund.dropoff || "",
-            fare: Number(refund.amount),
-          },
-          amount: Number(refund.amount),
-          reason: refund.reason,
-          bank,
-          link: emp ? portalLink(emp.id, phone) : "",
-      }),
-        "REFUND_REQUEST"
+          manager_name: mgr.employee_name,
+        }),
+        "REFUND_REASON_APPROVED"
       );
       if (!sent) {
-        await flowAlert(supabase, claim.id, "Pesan penggantian ke karyawan gagal terkirim setelah paraf manager — kirim ulang dari detail klaim.");
+        await flowAlert(supabase, claim.id, "Pesan hasil keputusan manager gagal terkirim ke karyawan — kabari manual bila perlu.");
       }
     });
 
