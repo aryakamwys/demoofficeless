@@ -21,7 +21,7 @@ const NAV = [
     ],
   },
   {
-    group: "Modul HR",
+    group: "HR",
     items: [
       { id: "employees", title: "Employees" },
       { id: "upload", title: "Upload Grab" },
@@ -177,14 +177,14 @@ const CONTENT: Record<string, ReactNode> = {
       <H1>Pengenalan</H1>
       <P>
         Officeless Perkom adalah aplikasi internal untuk mengelola klaim perjalanan Grab Business
-        karyawan (modul <b>Modul HR</b>) serta layanan pendukung operasional: <b>Manage Service</b>{" "}
+        karyawan (modul <b>HR</b>) serta layanan pendukung operasional: <b>Manage Service</b>{" "}
         (monitoring OpenClaw) dan <b>Inventory</b> (pendataan aset via barcode).
       </P>
 
       <H2>Struktur Menu</H2>
       <ul className="my-3 list-disc space-y-1 pl-5 text-sm text-slate-600">
         <li><b>Dashboard</b> — ringkasan klaim (kartu statistik).</li>
-        <li><b>Modul HR</b> — Employees (master karyawan), Upload Grab (statement Grab), Claims Grab (klaim & persetujuan).</li>
+        <li><b>HR</b> — Employees (master karyawan), Upload Grab (statement Grab), Claims Grab (klaim & persetujuan).</li>
         <li><b>Manage Service</b> — Openclaw Ticket (monitoring Outlook Perkom).</li>
         <li><b>Inventory</b> — pendaftaran aset Perkom dengan scan barcode.</li>
       </ul>
@@ -252,7 +252,7 @@ const CONTENT: Record<string, ReactNode> = {
       <H2>Langkah Upload</H2>
       <Steps
         items={[
-          <>Buka menu <b>Modul HR → Upload Grab</b>.</>,
+          <>Buka menu <b>HR → Upload Grab</b>.</>,
           <>Pilih <b>Periode</b> (bulan dan tahun) klaim.</>,
           <>Klik area upload, lalu pilih file statement Grab (format <b>CSV</b> atau <b>PDF</b>).</>,
           <>Klik <b>Upload</b> — file diproses otomatis.</>,
@@ -860,7 +860,7 @@ const CONTENT: Record<string, ReactNode> = {
       <H2>Cara Mengisi Ticket (HR, via Web)</H2>
       <Steps
         items={[
-          <>Buka <b>Modul HR → Claims Grab</b>, lalu klik klaim yang mau diedit.</>,
+          <>Buka <b>HR → Claims Grab</b>, lalu klik klaim yang mau diedit.</>,
           <>Pada tabel <b>Bookings</b>, klik ikon <b>pensil</b> (✏️) di baris trip yang mau diberi ticket.</>,
           <>Isi kolom <b>Ticket EnvGate (bukti kerja)</b> — pilih dari saran yang muncul (50 ticket terbaru) atau ketik nomornya manual, mis. <Cmd>32535</Cmd>.</>,
           <>Klik <b>Simpan</b> — perubahan tercatat sebagai note pada klaim.</>,

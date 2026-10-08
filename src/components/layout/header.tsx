@@ -25,6 +25,7 @@ import {
   Bell,
   Wrench,
   Boxes,
+  Scale,
   Activity,
   ShieldCheck,
   Wallet,
@@ -35,18 +36,19 @@ import { UserChip } from "@/components/layout/user-chip";
 
 const tripsSubItems = [
   { name: "Employees", href: "/employees", icon: Users },
-  { name: "Upload", href: "/upload", icon: Upload },
-  { name: "Claims", href: "/claims", icon: FileText },
+  { name: "Upload Grab", href: "/upload", icon: Upload },
+  { name: "Claims Grab", href: "/claims", icon: FileText },
 ];
 
 const pageTitles: Record<string, string> = {
   "/dashboard": "Dashboard",
   "/employees": "Employee Master",
-  "/upload": "Upload Statement",
-  "/claims": "Claims",
+  "/upload": "Upload Grab",
+  "/claims": "Claims Grab",
   "/services/openclaw": "Openclaw Ticket",
   "/services/inventory": "Inventory",
   "/inventory": "Inventory",
+  "/grc": "GRC",
   "/settings": "Settings",
   "/services/report": "Report",
   "/finance": "Finance",
@@ -120,7 +122,7 @@ export function Header({ isSuperadmin }: { isSuperadmin?: boolean }) {
               )}
             >
               <Car className="h-4 w-4 shrink-0" />
-              <span className="flex-1 text-left">Modul HR</span>
+              <span className="flex-1 text-left">HR</span>
               <ChevronDown
                 className={cn(
                   "h-3.5 w-3.5 transition-transform duration-200",
@@ -214,6 +216,18 @@ export function Header({ isSuperadmin }: { isSuperadmin?: boolean }) {
               >
                 <Boxes className="h-4 w-4 shrink-0" />
                 Inventory
+              </Link>
+              <Link
+                href="/grc"
+                className={cn(
+                  "flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors",
+                  pathname === "/grc"
+                    ? "bg-accent text-primary"
+                    : "text-muted-foreground hover:bg-accent hover:text-foreground"
+                )}
+              >
+                <Scale className="h-4 w-4 shrink-0" />
+                GRC
               </Link>
             </div>
 
