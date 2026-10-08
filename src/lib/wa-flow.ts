@@ -162,26 +162,45 @@ export async function getCompanyBank(
   return bank.account_number ? bank : null;
 }
 
-/** Pesan penahan: klaim tidak boleh maju selama penggantian belum selesai. */
-function refundHoldMessage(refunds: RefundRow[]): string {
+/** Pesan penahan: klaim tidak boleh maju selama penggantian belum selesai.
+ *  Penerima bisa karyawan (yang harus transfer) atau approver (yang diminta
+ *  menunggu) — teksnya dibedakan supaya manager tidak disuruh transfer. */
+function refundHoldMessage(refunds: RefundRow[], viewer: "EMPLOYEE" | "APPROVER"): string {
   const total = refunds.reduce((a, r) => a + Number(r.amount), 0);
+  const statusText = (r: RefundRow) =>
+    r.status === "CLAIMED"
+      ? viewer === "EMPLOYEE"
+        ? "lagi dicek HR."
+        : "sedang dicek HR."
+      : viewer === "EMPLOYEE"
+        ? "masih menunggu transfer Anda."
+        : "menunggu transfer karyawan.";
+  const lines = refunds.map(
+    (r) => `Perjalanan nomor ${r.trip_no} sebesar ${rupiah(r.amount)}, ${statusText(r)}`
+  );
+  if (viewer === "APPROVER") {
+    return [
+      `*Klaim Belum Bisa Disetujui*`,
+      ``,
+      `Masih ada penggantian ke rekening kantor yang belum selesai:`,
+      ``,
+      ...lines,
+      ``,
+      `Totalnya *${rupiah(total)}*.`,
+      ``,
+      `Setelah karyawan menyelesaikan transfer dan HR memvalidasi buktinya, klaim ini bisa Anda setujui lagi dari antrean. Tidak perlu membalas pesan ini.`,
+    ].join("\n");
+  }
   return [
     `*Klaim Ditahan*`,
     ``,
     `Sepertinya masih ada penggantian yang belum selesai, jadi klaimnya belum bisa lanjut dulu ya.`,
     ``,
-    ...refunds.map(
-      (r) =>
-        `Perjalanan nomor ${r.trip_no} sebesar ${rupiah(r.amount)}, ${
-          r.status === "CLAIMED" ? "lagi dicek HR." : "masih menunggu transfer Anda."
-        }`
-    ),
+    ...lines,
     ``,
     `Totalnya *${rupiah(total)}*.`,
     ``,
-    `Transfer ke rekening kantor lalu balas *SUDAH TF*.`,
-    ``,
-    `Mau lihat nominal dan rekeningnya? Balas *NOREK*.`,
+    `Buka link klaim Anda untuk melihat rekening kantor, unggah bukti transfer, lalu tekan tombol "Saya sudah transfer".`,
   ].join("\n");
 }
 
@@ -981,7 +1000,7 @@ async function handleRevisionCommands(
   if (cmd.type === "DONE") {
     // Penggantian belum selesai — klaim ditahan (tidak boleh diajukan ulang)
     if (refunds.length > 0) {
-      await sendAndLog(supabase, claim.id, employeePhone, refundHoldMessage(refunds), "REFUND_HOLD");
+      await sendAndLog(supabase, claim.id, employeePhone, refundHoldMessage(refunds, "EMPLOYEE"), "REFUND_HOLD");
       return;
     }
     // Manager sudah approved → kembali ke HR; belum → kembali ke Manager
@@ -1158,7 +1177,7 @@ export async function processWebhookReply(
       } else if (reply === "1" && refunds.length > 0) {
         // Ada penggantian belum selesai — konfirmasi ditahan
         if (employeePhone) {
-          await sendAndLog(supabase, claim.id, employeePhone, refundHoldMessage(refunds), "REFUND_HOLD");
+          await sendAndLog(supabase, claim.id, employeePhone, refundHoldMessage(refunds, "EMPLOYEE"), "REFUND_HOLD");
         }
       } else if (reply === "1") {
         const hasManager = !!claim.manager;
@@ -1295,7 +1314,7 @@ export async function processWebhookReply(
         await sendClaimInfo(supabase, claim, "MANAGER", phoneNumber, refunds);
       } else if (reply === "1" && refunds.length > 0) {
         // Penggantian belum selesai — approval ditahan
-        await sendAndLog(supabase, claim.id, phoneNumber, refundHoldMessage(refunds), "REFUND_HOLD");
+        await sendAndLog(supabase, claim.id, phoneNumber, refundHoldMessage(refunds, "APPROVER"), "REFUND_HOLD");
       } else if (reply === "1") {
         // Paraf otomatis dari ttd tersimpan — tanpa ini approve via WA/link
         // tidak menyimpan ttd dan kotak paraf di Report PDF kosong
@@ -1313,7 +1332,11 @@ export async function processWebhookReply(
             ``,
             `Terima kasih. Klaim atas nama ${claim.employee?.employee_name || "karyawan"} periode ${claim.period} sudah Anda setujui.`,
             ``,
-            `Sekarang diteruskan ke HR untuk persetujuan terakhir.`,
+            // Tanpa HR di klaim ini alur langsung final — jangan bilang
+            // "diteruskan ke HR" kalau tidak ada yang diteruskan.
+            claim.hr
+              ? `Sekarang diteruskan ke HR untuk persetujuan terakhir.`
+              : `Klaim langsung selesai — karyawan ini tidak terdaftar punya HR.`,
           ].join("\n"),
           "MANAGER_CONFIRMED"
         );
@@ -1371,7 +1394,7 @@ export async function processWebhookReply(
         await sendClaimInfo(supabase, claim, "HR", phoneNumber, refunds);
       } else if (reply === "1" && refunds.length > 0) {
         // Penggantian belum selesai — approval ditahan
-        await sendAndLog(supabase, claim.id, phoneNumber, refundHoldMessage(refunds), "REFUND_HOLD");
+        await sendAndLog(supabase, claim.id, phoneNumber, refundHoldMessage(refunds, "APPROVER"), "REFUND_HOLD");
       } else if (reply === "1") {
         // Paraf otomatis HR dari ttd tersimpan (sama seperti Manager)
         let hrSig = claim.hr_signature || null;

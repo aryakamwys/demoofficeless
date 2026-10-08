@@ -2,7 +2,7 @@ import { NextRequest, NextResponse, after } from "next/server";
 import { createServiceClient } from "@/lib/supabase-server";
 import { verifyApproveToken, approveToken } from "@/lib/wa-link";
 import { matchRole } from "@/lib/wa-match";
-import { fetchClaimFresh, processWebhookReply } from "@/lib/wa-flow";
+import { fetchClaimFresh, processWebhookReply, activeRefunds } from "@/lib/wa-flow";
 import { errorMessage } from "@/lib/utils";
 
 // Aksi tombol web (halaman /approve) — tanpa login: token di link pesan WA
@@ -186,6 +186,23 @@ export async function POST(request: NextRequest) {
         { success: false, error: "NOT_IN_REVISION", message: "Klaim ini tidak sedang dalam revisi." },
         { status: 409 }
       );
+    }
+
+    // Penggantian aktif menahan approval — tolak di sini supaya halaman
+    // tidak menampilkan "Klaim disetujui" padahal alurnya menahan klaim.
+    if (action === "APPROVE" && (v.role === "MANAGER" || v.role === "HR")) {
+      const refunds = await activeRefunds(supabase, v.claimId);
+      if (refunds.length > 0) {
+        return NextResponse.json(
+          {
+            success: false,
+            error: "REFUND_HOLD",
+            message:
+              "Klaim masih ditahan: ada penggantian ke rekening kantor yang belum selesai (menunggu transfer karyawan / validasi HR). Setelah selesai, setujui lagi dari antrean.",
+          },
+          { status: 409 }
+        );
+      }
     }
 
     const reply = action === "APPROVE"
