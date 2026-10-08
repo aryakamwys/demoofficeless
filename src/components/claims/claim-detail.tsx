@@ -57,6 +57,23 @@ function refundChip(r: TripRefund) {
       </span>
     );
   }
+  // Sudah diparaf manager — penggantian disetujui, ttd tampil di trip-nya
+  if (r.manager_status === "APPROVED") {
+    return (
+      <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-2 py-0.5 text-[11px] font-semibold text-emerald-700">
+        Diparaf manager ✓
+        {r.manager_signature && (
+          // Data URL base64 — paraf tersimpan otomatis dari ttd manager
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={r.manager_signature}
+            alt="Paraf manager"
+            className="h-5 object-contain mix-blend-multiply"
+          />
+        )}
+      </span>
+    );
+  }
   return (
     <span className="inline-block rounded-full bg-amber-50 px-2 py-0.5 text-[11px] font-semibold text-amber-700">
       Ganti ke rekening kantor
@@ -679,34 +696,15 @@ export function ClaimDetailView({ claim }: ClaimDetailViewProps) {
                     </p>
                   </div>
                   <div className="flex flex-col items-end gap-1">
-                    {r.status !== "CONFIRMED" && refundChip(r)}
-                    {/* Paraf manager — alasan penggantian ada penanggung jawabnya */}
-                    {r.manager_status === "PENDING" && (
-                      <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-semibold text-slate-600">
-                        Menunggu paraf manager
-                      </span>
-                    )}
-                    {r.manager_status === "APPROVED" && (
-                      <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-2 py-0.5 text-[11px] font-semibold text-emerald-700">
-                        Diparaf manager ✓
-                        {r.manager_signature && (
-                          // Data URL base64 — paraf tersimpan otomatis dari ttd manager
-                          // eslint-disable-next-line @next/next/no-img-element
-                          <img
-                            src={r.manager_signature}
-                            alt="Paraf manager"
-                            className="h-5 object-contain mix-blend-multiply"
-                          />
-                        )}
-                      </span>
-                    )}
-                    {r.manager_status === "REJECTED" && (
+                    {r.status === "CANCELLED" ? (
                       <span
-                        className="rounded-full bg-red-50 px-2 py-0.5 text-[11px] font-semibold text-red-700"
-                        title={r.manager_reason || ""}
+                        className="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-semibold text-slate-500"
+                        title={r.manager_status === "REJECTED" ? r.manager_reason || "" : undefined}
                       >
-                        Ditolak manager
+                        {r.manager_status === "REJECTED" ? "Ditolak manager" : "Dibatalkan"}
                       </span>
+                    ) : (
+                      r.status !== "CONFIRMED" && refundChip(r)
                     )}
                     {r.status === "CONFIRMED" && (
                       <span className="inline-block rounded-full bg-emerald-50 px-2 py-0.5 text-[11px] font-semibold text-emerald-700">
