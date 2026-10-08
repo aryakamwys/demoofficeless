@@ -27,13 +27,30 @@ export async function DELETE(
 
   // Hard delete: file fisik dari storage dulu.
   // File hilang/eksis error tidak menghalangi hapus baris — baris adalah sumber kebenaran.
-  if (upload.storage_path) {
+  const filesToRemove: string[] = [];
+  if (upload.storage_path) filesToRemove.push(upload.storage_path);
+
+  // Bukti TF penggantian ikut dibersihkan (barisnya cascade, file di storage tidak)
+  const { data: claimIds } = await svc
+    .from("claims")
+    .select("id")
+    .eq("upload_id", id);
+  if (claimIds && claimIds.length > 0) {
+    const { data: proofs } = await svc
+      .from("trip_refunds")
+      .select("proof_path")
+      .in("claim_id", claimIds.map((c: { id: string }) => c.id));
+    for (const p of proofs || []) {
+      if (p.proof_path) filesToRemove.push(p.proof_path);
+    }
+  }
+  if (filesToRemove.length > 0) {
     const { error: storageError } = await svc
       .storage
       .from("dataperkom")
-      .remove([upload.storage_path]);
+      .remove(filesToRemove);
     if (storageError) {
-      console.warn(`[UPLOAD] Gagal hapus file ${upload.storage_path}: ${storageError.message}`);
+      console.warn(`[UPLOAD] Gagal hapus ${filesToRemove.length} file storage: ${storageError.message}`);
     }
   }
 
