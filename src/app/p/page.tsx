@@ -353,10 +353,14 @@ export default function PortalPage() {
       </header>
 
       <main className="mx-auto max-w-md px-4 py-4 md:max-w-2xl lg:max-w-5xl">
+        {/* Loading sebagai modal overlay — terlihat jelas dan konten di
+            belakangnya teredam, bukan baris spinner menempel di atas kartu */}
         {busy && (
-          <div className="mb-3 flex items-center gap-2 text-[13px] font-medium text-slate-600">
-            <span className="loading loading-spinner loading-sm text-slate-400" />
-            {busy}
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/30 px-4">
+            <div className="flex items-center gap-2.5 rounded-2xl bg-white px-5 py-4 shadow-lg">
+              <span className="loading loading-spinner text-[#00B14F]" />
+              <p className="text-[13px] font-semibold text-slate-700">{busy}</p>
+            </div>
           </div>
         )}
 
@@ -509,7 +513,10 @@ function ClaimWork({
   const [ticketPick, setTicketPick] = useState<Record<number, string>>({});
   const [explainText, setExplainText] = useState<Record<string, string>>({});
   const [confirmOpen, setConfirmOpen] = useState(false);
-  const unconfirmed = data.status === "PENDING" || data.status === "SENT";
+  // CTAs hanya sebelum karyawan konfirmasi — setelah itu klaim di tangan
+  // Manager/HR (atau menunggu keputusan penggantian); tombol setuju/
+  // catatan tidak boleh tampil lagi
+  const unconfirmed = !data.approved_at && !data.in_revision;
   const activeRefunds = data.refunds.filter((r) => r.status === "REQUESTED" || r.status === "CLAIMED");
   const hasEngineerTickets = data.ticket_options.length > 0;
 
