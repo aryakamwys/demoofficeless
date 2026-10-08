@@ -29,7 +29,7 @@ export function SiteFooter() {
         <div>
           <h3 className="text-base font-semibold text-slate-700">Kontak</h3>
           <div className="mt-3 space-y-1.5 text-sm leading-relaxed text-slate-500">
-            <p>E-Mail: admin@perkom.co.id</p>
+            <p>E-Mail: info@perkom.co.id</p>
             <p>perkombusiness.com</p>
           </div>
         </div>

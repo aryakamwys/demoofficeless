@@ -32,8 +32,8 @@ import { useState } from "react";
 
 const tripsSubItems = [
   { name: "Employees", href: "/employees", icon: Users },
-  { name: "Upload", href: "/upload", icon: Upload },
-  { name: "Claims", href: "/claims", icon: FileText },
+  { name: "Upload Grab", href: "/upload", icon: Upload },
+  { name: "Claims Grab", href: "/claims", icon: FileText },
 ];
 
 interface SidebarProps {
@@ -125,7 +125,7 @@ export function Sidebar({ collapsed, onToggle, isSuperadmin }: SidebarProps) {
                       <Car className="h-4 w-4" />
                     </div>
                   </TooltipTrigger>
-                  <TooltipContent side="right">Claims Grab</TooltipContent>
+                  <TooltipContent side="right">Modul HR</TooltipContent>
                 </Tooltip>
                 {tripsSubItems.map((item) => (
                   <SidebarLink
@@ -156,7 +156,7 @@ export function Sidebar({ collapsed, onToggle, isSuperadmin }: SidebarProps) {
                     <div className="absolute left-[-8px] top-0 bottom-0 w-1 bg-blue-600 rounded-r-md" />
                   )}
                   <Car className="h-5 w-5 shrink-0" />
-                  <span className="flex-1 text-left">Claims Grab</span>
+                  <span className="flex-1 text-left">Modul HR</span>
                   <ChevronDown
                     className={cn(
                       "h-4 w-4 transition-transform duration-200",
