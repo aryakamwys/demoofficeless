@@ -6,7 +6,7 @@ import {
   buildRefundReasonApprovedMessage,
   buildRefundReasonRejectedMessage,
 } from "@/lib/whatsapp";
-import { sendAndLog, flowAlert, getCompanyBank } from "@/lib/wa-flow";
+import { sendAndLog, flowAlert, getCompanyBank, releaseClaimIfNoRefunds } from "@/lib/wa-flow";
 
 // Keputusan manager atas ALASAN KARYAWAN untuk trip "tidak sesuai" — dari
 // link di pesan WA (token HMAC, tanpa login; trust model sama dengan
@@ -238,6 +238,13 @@ export async function POST(request: NextRequest) {
       author_name: mgr.employee_name,
       author_role: "MANAGER",
     });
+
+    // Penggantian terakhir selesai → klaim kembali ke jalur approval
+    try {
+      await releaseClaimIfNoRefunds(supabase, claim.id);
+    } catch (e) {
+      await flowAlert(supabase, claim.id, e instanceof Error ? e.message : "Gagal mengembalikan klaim ke jalur approval setelah penggantian selesai.");
+    }
 
     const phone = employeePhone;
     after(async () => {

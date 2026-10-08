@@ -181,18 +181,30 @@ function dateLabel(iso: string) {
   );
 }
 
-/** Badge status — pill kecil, satu bahasa. */
-function StatusChip({ status }: { status: string }) {
+/** Badge status — pill kecil, satu bahasa. Label menyesuaikan tahap: begitu
+ *  karyawan konfirmasi, chip bilang menunggu Manager/HR (bukan "menunggu
+ *  konfirmasi Anda" yang menyesatkan). */
+function StatusChip(c: {
+  status: string;
+  approved_at?: string | null;
+  in_revision?: boolean;
+  manager_status: string;
+  hr_status: string;
+}) {
   const map: Record<string, string> = {
     PENDING: "bg-amber-50 text-amber-700",
     SENT: "bg-amber-50 text-amber-700",
     NEED_REVIEW: "bg-blue-50 text-blue-700",
     APPROVED: "bg-emerald-50 text-emerald-700",
   };
+  let label = STATUS_LABEL[c.status] || c.status;
+  let tone = map[c.status] || map.NEED_REVIEW;
+  if (c.status !== "APPROVED" && c.approved_at && !c.in_revision) {
+    label = c.manager_status === "APPROVED" ? "Menunggu persetujuan HR" : "Menunggu persetujuan Manager";
+    tone = "bg-blue-50 text-blue-700";
+  }
   return (
-    <span className={`rounded-full px-2.5 py-1 text-[11px] font-semibold ${map[status] || map.NEED_REVIEW}`}>
-      {STATUS_LABEL[status] || status}
-    </span>
+    <span className={`shrink-0 rounded-full px-2.5 py-1 text-[11px] font-semibold ${tone}`}>{label}</span>
   );
 }
 
@@ -386,7 +398,13 @@ export default function PortalPage() {
                       <div className="min-w-0 flex-1">
                         <div className="flex items-start justify-between gap-2">
                           <p className="text-[15px] font-bold text-slate-900">Periode {c.period}</p>
-                          <StatusChip status={c.status} />
+                          <StatusChip
+                            status={c.status}
+                            approved_at={c.approved_at}
+                            in_revision={c.status === "NEED_REVIEW" && !!c.approved_at}
+                            manager_status={c.manager_status}
+                            hr_status={c.hr_status}
+                          />
                         </div>
                         <p className="mt-1.5 text-[13px] text-slate-600">
                           {c.trip_count} perjalanan · <span className="font-bold text-slate-900">{rupiah(c.total_amount)}</span>
@@ -503,7 +521,13 @@ function ClaimWork({
       <div className="rounded-2xl bg-white p-4">
         <div className="flex items-center justify-between gap-2">
           <p className="text-[15px] font-bold text-slate-900">Periode {data.period}</p>
-          <StatusChip status={data.status} />
+          <StatusChip
+            status={data.status}
+            approved_at={data.approved_at}
+            in_revision={data.in_revision}
+            manager_status={data.manager_status}
+            hr_status={data.hr_status}
+          />
         </div>
         <div className="mt-3 grid grid-cols-2 gap-2.5">
           <div>
@@ -585,7 +609,7 @@ function ClaimWork({
                   {waitingManager && (
                     <div className="mt-2.5 rounded-lg bg-slate-50 px-3 py-2.5">
                       <p className="text-[12px] font-semibold text-slate-700">Alasan Anda terkirim ke manager</p>
-                      <p className="mt-0.5 text-[12px] leading-relaxed text-slate-600">“{r.employee_reason}”</p>
+                      <p className="mt-0.5 text-[12px] leading-relaxed text-slate-600">“{r.employee_reason || "alasan tidak tercatat"}”</p>
                       <p className="mt-1 text-[11px] leading-relaxed text-slate-400">
                         Kalau manager menyetujui, trip ini dianggap sah dan Anda tidak perlu membayar.
                       </p>

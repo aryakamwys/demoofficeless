@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServerClient, createServiceClient } from "@/lib/supabase-server";
-import { fetchClaimFresh, sendAndLog, flowAlert, activeRefunds, getCompanyBank } from "@/lib/wa-flow";
+import { fetchClaimFresh, sendAndLog, flowAlert, activeRefunds, getCompanyBank, releaseClaimIfNoRefunds } from "@/lib/wa-flow";
 import {
   normalizePhone,
   buildRefundFlaggedMessage,
@@ -276,6 +276,13 @@ export async function POST(
       author_role: "HR",
     });
 
+    // Semua penggantian selesai → klaim kembali ke jalur approval
+    try {
+      await releaseClaimIfNoRefunds(service, id);
+    } catch (e) {
+      await flowAlert(service, id, e instanceof Error ? e.message : "Gagal mengembalikan klaim ke jalur approval setelah penggantian selesai.");
+    }
+
     if (employeePhone) {
       const sent = await sendAndLog(
         service, id, employeePhone,
@@ -346,6 +353,13 @@ export async function POST(
       author_name: actor,
       author_role: "HR",
     });
+
+    // Semua penggantian selesai → klaim kembali ke jalur approval
+    try {
+      await releaseClaimIfNoRefunds(service, id);
+    } catch (e) {
+      await flowAlert(service, id, e instanceof Error ? e.message : "Gagal mengembalikan klaim ke jalur approval setelah penggantian dibatalkan.");
+    }
     if (employeePhone) {
       await sendAndLog(
         service, id, employeePhone,

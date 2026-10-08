@@ -85,6 +85,30 @@ async function mustUpdateClaim(
   if (error) throw new Error(`Gagal update klaim: ${error.message}`);
 }
 
+/** Penggantian selesai → lepaskan tahanan klaim. Menandai trip menahan
+ *  klaim di NEED_REVIEW; setelah SEMUA penggantian selesai (dinyatakan sah
+ *  manager / dibayar & dikonfirmasi / dibatalkan), klaim kembali ke jalur
+ *  approval (SENT). Tanpa ini karyawan melihat banner "diminta revisi"
+ *  yang menyesatkan padahal tidak ada revisi. */
+export async function releaseClaimIfNoRefunds(
+  supabase: ReturnType<typeof createServiceClient>,
+  claimId: string
+): Promise<boolean> {
+  const { data: active } = await supabase
+    .from("trip_refunds")
+    .select("id")
+    .eq("claim_id", claimId)
+    .in("status", ["REQUESTED", "CLAIMED"]);
+  if ((active || []).length > 0) return false;
+  const { error } = await supabase
+    .from("claims")
+    .update({ status: "SENT" })
+    .eq("id", claimId)
+    .eq("status", "NEED_REVIEW");
+  if (error) throw new Error(`Gagal melepaskan tahanan klaim: ${error.message}`);
+  return true;
+}
+
 /** Catat masalah alur sebagai komentar klaim — HR melihatnya di timeline
  *  dan bisa ambil tindakan (mis. kirim ulang pesan dari halaman klaim). */
 export async function flowAlert(
