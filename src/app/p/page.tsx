@@ -116,7 +116,7 @@ export default function PortalPage() {
             phase: "error",
             message:
               body.error === "TOKEN_INVALID"
-                ? "Link ini tidak berlaku lagi (lewat 90 hari / nomor berubah). Minta HR kirim link baru."
+                ? "Link ini tidak berlaku lagi (lewat 30 hari / nomor berubah). Kirim pesan apa saja ke nomor WhatsApp Perkom — link baru otomatis dikirim."
                 : "Gagal memuat data.",
           });
           return;
@@ -317,7 +317,8 @@ export default function PortalPage() {
             )}
 
             <p className="mt-6 px-1 text-center text-[11px] leading-relaxed text-slate-400">
-              Simpan link ini — berlaku 90 hari dan khusus untuk Anda. Jangan diteruskan ke orang lain.
+              Simpan link ini — berlaku 30 hari dan khusus untuk Anda. Kalau hilang, kirim pesan apa
+              saja ke nomor WhatsApp Perkom untuk dapat link baru. Jangan diteruskan ke orang lain.
             </p>
           </>
         )}

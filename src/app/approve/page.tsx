@@ -256,62 +256,119 @@ export default function ApprovePage() {
     }
   };
 
-  const queueBlock = (items: QueueItem[]) =>
-    items.length > 0 && (
+  /** Setujui semua klaim satu karyawan secara berurutan. */
+  const approveAll = async (name: string, group: QueueItem[]) => {
+    setQueueBusy(`group:${name}`);
+    setError("");
+    for (const q of group) {
+      if (queueDone[q.token]) continue;
+      try {
+        await postWith(q.token, { action: "APPROVE" });
+        setQueueDone((d) => ({ ...d, [q.token]: "Disetujui ✓" }));
+      } catch (e) {
+        setError(`${name} (${q.period}): ${e instanceof Error ? e.message : "gagal"}`);
+        break; // berhenti di kegagalan — sisanya belum diproses
+      }
+    }
+    setQueueBusy(null);
+  };
+
+  const queueBlock = (items: QueueItem[]) => {
+    if (items.length === 0) return false;
+    // Kelompokkan per karyawan — manager/HR menangani banyak klaim sekaligus
+    const groups: Array<{ name: string; claims: QueueItem[]; total: number }> = [];
+    for (const q of items) {
+      const g = groups.find((x) => x.name === q.employee_name);
+      if (g) {
+        g.claims.push(q);
+        g.total += q.total_amount;
+      } else {
+        groups.push({ name: q.employee_name, claims: [q], total: q.total_amount });
+      }
+    }
+    return (
       <div className="mt-4 rounded-xl border border-slate-200 bg-white p-4">
         <p className="text-[14px] font-bold text-slate-800">
           Klaim lain menunggu Anda ({items.length})
         </p>
         <p className="mt-0.5 text-[12px] leading-relaxed text-slate-600">
-          Proses dari sini saja — tidak perlu membalas chat satu per satu. Tiap tombol butuh ± 10 detik (mengirim WhatsApp).
+          Dikelompokkan per karyawan. Tiap persetujuan butuh ± 10 detik (mengirim WhatsApp).
         </p>
-        <ul className="mt-3 space-y-2.5">
-          {items.map((q) => {
-            const done = queueDone[q.token];
+        <div className="mt-3 space-y-4">
+          {groups.map((g) => {
+            const remaining = g.claims.filter((q) => !queueDone[q.token]);
+            const groupBusy = queueBusy === `group:${g.name}`;
             return (
-              <li
-                key={q.token}
-                className="flex items-center justify-between gap-3 border-b border-slate-100 pb-2.5 last:border-0 last:pb-0"
-              >
-                <div className="min-w-0">
-                  <p className="truncate text-[13px] font-semibold text-slate-800">
-                    {q.employee_name}
-                  </p>
-                  <p className="text-[12px] text-slate-500">
-                    {q.period} · {rupiah(q.total_amount)} · {q.trip_count} trip
-                  </p>
-                </div>
-                {done ? (
-                  <span className="shrink-0 text-[12px] font-bold text-emerald-700">{done}</span>
-                ) : (
-                  <div className="flex shrink-0 gap-1.5">
-                    <button
-                      type="button"
-                      disabled={!!queueBusy}
-                      onClick={() => queueAction(q, "APPROVE")}
-                      className="rounded-lg bg-emerald-600 px-3 py-1.5 text-[12px] font-bold text-white transition-colors hover:bg-emerald-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-600 disabled:opacity-50"
-                    >
-                      {queueBusy === q.token ? "Memproses…" : "Setujui"}
-                    </button>
-                    <button
-                      type="button"
-                      disabled={!!queueBusy}
-                      onClick={() => {
-                        const r = window.prompt(`Alasan revisi untuk ${q.employee_name}:`);
-                        if (r && r.trim().length >= 5) queueAction(q, "REVISE", r.trim());
-                      }}
-                      className="rounded-lg border border-amber-300 bg-amber-50 px-3 py-1.5 text-[12px] font-bold text-amber-700 transition-colors hover:bg-amber-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 disabled:opacity-50"
-                    >
-                      Revisi
-                    </button>
+              <div key={g.name} className="rounded-lg border border-slate-100 p-3">
+                <div className="flex items-center justify-between gap-2">
+                  <div className="min-w-0">
+                    <p className="truncate text-[13px] font-bold text-slate-800">{g.name}</p>
+                    <p className="text-[12px] text-slate-500">
+                      {g.claims.length} klaim · total {rupiah(g.total)}
+                    </p>
                   </div>
-                )}
-              </li>
+                  {remaining.length > 0 ? (
+                    <button
+                      type="button"
+                      disabled={!!queueBusy}
+                      onClick={() => approveAll(g.name, g.claims)}
+                      className="shrink-0 rounded-lg bg-emerald-600 px-3 py-1.5 text-[12px] font-bold text-white transition-colors hover:bg-emerald-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-600 disabled:opacity-50"
+                    >
+                      {groupBusy ? "Memproses…" : `Setujui semua (${remaining.length})`}
+                    </button>
+                  ) : (
+                    <span className="shrink-0 text-[12px] font-bold text-emerald-700">
+                      Semua diproses ✓
+                    </span>
+                  )}
+                </div>
+                <ul className="mt-2 space-y-2">
+                  {g.claims.map((q) => {
+                    const done = queueDone[q.token];
+                    return (
+                      <li
+                        key={q.token}
+                        className="flex items-center justify-between gap-3 border-t border-slate-100 pt-2"
+                      >
+                        <p className="min-w-0 truncate text-[12px] text-slate-600">
+                          {q.period} · {rupiah(q.total_amount)} · {q.trip_count} trip
+                        </p>
+                        {done ? (
+                          <span className="shrink-0 text-[12px] font-bold text-emerald-700">{done}</span>
+                        ) : (
+                          <div className="flex shrink-0 gap-1.5">
+                            <button
+                              type="button"
+                              disabled={!!queueBusy}
+                              onClick={() => queueAction(q, "APPROVE")}
+                              className="rounded-lg bg-emerald-600 px-3 py-1 text-[11px] font-bold text-white transition-colors hover:bg-emerald-700 disabled:opacity-50"
+                            >
+                              {queueBusy === q.token ? "…" : "Setujui"}
+                            </button>
+                            <button
+                              type="button"
+                              disabled={!!queueBusy}
+                              onClick={() => {
+                                const r = window.prompt(`Alasan revisi untuk ${q.employee_name} (${q.period}):`);
+                                if (r && r.trim().length >= 5) queueAction(q, "REVISE", r.trim());
+                              }}
+                              className="rounded-lg border border-amber-300 bg-amber-50 px-3 py-1 text-[11px] font-bold text-amber-700 transition-colors hover:bg-amber-100 disabled:opacity-50"
+                            >
+                              Revisi
+                            </button>
+                          </div>
+                        )}
+                      </li>
+                    );
+                  })}
+                </ul>
+              </div>
             );
           })}
-        </ul>
+        </div>
       </div>
     );
+  };
 
   return (
     <div className="min-h-screen bg-slate-50">

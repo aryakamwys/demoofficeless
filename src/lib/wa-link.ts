@@ -72,9 +72,11 @@ export function verifyRefundToken(
   }
 }
 
-// Portal karyawan — link panjang umur (90 hari) untuk semua klaimnya.
+// Portal karyawan — link untuk semua klaimnya, umur 30 hari. Karyawan yang
+// lupa/lupa simpan cukup membalas chat bot dengan apa pun: balasan otomatis
+// webhook selalu men-generate link BARU (perpanjangan 30 hari).
 // Semua proses klaim kini lewat web; WA hanya pengantar link + notifikasi.
-const PORTAL_TTL_MS = 90 * 24 * 60 * 60 * 1000;
+const PORTAL_TTL_MS = 30 * 24 * 60 * 60 * 1000;
 
 /** Link portal karyawan. Kosong jika APP_URL belum diset. */
 export function portalLink(employeeId: string, phone: string): string {

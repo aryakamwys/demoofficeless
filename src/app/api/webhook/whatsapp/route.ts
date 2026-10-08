@@ -113,7 +113,9 @@ export async function POST(request: NextRequest) {
             `Semua klaim Anda — yang sedang berjalan maupun yang sudah selesai — ada di link ini:`,
             portalLink(emp.id, phoneNumber),
             ``,
-            `Cek rincian, setuju, catatan untuk HR, ticket, dan unggah bukti transfer: semuanya lewat link itu. Simpan linknya ya (berlaku 90 hari).`,
+            `Cek rincian, setuju, catatan untuk HR, ticket, dan unggah bukti transfer: semuanya lewat link itu.`,
+            ``,
+            `Simpan linknya ya (berlaku 30 hari). Kalau hilang/expired, kirim pesan apa saja ke nomor ini — link baru otomatis dikirim.`,
           ]
         : [
             `*Semua Proses Klaim Pindah ke Web*`,
