@@ -437,20 +437,29 @@ export default function PortalPage() {
             {state.done.length > 0 && (
               <div className="mt-5">
                 <p className="mb-2 px-1 text-[12px] font-semibold text-slate-500">Sudah selesai</p>
-                <div className="rounded-2xl bg-white p-2">
-                  <div className="grid md:grid-cols-2">
-                    {state.done.map((c) => (
-                      <button
-                        key={c.id}
-                        type="button"
-                        onClick={() => openClaim(c.id)}
-                        className="flex w-full items-center justify-between rounded-xl px-2.5 py-2.5 text-left active:bg-slate-50"
-                      >
-                        <span className="text-[13px] text-slate-700">Periode {c.period}</span>
+                <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-3">
+                  {state.done.map((c) => (
+                    <button
+                      key={c.id}
+                      type="button"
+                      onClick={() => openClaim(c.id)}
+                      className="flex w-full items-center justify-between gap-2 rounded-2xl bg-white px-4 py-3.5 text-left transition-colors active:bg-slate-50"
+                    >
+                      <div className="flex min-w-0 items-center gap-2.5">
+                        <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-emerald-50 text-[12px] font-bold text-emerald-600">
+                          ✓
+                        </span>
+                        <div className="min-w-0">
+                          <p className="truncate text-[13px] font-semibold text-slate-800">Periode {c.period}</p>
+                          <p className="text-[11px] text-slate-400">{c.trip_count} perjalanan</p>
+                        </div>
+                      </div>
+                      <div className="flex shrink-0 items-center gap-1.5">
                         <span className="text-[13px] font-bold text-slate-900">{rupiah(c.total_amount)}</span>
-                      </button>
-                    ))}
-                  </div>
+                        <ChevronRight className="h-4 w-4 text-slate-300" />
+                      </div>
+                    </button>
+                  ))}
                 </div>
               </div>
             )}

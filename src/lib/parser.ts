@@ -67,6 +67,24 @@ export function parseGrabCSV(csvText: string): ParsedTrip[] {
   return trips;
 }
 
+/** Nama bulan (Indonesia/Inggris, penuh/singkatan) → "01".."12".
+ *  null kalau tak dikenal — pemanggil TIDAK boleh mengarang Januari:
+ *  pernah bikin statement "Mei" (May) ditolak karena dibaca Januari. */
+export function monthNameToNumber(name: string): string | null {
+  const map: Record<string, string> = {
+    jan: "01", feb: "02", mar: "03", apr: "04", mei: "05", jun: "06",
+    jul: "07", agu: "08", sep: "09", okt: "10", nov: "11", des: "12",
+    januari: "01", februari: "02", maret: "03", april: "04",
+    juni: "06", juli: "07", agustus: "08", september: "09",
+    oktober: "10", november: "11", desember: "12",
+    // Statement Grab kadang memakai nama bulan Inggris
+    january: "01", february: "02", march: "03", may: "05",
+    august: "08", october: "10", december: "12",
+    aug: "08", oct: "10", dec: "12",
+  };
+  return map[(name || "").toLowerCase().trim()] || null;
+}
+
 /**
  * Parse a Grab Business PDF statement.
  * Since the PDF may be image-based, this uses pdf-parse for text-based PDFs.
@@ -109,18 +127,18 @@ export async function parseGrabPDF(buffer: Buffer, employees: Array<{ employee_n
     if (dateStr) {
       const parts = dateStr.trim().split(/\s+/);
       if (parts.length >= 3) {
-        const idnMonthMap: Record<string, string> = {
-          jan: "01", feb: "02", mar: "03", apr: "04", mei: "05", jun: "06",
-          jul: "07", agu: "08", sep: "09", okt: "10", nov: "11", des: "12",
-          januari: "01", februari: "02", maret: "03", april: "04",
-          juni: "06", juli: "07", agustus: "08", september: "09",
-          oktober: "10", november: "11", desember: "12",
-        };
         const day = parts[0].padStart(2, "0");
-        const monthStr = parts[1].toLowerCase();
         const year = parts[2];
-        const month = idnMonthMap[monthStr] || "01";
-        isoDate = `${year}-${month}-${day}T00:00:00Z`;
+        const month = monthNameToNumber(parts[1]);
+        if (month) {
+          isoDate = `${year}-${month}-${day}T00:00:00Z`;
+        } else {
+          // Bulan tak dikenal — JANGAN mengarang Januari (pernah bikin
+          // statement Mei ditolak "isinya Januari"); coba parse bebas,
+          // gagal maka biarkan default hari ini
+          const d = new Date(dateStr);
+          if (!isNaN(d.getTime())) isoDate = d.toISOString();
+        }
       }
     }
 
