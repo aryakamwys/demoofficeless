@@ -81,6 +81,7 @@ export async function GET(request: NextRequest) {
     status: c.status,
     manager_status: c.manager_status,
     hr_status: c.hr_status,
+    approved_at: c.approved_at,
     refund_pending: refundsByClaim.get(c.id as string) || 0,
     updated_at: c.updated_at,
   }));

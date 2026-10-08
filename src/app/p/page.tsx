@@ -17,6 +17,7 @@ type ClaimRow = {
   status: string;
   manager_status: string;
   hr_status: string;
+  approved_at: string | null;
   refund_pending: number;
 };
 
@@ -34,6 +35,9 @@ type ClaimDetail = {
   id: string;
   period: string;
   status: string;
+  manager_status: string;
+  hr_status: string;
+  approved_at: string | null;
   total_amount: number;
   in_revision: boolean;
   revision_reason: string | null;
@@ -62,6 +66,115 @@ function rupiah(n: number) {
 
 function pad2(n: number) {
   return n.toString().padStart(2, "0");
+}
+
+/** Tahapan klaim: kamu → manager → HR. Dipakai kartu (ringkas) & detail. */
+type Stage = { key: string; label: string; state: "done" | "active" | "todo" | "warn" };
+
+function claimStages(c: {
+  approved_at?: string | null;
+  in_revision?: boolean;
+  manager_status: string;
+  hr_status: string;
+  status: string;
+}): { stages: Stage[]; percent: number } {
+  const done = c.status === "APPROVED";
+  const youDone = !!c.approved_at && !c.in_revision;
+  const mgrDone = c.manager_status === "APPROVED";
+  const hrDone = c.hr_status === "APPROVED" || done;
+
+  if (c.in_revision) {
+    return {
+      stages: [
+        { key: "you", label: "Perlu dibereskan", state: "warn" },
+        { key: "mgr", label: "Manager", state: "todo" },
+        { key: "hr", label: "HR", state: "todo" },
+      ],
+      percent: 8,
+    };
+  }
+  const stages: Stage[] = [
+    { key: "you", label: "Kamu", state: youDone ? "done" : "active" },
+    {
+      key: "mgr",
+      label: "Manager",
+      state: mgrDone ? "done" : youDone ? "active" : "todo",
+    },
+    {
+      key: "hr",
+      label: "HR",
+      state: hrDone ? "done" : mgrDone ? "active" : "todo",
+    },
+  ];
+  const doneCount = stages.filter((s) => s.state === "done").length;
+  return { stages, percent: Math.round((doneCount / stages.length) * 100) };
+}
+
+/** Stepper ringkas untuk kartu klaim: titik → garis → titik. */
+function ProgressCompact(p: {
+  approved_at?: string | null;
+  in_revision?: boolean;
+  manager_status: string;
+  hr_status: string;
+  status: string;
+}) {
+  const { stages, percent } = claimStages(p);
+  return (
+    <div className="mt-3">
+      <div className="flex items-center gap-1.5">
+        {stages.map((s, i) => (
+          <div key={s.key} className="flex flex-1 items-center gap-1.5">
+            <span
+              className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[10px] font-bold ${
+                s.state === "done"
+                  ? "bg-emerald-600 text-white"
+                  : s.state === "active"
+                    ? "border-2 border-emerald-500 text-emerald-600"
+                    : s.state === "warn"
+                      ? "bg-amber-500 text-white"
+                      : "border-2 border-slate-200 text-slate-300"
+              }`}
+            >
+              {s.state === "done" ? "✓" : i + 1}
+            </span>
+            {i < stages.length - 1 && (
+              <span
+                className={`h-0.5 flex-1 rounded ${
+                  stages[i + 1]!.state === "done" ? "bg-emerald-500" : "bg-slate-200"
+                }`}
+              />
+            )}
+          </div>
+        ))}
+      </div>
+      <div className="mt-1.5 flex justify-between text-[10px] font-medium">
+        {stages.map((s) => (
+          <span
+            key={s.key}
+            className={
+              s.state === "done"
+                ? "text-emerald-700"
+                : s.state === "active"
+                  ? "text-slate-800"
+                  : s.state === "warn"
+                    ? "text-amber-700"
+                    : "text-slate-400"
+            }
+          >
+            {s.label}
+          </span>
+        ))}
+      </div>
+      <div className="mt-1.5 h-1 overflow-hidden rounded-full bg-slate-100">
+        <div
+          className={`h-full rounded-full transition-all duration-500 ${
+            stages.some((s) => s.state === "warn") ? "bg-amber-500" : "bg-emerald-500"
+          }`}
+          style={{ width: `${Math.max(percent, 6)}%` }}
+        />
+      </div>
+    </div>
+  );
 }
 
 function dateLabel(iso: string) {
@@ -284,6 +397,13 @@ export default function PortalPage() {
                         {c.refund_pending} penggantian menunggu
                       </p>
                     )}
+                    <ProgressCompact
+                      approved_at={c.approved_at}
+                      in_revision={c.status === "NEED_REVIEW" && !!c.approved_at}
+                      manager_status={c.manager_status}
+                      hr_status={c.hr_status}
+                      status={c.status}
+                    />
                   </button>
                 ))}
               </div>
@@ -380,6 +500,13 @@ function ClaimWork({
             <p className="text-[17px] font-bold text-slate-900">{data.trips.length}</p>
           </div>
         </div>
+        <ProgressCompact
+          approved_at={data.approved_at}
+          in_revision={data.in_revision}
+          manager_status={data.manager_status}
+          hr_status={data.hr_status}
+          status={data.status}
+        />
       </div>
 
       {/* Banner revisi */}
