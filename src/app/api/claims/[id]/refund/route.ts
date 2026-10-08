@@ -10,7 +10,7 @@ import {
   buildRefundCancelledMessage,
   buildRefundManagerApprovalMessage,
 } from "@/lib/whatsapp";
-import { refundApproveLink } from "@/lib/wa-link";
+import { refundApproveLink, portalLink } from "@/lib/wa-link";
 
 // Aksi HR untuk penggantian trip "tidak sesuai" (karyawan transfer biaya
 // trip ke rekening kantor). Semua aksi hanya untuk HR yang login —
@@ -160,6 +160,7 @@ export async function POST(
           amount,
           reason,
           bank,
+          link: claim.employee ? portalLink(claim.employee.id, employeePhone) : "",
         }),
         "REFUND_REQUEST"
       );

@@ -28,7 +28,7 @@ import {
 } from "@/lib/whatsapp";
 import { parseWaCommand } from "@/lib/wa-commands";
 import { getTicket, getRecentTickets, ticketTitle } from "@/lib/envgate";
-import { approveLink } from "@/lib/wa-link";
+import { approveLink, portalLink } from "@/lib/wa-link";
 
 // Helper: fetch a fresh claim with all relations
 export async function fetchClaimFresh(supabase: ReturnType<typeof createServiceClient>, claimId: string) {
@@ -509,7 +509,7 @@ async function handleRevisionRequest(
         requester_name: actorName,
         requester_role: role,
         reason,
-        category: claim.employee?.category ?? null,
+        link: claim.employee ? portalLink(claim.employee.id, employeePhone) : "",
       }),
       "REVISION_REQUEST"
     );

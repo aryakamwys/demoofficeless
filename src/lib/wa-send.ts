@@ -1,5 +1,6 @@
 import { createServerClient } from "@/lib/supabase-server";
-import { sendTextMessage, buildClaimMessage } from "@/lib/whatsapp";
+import { sendTextMessage, buildClaimMessage, normalizePhone } from "@/lib/whatsapp";
+import { portalLink } from "@/lib/wa-link";
 
 /** Kirim pesan klaim ke karyawan — dipakai kirim satuan (dialog Send) dan
  *  blast massal (antrean server). Tidak throw: return {ok, error, status}
@@ -34,8 +35,7 @@ export async function sendClaimToEmployee(
     period: claim.period,
     trip_count: claim.trip_count,
     total_amount: claim.total_amount,
-    trips: claim.trips || [],
-    category: claim.employee.category ?? null,
+    link: portalLink(claim.employee.id, normalizePhone(claim.employee.phone_number) || ""),
   });
 
   const result = await sendTextMessage(claim.employee.phone_number, message);

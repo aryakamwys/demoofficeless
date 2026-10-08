@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServiceClient } from "@/lib/supabase-server";
-import { verifyRefundToken } from "@/lib/wa-link";
+import { verifyRefundToken, portalLink } from "@/lib/wa-link";
 import { normalizePhone, buildRefundRequestMessage } from "@/lib/whatsapp";
 import { sendAndLog, flowAlert, getCompanyBank } from "@/lib/wa-flow";
 
@@ -45,7 +45,7 @@ async function loadContext(token: string) {
       id,
       period,
       manager_id,
-      employee:employees!claims_employee_id_fkey(employee_name, phone_number),
+      employee:employees!claims_employee_id_fkey(id, employee_name, phone_number),
       manager:employees!claims_manager_id_fkey(employee_name, phone_number)
     `)
     .eq("id", (refund as RefundRow).claim_id)
@@ -224,6 +224,7 @@ export async function POST(request: NextRequest) {
         amount: Number(refund.amount),
         reason: refund.reason,
         bank,
+        link: emp ? portalLink(emp.id, employeePhone || "") : "",
       }),
       "REFUND_REQUEST"
     );

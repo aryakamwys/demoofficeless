@@ -191,36 +191,32 @@ function approverMenuLines(next: string): string[] {
 }
 
 /**
- * Build the claim notification message.
+ * Pesan blast klaim — RINGAN: ringkasan + link portal. Semua proses
+ * (cek rincian, setuju, catatan, ticket, bukti transfer) ada di web;
+ * WA tidak lagi memuat daftar perjalanan penuh.
  */
 export function buildClaimMessage(params: {
   employee_name: string;
   period: string;
   trip_count: number;
   total_amount: number;
-  trips: WaTripLine[];
-  category?: string | null;
+  link?: string;
 }): string {
-  const { employee_name, period, trip_count, total_amount, trips } = params;
   return [
-    `*Klaim Baru*`,
+    `*Klaim Grab Siap Dicek*`,
     ``,
-    `Halo ${employee_name},`,
+    `Halo ${params.employee_name},`,
     ``,
-    `Ini rincian klaim Grab Anda untuk periode ${period}. Mohon dicek dulu sebelum diproses ya.`,
+    `Klaim Grab Anda periode ${params.period} sudah masuk: ${params.trip_count} perjalanan, total *${formatAmount(params.total_amount)}*.`,
     ``,
-    trips.map((t, i) => tripLine(t, false, i + 1)).join("\n\n"),
-    ``,
-    `Totalnya ${trip_count} perjalanan, *${formatAmount(total_amount)}*.`,
-    ``,
-    ...(params.category === "SALES"
-      ? []
-      : [
-          `Kalau ada ticket EnvGate untuk pekerjaan di perjalanan ini, bisa dilampirkan lewat chat. Ketik TICKET lalu nomor perjalanan dan nomor ticketnya.`,
-          `Contoh: TICKET 3 PIM-34285`,
+    ...(params.link
+      ? [
+          `Cek rinciannya dan proses (setuju / catatan / ticket / bukti transfer) lewat link ini:`,
+          params.link,
           ``,
-        ]),
-    ...employeeMenuLines(params.category),
+          `Simpan linknya — semua klaim Anda, yang berjalan maupun yang selesai, ada di sana. Tidak perlu membalas chat ini ya.`,
+        ]
+      : [`Silakan hubungi HR Perkom untuk memproses klaim ini.`]),
   ].join("\n");
 }
 
@@ -417,7 +413,8 @@ export interface CompanyBank {
   account_name?: string;
 }
 
-function bankLines(bank: CompanyBank): string[] {
+function bankLines(bank: CompanyBank | null): string[] {
+  if (!bank) return [`Rekening kantor belum diisi HR — hubungi HR Perkom.`];
   return [
     `Bank ${bank.bank_name}`,
     `Nomor rekening ${bank.account_number}`,
@@ -425,7 +422,8 @@ function bankLines(bank: CompanyBank): string[] {
   ];
 }
 
-/** HR menandai trip tidak sesuai → karyawan diminta mengganti uangnya. */
+/** HR menandai trip tidak sesuai → karyawan diminta mengganti uangnya.
+ *  Prosesnya (unggah bukti + konfirmasi transfer) lewat portal web. */
 export function buildRefundRequestMessage(params: {
   employee_name: string;
   period: string;
@@ -433,7 +431,8 @@ export function buildRefundRequestMessage(params: {
   trip: WaTripLine;
   amount: number;
   reason: string;
-  bank: CompanyBank;
+  bank: CompanyBank | null;
+  link?: string;
 }): string {
   const t = params.trip;
   return [
@@ -450,11 +449,14 @@ export function buildRefundRequestMessage(params: {
     `Jadi biaya perjalanan ini perlu Anda ganti sebesar *${formatAmount(params.amount)}*, ditransfer ke rekening kantor:`,
     ...bankLines(params.bank),
     ``,
-    `Kalau sudah transfer, balas saja *SUDAH TF*. Boleh ditambah keterangan, misalnya SUDAH TF bca jam 14.30.`,
+    ...(params.link
+      ? [
+          `Setelah transfer, unggah bukti transfernya (foto/screenshot) dan konfirmasi lewat link ini:`,
+          params.link,
+        ]
+      : [`Setelah transfer, hubungi HR Perkom untuk konfirmasi.`]),
     ``,
     `Setelah pembayarannya dicek HR, perjalanan ini otomatis keluar dari klaim Anda.`,
-    ``,
-    `Ada pertanyaan? Balas saja pesan ini, nanti jadi catatan untuk HR.`,
   ].join("\n");
 }
 
@@ -647,9 +649,8 @@ function formatTripDate(dateStr: string): string {
 }
 
 /**
- * Notifikasi ke engineer: klaim diminta revisi oleh Manager/HR.
- * Data klaim tidak bisa diubah lewat chat (langsung dari statement Grab) —
- * koreksi cukup lewat catatan untuk HR.
+ * Notifikasi revisi — semua pengerjaan lewat portal web (catatan, ticket,
+ * kirim ulang); WA hanya menyampaikan alasannya + link.
  */
 export function buildRevisionRequestMessage(params: {
   employee_name: string;
@@ -657,7 +658,7 @@ export function buildRevisionRequestMessage(params: {
   requester_name: string;
   requester_role: "MANAGER" | "HR";
   reason: string;
-  category?: string | null;
+  link?: string;
 }): string {
   const roleLabel = params.requester_role === "MANAGER" ? "Manager" : "HR";
   return [
@@ -668,23 +669,12 @@ export function buildRevisionRequestMessage(params: {
     `Klaim periode ${params.period} diminta direvisi oleh ${roleLabel} (${params.requester_name}).`,
     `Alasannya: ${params.reason || "tidak disertakan"}`,
     ``,
-    `Data perjalanan di klaim ini langsung dari statement Grab, jadi tidak diubah lewat chat ya. Kalau ada yang perlu diluruskan, cukup balas dengan catatan untuk HR — sebutkan nomor perjalanannya.`,
-    ``,
-    `Contoh: perjalanan nomor 3 bukan perjalanan saya`,
-    ``,
-    `Ketik LIST untuk melihat daftar perjalanan beserta nomornya.`,
-    ``,
-    ...(params.category === "SALES"
-      ? []
-      : [
-          `Ketik TICKET lalu nomor perjalanan dan nomor ticketnya untuk melampirkan ticket EnvGate.`,
-          `Contoh: TICKET 3 PIM-34285`,
-          `Kalau perjalanannya banyak, ketik TICKET SEMUA, nanti dipandu satu per satu.`,
-          ``,
-        ]),
-    `Kalau sudah beres, ketik *SELESAI*. Klaimnya dikirim ulang ke ${roleLabel}.`,
-    ``,
-    `Ketik INFO kapan saja untuk melihat posisi klaim.`,
+    ...(params.link
+      ? [
+          `Buka link klaim Anda untuk menulis catatan untuk HR, melengkapi ticket, lalu mengirim ulang:`,
+          params.link,
+        ]
+      : [`Silakan hubungi HR Perkom untuk memproses revisinya.`]),
   ].join("\n");
 }
 
