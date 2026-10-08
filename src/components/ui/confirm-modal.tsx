@@ -53,3 +53,37 @@ export function ConfirmModal({
     </div>
   );
 }
+
+/** Modal info setelah aksi tersimpan — memastikan pengguna tahu notifikasi
+ *  WhatsApp memang berjalan (dikirim di background, tidak perlu menunggu). */
+export function InfoModal({
+  open,
+  title,
+  desc,
+  onClose,
+}: {
+  open: boolean;
+  title: string;
+  desc: string;
+  onClose: () => void;
+}) {
+  if (!open) return null;
+  return (
+    <div className="modal modal-open" role="dialog" aria-modal="true">
+      <div className="modal-box max-w-sm rounded-2xl bg-white p-5">
+        <h3 className="text-[15px] font-bold text-slate-900">{title}</h3>
+        <p className="mt-1.5 text-[13px] leading-relaxed text-slate-600">{desc}</p>
+        <div className="modal-action mt-4">
+          <button
+            type="button"
+            className="btn btn-sm h-10 min-h-0 rounded-xl border-0 bg-[#00B14F] px-4 text-[13px] font-semibold text-white hover:bg-[#009040]"
+            onClick={onClose}
+          >
+            Oke
+          </button>
+        </div>
+      </div>
+      <button type="button" className="modal-backdrop" aria-label="Tutup" onClick={onClose} />
+    </div>
+  );
+}

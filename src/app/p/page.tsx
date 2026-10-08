@@ -6,8 +6,8 @@
 // tanpa gradasi/emoji; konfirmasi lewat modal (daisyUI).
 import { useCallback, useEffect, useRef, useState } from "react";
 import Image from "next/image";
-import { Circle, Square, Ticket } from "lucide-react";
-import { ConfirmModal } from "@/components/ui/confirm-modal";
+import { ChevronRight, Circle, Square, Ticket } from "lucide-react";
+import { ConfirmModal, InfoModal } from "@/components/ui/confirm-modal";
 
 type ClaimRow = {
   id: string;
@@ -202,6 +202,8 @@ export default function PortalPage() {
   const [error, setError] = useState("");
   const [note, setNote] = useState("");
   const [showNote, setShowNote] = useState(false);
+  // Modal info setelah aksi tersimpan (WA jalan di background)
+  const [actInfo, setActInfo] = useState(false);
   const tokenRef = useRef("");
 
   useEffect(() => {
@@ -282,6 +284,7 @@ export default function PortalPage() {
         // Beri jeda singkat supaya pembaruan status (background) sudah masuk DB
         await new Promise((r) => setTimeout(r, 1500));
         if (state.phase === "detail") await openClaim(state.data.id);
+        setActInfo(true);
       } catch (e) {
         setError(e instanceof Error ? e.message : "Gagal memproses. Coba lagi.");
       } finally {
@@ -371,7 +374,7 @@ export default function PortalPage() {
             )}
 
             {state.active.length > 0 && (
-              <div className="space-y-2.5">
+              <div className="grid gap-2.5 md:grid-cols-2 xl:grid-cols-3">
                 {state.active.map((c) => (
                   <button
                     key={c.id}
@@ -379,25 +382,30 @@ export default function PortalPage() {
                     onClick={() => openClaim(c.id)}
                     className="w-full rounded-2xl bg-white p-4 text-left transition-colors active:bg-slate-50"
                   >
-                    <div className="flex items-center justify-between gap-2">
-                      <p className="text-[15px] font-bold text-slate-900">Periode {c.period}</p>
-                      <StatusChip status={c.status} />
+                    <div className="flex items-start gap-3">
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-start justify-between gap-2">
+                          <p className="text-[15px] font-bold text-slate-900">Periode {c.period}</p>
+                          <StatusChip status={c.status} />
+                        </div>
+                        <p className="mt-1.5 text-[13px] text-slate-600">
+                          {c.trip_count} perjalanan · <span className="font-bold text-slate-900">{rupiah(c.total_amount)}</span>
+                        </p>
+                        {c.refund_pending > 0 && (
+                          <p className="mt-1.5 text-[12px] font-medium text-amber-700">
+                            {c.refund_pending} penggantian menunggu
+                          </p>
+                        )}
+                        <ProgressCompact
+                          approved_at={c.approved_at}
+                          in_revision={c.status === "NEED_REVIEW" && !!c.approved_at}
+                          manager_status={c.manager_status}
+                          hr_status={c.hr_status}
+                          status={c.status}
+                        />
+                      </div>
+                      <ChevronRight className="mt-1 h-5 w-5 shrink-0 text-slate-300" />
                     </div>
-                    <p className="mt-1.5 text-[13px] text-slate-600">
-                      {c.trip_count} perjalanan · <span className="font-bold text-slate-900">{rupiah(c.total_amount)}</span>
-                    </p>
-                    {c.refund_pending > 0 && (
-                      <p className="mt-1.5 text-[12px] font-medium text-amber-700">
-                        {c.refund_pending} penggantian menunggu
-                      </p>
-                    )}
-                    <ProgressCompact
-                      approved_at={c.approved_at}
-                      in_revision={c.status === "NEED_REVIEW" && !!c.approved_at}
-                      manager_status={c.manager_status}
-                      hr_status={c.hr_status}
-                      status={c.status}
-                    />
                   </button>
                 ))}
               </div>
@@ -407,17 +415,19 @@ export default function PortalPage() {
               <div className="mt-5">
                 <p className="mb-2 px-1 text-[12px] font-semibold text-slate-500">Sudah selesai</p>
                 <div className="rounded-2xl bg-white p-2">
-                  {state.done.map((c) => (
-                    <button
-                      key={c.id}
-                      type="button"
-                      onClick={() => openClaim(c.id)}
-                      className="flex w-full items-center justify-between rounded-xl px-2.5 py-2.5 text-left active:bg-slate-50"
-                    >
-                      <span className="text-[13px] text-slate-700">Periode {c.period}</span>
-                      <span className="text-[13px] font-bold text-slate-900">{rupiah(c.total_amount)}</span>
-                    </button>
-                  ))}
+                  <div className="grid md:grid-cols-2">
+                    {state.done.map((c) => (
+                      <button
+                        key={c.id}
+                        type="button"
+                        onClick={() => openClaim(c.id)}
+                        className="flex w-full items-center justify-between rounded-xl px-2.5 py-2.5 text-left active:bg-slate-50"
+                      >
+                        <span className="text-[13px] text-slate-700">Periode {c.period}</span>
+                        <span className="text-[13px] font-bold text-slate-900">{rupiah(c.total_amount)}</span>
+                      </button>
+                    ))}
+                  </div>
                 </div>
               </div>
             )}
@@ -445,6 +455,13 @@ export default function PortalPage() {
         {error && (
           <p className="mt-3 rounded-xl bg-red-50 px-3 py-2.5 text-[13px] font-medium text-red-700">{error}</p>
         )}
+
+        <InfoModal
+          open={actInfo}
+          title="Tersimpan"
+          desc="Aksi Anda sudah tersimpan. Kabar selanjutnya dikirim otomatis ke WhatsApp Anda — berjalan di latar belakang, tidak perlu menunggu di halaman ini."
+          onClose={() => setActInfo(false)}
+        />
       </main>
     </div>
   );
@@ -478,7 +495,10 @@ function ClaimWork({
   const hasEngineerTickets = data.ticket_options.length > 0;
 
   return (
-    <>
+    // Desktop: 2 kolom (ringkasan/penggantian | perjalanan/aksi);
+    // mobile tetap urutan vertikal yang sama.
+    <div className="lg:grid lg:grid-cols-2 lg:items-start lg:gap-2.5">
+    <div className="space-y-2.5">
       {/* Ringkasan */}
       <div className="rounded-2xl bg-white p-4">
         <div className="flex items-center justify-between gap-2">
@@ -678,7 +698,9 @@ function ClaimWork({
       )}
 
       {/* Daftar perjalanan */}
-      <div className="mt-2.5 rounded-2xl bg-white p-4">
+      </div>
+    <div className="mt-2.5 space-y-2.5 lg:mt-0">
+      <div className="rounded-2xl bg-white p-4">
         <p className="text-[14px] font-bold text-slate-900">Daftar perjalanan ({data.trips.length})</p>
         <ul className="mt-2 divide-y divide-slate-100">
           {data.trips.map((t) => (
@@ -826,6 +848,7 @@ function ClaimWork({
       <p className="mt-4 text-center text-[11px] leading-relaxed text-slate-400">
         Kabar perkembangan dikirim ke WhatsApp Anda — tidak perlu membalas chat.
       </p>
+      </div>
 
       <ConfirmModal
         open={confirmOpen}
@@ -839,6 +862,6 @@ function ClaimWork({
           act({ action: "confirm", claim_id: data.id });
         }}
       />
-    </>
+    </div>
   );
 }

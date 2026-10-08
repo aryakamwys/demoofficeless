@@ -160,7 +160,7 @@ export default function UploadPage() {
   };
 
   return (
-    <div className="max-w-3xl space-y-6">
+    <div className="grid items-start gap-6 lg:grid-cols-2">
       {/* ==== Unggah statement ==== */}
       <Card>
         <CardContent className="space-y-4 pt-6">

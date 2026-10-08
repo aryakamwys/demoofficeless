@@ -6,7 +6,7 @@
 import { useEffect, useRef, useState } from "react";
 import Image from "next/image";
 import { Circle, Square, Ticket } from "lucide-react";
-import { ConfirmModal } from "@/components/ui/confirm-modal";
+import { ConfirmModal, InfoModal } from "@/components/ui/confirm-modal";
 
 type Trip = {
   no: number;
@@ -124,6 +124,8 @@ export default function ApprovePage() {
   // Antrean klaim lain menunggu approver ini (Manager/HR)
   const [queueBusy, setQueueBusy] = useState<string | null>(null);
   const [queueDone, setQueueDone] = useState<Record<string, string>>({});
+  // Modal info setelah keputusan tersimpan (WA jalan di background)
+  const [doneInfo, setDoneInfo] = useState(false);
 
   const load = (t: string) =>
     fetch(`/api/wa/action?t=${encodeURIComponent(t)}`)
@@ -189,6 +191,7 @@ export default function ApprovePage() {
               ? "Permintaan revisi terkirim ke karyawan."
               : "Catatan tersimpan untuk HR.",
       });
+      setDoneInfo(true);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Gagal memproses. Coba lagi.");
       setState({ ...state, busy: null });
@@ -289,7 +292,7 @@ export default function ApprovePage() {
         <p className="mt-0.5 text-[12px] leading-relaxed text-slate-500">
           Dikelompokkan per karyawan — bisa disetujui sekaligus.
         </p>
-        <div className="mt-3 space-y-3">
+        <div className="mt-3 grid gap-3 md:grid-cols-2">
           {groups.map((g) => {
             const remaining = g.claims.filter((q) => !queueDone[q.token]);
             const groupBusy = queueBusy === `group:${g.name}`;
@@ -405,12 +408,20 @@ export default function ApprovePage() {
         )}
 
         {state.phase === "done" && (
-          <div className="rounded-2xl bg-white p-8 text-center">
-            <p className="text-[16px] font-bold text-emerald-700">{state.title}</p>
-            <p className="mt-1.5 text-[13px] leading-relaxed text-slate-600">
-              Konfirmasinya juga dikirim ke WhatsApp Anda. Tidak perlu membalas pesan klaim lagi.
-            </p>
-          </div>
+          <>
+            <div className="rounded-2xl bg-white p-8 text-center">
+              <p className="text-[16px] font-bold text-emerald-700">{state.title}</p>
+              <p className="mt-1.5 text-[13px] leading-relaxed text-slate-600">
+                Konfirmasinya juga dikirim ke WhatsApp Anda. Tidak perlu membalas pesan klaim lagi.
+              </p>
+            </div>
+            <InfoModal
+              open={doneInfo}
+              title={state.title}
+              desc="Keputusan sudah tersimpan. Notifikasi WhatsApp sedang dikirim otomatis ke pihak yang bersangkutan — berjalan di latar belakang, tidak perlu menunggu di halaman ini."
+              onClose={() => setDoneInfo(false)}
+            />
+          </>
         )}
 
         {state.phase === "ready" && (

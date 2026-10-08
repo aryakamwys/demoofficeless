@@ -7,7 +7,7 @@
 import { useEffect, useRef, useState } from "react";
 import Image from "next/image";
 import { Circle, Square } from "lucide-react";
-import { ConfirmModal } from "@/components/ui/confirm-modal";
+import { ConfirmModal, InfoModal } from "@/components/ui/confirm-modal";
 
 type RefundInfo = {
   employee_name: string;
@@ -41,6 +41,8 @@ export default function RefundApprovePage() {
   const [showReject, setShowReject] = useState(false);
   const [reason, setReason] = useState("");
   const [error, setError] = useState("");
+  // Modal info setelah keputusan tersimpan (WA jalan di background)
+  const [doneInfo, setDoneInfo] = useState(false);
   const tokenRef = useRef("");
 
   useEffect(() => {
@@ -108,6 +110,7 @@ export default function RefundApprovePage() {
             ? `Alasan diterima — perjalanan dianggap sah${state.data.has_signature ? " dengan paraf Anda" : ""}. Karyawan tidak perlu membayar.`
             : "Alasan ditolak — karyawan diminta mengganti ke rekening kantor.",
       });
+      setDoneInfo(true);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Gagal memproses. Coba lagi.");
       if (state.phase === "ready") setState({ ...state, busy: false });
@@ -150,12 +153,20 @@ export default function RefundApprovePage() {
         )}
 
         {state.phase === "done" && (
-          <div className="rounded-2xl bg-white p-8 text-center">
-            <p className="text-[16px] font-bold leading-relaxed text-emerald-700">{state.title}</p>
-            <p className="mt-1.5 text-[13px] leading-relaxed text-slate-600">
-              Keputusan sudah dikirim ke karyawan dan HR. Tidak perlu membalas pesan apa pun.
-            </p>
-          </div>
+          <>
+            <div className="rounded-2xl bg-white p-8 text-center">
+              <p className="text-[16px] font-bold leading-relaxed text-emerald-700">{state.title}</p>
+              <p className="mt-1.5 text-[13px] leading-relaxed text-slate-600">
+                Keputusan sudah dikirim ke karyawan dan HR. Tidak perlu membalas pesan apa pun.
+              </p>
+            </div>
+            <InfoModal
+              open={doneInfo}
+              title="Keputusan tersimpan"
+              desc="Karyawan dan HR sedang dikabari lewat WhatsApp otomatis — berjalan di latar belakang, tidak perlu menunggu di halaman ini."
+              onClose={() => setDoneInfo(false)}
+            />
+          </>
         )}
 
         {state.phase === "ready" && (
