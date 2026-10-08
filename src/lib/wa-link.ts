@@ -72,6 +72,44 @@ export function verifyRefundToken(
   }
 }
 
+// Portal karyawan — link panjang umur (90 hari) untuk semua klaimnya.
+// Semua proses klaim kini lewat web; WA hanya pengantar link + notifikasi.
+const PORTAL_TTL_MS = 90 * 24 * 60 * 60 * 1000;
+
+/** Link portal karyawan. Kosong jika APP_URL belum diset. */
+export function portalLink(employeeId: string, phone: string): string {
+  const base = appUrl();
+  if (!base) return "";
+  const exp = Date.now() + PORTAL_TTL_MS;
+  const payload = `PORTAL.${employeeId}.${phone}.${exp}`;
+  const sig = createHmac("sha256", secret()).update(payload).digest("base64url");
+  const token = Buffer.from(`${payload}.${sig}`).toString("base64url");
+  return `${base}/p?t=${token}`;
+}
+
+/** Verifikasi token portal — null jika rusak/kedaluwarsa/dimanipulasi. */
+export function verifyPortalToken(
+  token: string
+): { employeeId: string; phone: string } | null {
+  try {
+    const raw = Buffer.from(token, "base64url").toString("utf8");
+    const parts = raw.split(".");
+    if (parts.length !== 5) return null;
+    const [prefix, employeeId, phone, exp, sig] = parts;
+    if (prefix !== "PORTAL" || !employeeId || !phone || !exp || !sig) return null;
+    if (!Number(exp) || Number(exp) < Date.now()) return null;
+    const expected = createHmac("sha256", secret())
+      .update(`PORTAL.${employeeId}.${phone}.${exp}`)
+      .digest("base64url");
+    const a = Buffer.from(sig);
+    const b = Buffer.from(expected);
+    if (a.length !== b.length || !timingSafeEqual(a, b)) return null;
+    return { employeeId, phone };
+  } catch {
+    return null;
+  }
+}
+
 /** Verifikasi tautan — null jika rusak/kedaluwarsa/dimanipulasi. */
 export function verifyApproveToken(
   token: string
