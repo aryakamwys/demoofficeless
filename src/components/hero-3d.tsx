@@ -1,9 +1,9 @@
 "use client";
 
-// Hero 3D ala SaaS modern (three.js murni — tanpa wrapper react): kartu
-// klaim melayang + pin rute + cincin aksen, palet biru DESIGN.md. Ringan:
-// geometri dasar, DPR dibatasi, animasi berhenti bila tab tak terlihat /
-// reduced-motion, semua resource di-dispose saat unmount.
+// Adegan 3D ambient untuk hero: dua pin lokasi + rute putus-putus (kisah
+// perjalanan Grab) dan kartu-kartu berwarna dengan garis tepi — bukan kotak
+// putih polos yang terbaca "placeholder". three.js murni, di-load dinamis,
+// DPR dibatasi, reduced-motion render sekali, semua di-dispose.
 import { useEffect, useRef } from "react";
 // Type-only — hilang saat kompilasi; three tetap di-load dinamis di effect
 import type * as ThreeType from "three";
@@ -27,66 +27,106 @@ export function Hero3D({ className = "" }: { className?: string }) {
 
       const scene = new THREE.Scene();
       const camera = new THREE.PerspectiveCamera(38, width / height, 0.1, 100);
-      camera.position.set(0, 0.4, 9);
+      camera.position.set(0, 0.6, 9);
 
       const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
       renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5));
       renderer.setSize(width, height);
       mount.appendChild(renderer.domElement);
 
-      // ==== Objek: kartu klaim melayang (putih) + aksen biru ====
-      const cards = new THREE.Group();
-      const cardGeo = new THREE.BoxGeometry(1.6, 2.1, 0.06);
-      const whiteMat = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.35, metalness: 0.05 });
-      const blueMat = new THREE.MeshStandardMaterial({ color: 0x2563eb, roughness: 0.4, metalness: 0.1 });
-      const skyMat = new THREE.MeshStandardMaterial({ color: 0x93c5fd, roughness: 0.5 });
+      const disposables: Array<{ dispose: () => void }> = [];
 
-      const layout: Array<{ x: number; y: number; z: number; mat: ThreeType.Material; scale: number }> = [
-        { x: -2.1, y: 0.5, z: -0.4, mat: whiteMat, scale: 0.85 },
-        { x: 0, y: 0, z: 0.4, mat: whiteMat, scale: 1 },
-        { x: 2.2, y: 0.7, z: -0.5, mat: whiteMat, scale: 0.8 },
-        { x: -1.1, y: -1.5, z: 0.9, mat: skyMat, scale: 0.6 },
-        { x: 1.3, y: -1.6, z: 1.1, mat: blueMat, scale: 0.55 },
+      const mat = (color: number, roughness = 0.4) => {
+        const m = new THREE.MeshStandardMaterial({ color, roughness, metalness: 0.08 });
+        disposables.push(m);
+        return m;
+      };
+      const geo = <T extends ThreeType.BufferGeometry>(g: T) => {
+        disposables.push(g);
+        return g;
+      };
+
+      // ==== Kartu klaim berwarna + garis tepi supaya terbaca "kartu",
+      // bukan kotak abu polos ====
+      const group = new THREE.Group();
+      const cardGeo = geo(new THREE.BoxGeometry(1.5, 2, 0.06));
+      const edgeGeo = geo(new THREE.EdgesGeometry(cardGeo));
+      const edgeLine = (color: number) => {
+        const m = new THREE.LineBasicMaterial({ color, transparent: true, opacity: 0.5 });
+        disposables.push(m);
+        return m;
+      };
+      const palette = [0x2563eb, 0x818cf8, 0x7dd3fc, 0xffffff, 0x2563eb];
+      const layout = [
+        { x: -2.4, y: 0.6, z: -0.6, s: 0.85 },
+        { x: 0.1, y: -0.1, z: 0.3, s: 1 },
+        { x: 2.5, y: 0.8, z: -0.7, s: 0.8 },
+        { x: -1.3, y: -1.7, z: 0.8, s: 0.55 },
+        { x: 1.5, y: -1.8, z: 1, s: 0.5 },
       ];
-      const floats: Array<{ mesh: ThreeType.Mesh; phase: number; baseY: number }> = [];
+      const floats: Array<{ obj: ThreeType.Object3D; phase: number; baseY: number }> = [];
       layout.forEach((c, i) => {
-        const mesh = new THREE.Mesh(cardGeo, c.mat);
-        mesh.position.set(c.x, c.y, c.z);
-        mesh.scale.setScalar(c.scale);
-        mesh.rotation.z = (i % 2 === 0 ? 1 : -1) * (0.08 + i * 0.03);
-        cards.add(mesh);
-        floats.push({ mesh, phase: i * 1.3, baseY: c.y });
+        const card = new THREE.Group();
+        card.add(new THREE.Mesh(cardGeo, mat(palette[i] ?? 0xffffff)));
+        card.add(new THREE.LineSegments(edgeGeo, edgeLine(0x93c5fd)));
+        card.position.set(c.x, c.y, c.z);
+        card.scale.setScalar(c.s);
+        card.rotation.z = (i % 2 === 0 ? 1 : -1) * (0.09 + i * 0.02);
+        group.add(card);
+        floats.push({ obj: card, phase: i * 1.25, baseY: c.y });
       });
-      scene.add(cards);
 
-      // Pin lokasi (drop-off) — motif perjalanan Grab
-      const pin = new THREE.Group();
-      const pinHead = new THREE.Mesh(
-        new THREE.SphereGeometry(0.34, 24, 24),
-        blueMat
-      );
-      pinHead.position.y = 0.55;
-      const pinTip = new THREE.Mesh(new THREE.ConeGeometry(0.34, 0.7, 24), blueMat);
-      pinTip.rotation.x = Math.PI;
-      pinTip.position.y = 0.05;
-      pin.add(pinHead, pinTip);
-      pin.position.set(1.15, 2.2, 1.4);
-      pin.scale.setScalar(0.9);
-      scene.add(pin);
+      // ==== Rute perjalanan: pin jemput (abu) → putus-putus → pin tujuan (biru) ====
+      const makePin = (color: number, scale: number) => {
+        const g = new THREE.Group();
+        const head = new THREE.Mesh(geo(new THREE.SphereGeometry(0.32, 24, 24)), mat(color));
+        head.position.y = 0.55;
+        const tip = new THREE.Mesh(geo(new THREE.ConeGeometry(0.32, 0.66, 24)), mat(color));
+        tip.rotation.x = Math.PI;
+        tip.position.y = 0.06;
+        g.add(head, tip);
+        g.scale.setScalar(scale);
+        return g;
+      };
+      const startPin = makePin(0x94a3b8, 0.75);
+      startPin.position.set(-3.1, 2.1, 1.2);
+      const endPin = makePin(0x2563eb, 1);
+      endPin.position.set(3.0, 2.4, 1.4);
+      group.add(startPin, endPin);
+
+      const routePoints = [
+        new THREE.Vector3(-3.1, 2.1, 1.2),
+        new THREE.Vector3(-1.2, 3.1, 1.2),
+        new THREE.Vector3(1.1, 3.3, 1.3),
+        new THREE.Vector3(3.0, 2.4, 1.4),
+      ];
+      const routeGeo = geo(new THREE.BufferGeometry().setFromPoints(routePoints));
+      const routeMat = new THREE.LineDashedMaterial({
+        color: 0x2563eb,
+        dashSize: 0.28,
+        gapSize: 0.18,
+        transparent: true,
+        opacity: 0.85,
+      });
+      disposables.push(routeMat);
+      const route = new THREE.Line(routeGeo, routeMat);
+      route.computeLineDistances();
+      group.add(route);
 
       // Cincin aksen lembut di belakang
       const ring = new THREE.Mesh(
-        new THREE.TorusGeometry(3.2, 0.05, 16, 80),
-        new THREE.MeshStandardMaterial({ color: 0xbfdbfe, roughness: 0.6 })
+        geo(new THREE.TorusGeometry(3.4, 0.045, 16, 80)),
+        mat(0xbfdbfe, 0.6)
       );
-      ring.position.z = -2.5;
-      scene.add(ring);
+      ring.position.z = -2.6;
+      group.add(ring);
 
-      scene.add(new THREE.AmbientLight(0xffffff, 0.9));
-      const key = new THREE.DirectionalLight(0xffffff, 1.4);
+      scene.add(group);
+      scene.add(new THREE.AmbientLight(0xffffff, 0.95));
+      const key = new THREE.DirectionalLight(0xffffff, 1.5);
       key.position.set(4, 6, 6);
       scene.add(key);
-      const rim = new THREE.DirectionalLight(0x93c5fd, 0.6);
+      const rim = new THREE.DirectionalLight(0x93c5fd, 0.7);
       rim.position.set(-6, -2, 4);
       scene.add(rim);
 
@@ -115,14 +155,14 @@ export function Hero3D({ className = "" }: { className?: string }) {
       const tick = () => {
         const t = (performance.now() - startedAt) / 1000;
         for (const f of floats) {
-          f.mesh.position.y = f.baseY + Math.sin(t * 0.8 + f.phase) * 0.18;
-          f.mesh.rotation.y = Math.sin(t * 0.4 + f.phase) * 0.22;
+          f.obj.position.y = f.baseY + Math.sin(t * 0.8 + f.phase) * 0.16;
+          f.obj.rotation.y = Math.sin(t * 0.4 + f.phase) * 0.2;
         }
-        pin.position.y = 2.2 + Math.sin(t * 1.1) * 0.14;
-        pin.rotation.y = t * 0.6;
+        endPin.position.y = 2.4 + Math.sin(t * 1.1) * 0.12;
+        endPin.rotation.y = t * 0.5;
         ring.rotation.z = t * 0.08;
-        cards.rotation.y += (targetX - cards.rotation.y) * 0.05;
-        cards.rotation.x += (targetY - cards.rotation.x) * 0.05;
+        group.rotation.y += (targetX - group.rotation.y) * 0.05;
+        group.rotation.x += (targetY - group.rotation.x) * 0.05;
         renderer.render(scene, camera);
         if (!reduced) frame = requestAnimationFrame(tick);
       };
@@ -133,14 +173,7 @@ export function Hero3D({ className = "" }: { className?: string }) {
         window.removeEventListener("pointermove", onPointer);
         resizeObserver.disconnect();
         renderer.dispose();
-        cardGeo.dispose();
-        whiteMat.dispose();
-        blueMat.dispose();
-        skyMat.dispose();
-        pinHead.geometry.dispose();
-        pinTip.geometry.dispose();
-        ring.geometry.dispose();
-        (ring.material as ThreeType.Material).dispose();
+        for (const d of disposables) d.dispose();
         if (renderer.domElement.parentElement === mount) {
           mount.removeChild(renderer.domElement);
         }

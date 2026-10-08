@@ -4,10 +4,9 @@ import { useState, type FormEvent } from "react";
 import Image from "next/image";
 import { Eye, EyeOff, Loader2, Lock, Mail } from "lucide-react";
 import { createBrowserClient } from "@/lib/supabase";
-import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Hero3D } from "@/components/hero-3d";
+import { ProductVisual } from "@/components/product-visual";
 
 // Login dua panel ala Cloudflare: kiri branding (3D + logo, desktop saja),
 // kanan kartu form. Fungsionalitas login tidak berubah.
@@ -45,8 +44,8 @@ export default function LoginPage() {
 
   return (
     <div className="flex min-h-screen bg-slate-50">
-      {/* Panel kiri: branding + 3D (hanya desktop) */}
-      <div className="relative hidden w-1/2 flex-col justify-between overflow-hidden bg-gradient-to-b from-blue-50/80 via-white to-white p-10 lg:flex">
+      {/* Panel kiri: branding + visual produk (hanya desktop) */}
+      <div className="relative hidden w-1/2 flex-col justify-between overflow-hidden bg-gradient-to-b from-blue-50/70 via-white to-white p-10 lg:flex">
         <div className="flex items-center gap-2.5">
           <Image
             src="/ogoperkom.png"
@@ -58,7 +57,7 @@ export default function LoginPage() {
           />
           <span className="text-sm font-semibold text-slate-800">Officeless Perkom</span>
         </div>
-        <Hero3D className="h-72 w-full" />
+        <ProductVisual compact />
         <div>
           <h2 className="text-xl font-bold text-slate-900">
             Klaim Grab Business, tanpa ribet.
@@ -138,13 +137,13 @@ export default function LoginPage() {
                 <p className="rounded-xl bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>
               )}
 
-              <Button
+              <button
                 type="submit"
-                className="h-11 w-full rounded-full text-base font-semibold"
+                className="btn btn-primary h-11 min-h-0 w-full rounded-full text-base font-semibold"
                 disabled={loading}
               >
                 {loading && <Loader2 className="h-4 w-4 animate-spin" />} Masuk
-              </Button>
+              </button>
             </form>
           </div>
 
