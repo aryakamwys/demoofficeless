@@ -5,15 +5,7 @@ import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
-import {
-  Select,
-  SelectContent,
-  SelectGroup,
-  SelectItem,
-  SelectLabel,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+import { MonthPicker } from "@/components/ui/month-picker";
 import {
   Upload as UploadIcon,
   Loader2,
@@ -48,9 +40,6 @@ export default function UploadPage() {
   const [uploads, setUploads] = useState<Upload[]>([]);
   const [historyLoading, setHistoryLoading] = useState(true);
   const inputRef = useRef<HTMLInputElement>(null);
-
-  // Tahun terbaru dulu, bulan terbaru dulu dalam tiap tahun
-  const years = [dayjs().year() + 1, dayjs().year(), dayjs().year() - 1];
 
   const fetchUploads = useCallback(async () => {
     setHistoryLoading(true);
@@ -176,28 +165,7 @@ export default function UploadPage() {
 
           <div className="space-y-2">
             <label className="text-sm font-medium text-slate-700">Periode</label>
-            <Select value={period} onValueChange={setPeriod}>
-              <SelectTrigger className="w-full sm:w-56">
-                <SelectValue placeholder="Pilih periode" />
-              </SelectTrigger>
-              <SelectContent>
-                {years.map((year) => (
-                  <SelectGroup key={year}>
-                    <SelectLabel className="text-xs font-semibold uppercase tracking-wide text-slate-400">
-                      {year}
-                    </SelectLabel>
-                    {months
-                      .map((month, idx) => ({ month, idx }))
-                      .reverse()
-                      .map(({ month, idx }) => (
-                        <SelectItem key={`${year}-${idx}`} value={`${month} ${year}`}>
-                          {month} {year}
-                        </SelectItem>
-                      ))}
-                  </SelectGroup>
-                ))}
-              </SelectContent>
-            </Select>
+            <MonthPicker value={period} onChange={setPeriod} disabled={loading} />
           </div>
 
           {/* Dropzone / file terpilih */}
