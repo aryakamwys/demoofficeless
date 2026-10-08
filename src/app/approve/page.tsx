@@ -210,8 +210,9 @@ export default function ApprovePage() {
       if (after) {
         after();
       } else {
-        // Beri jeda singkat supaya pembaruan status (background) sudah masuk DB
-        await new Promise((r) => setTimeout(r, 1500));
+        // Jeda singkat hanya untuk update DB di background (kiriman WA yang
+        // lambat tidak memengangkan tampilan) — DB lokal selesai <100ms
+        await new Promise((r) => setTimeout(r, 400));
         await load(tokenRef.current);
       }
     } catch (e) {

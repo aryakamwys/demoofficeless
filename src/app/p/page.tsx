@@ -293,8 +293,9 @@ export default function PortalPage() {
       setBusy("Menyimpan…");
       try {
         await post(payload);
-        // Beri jeda singkat supaya pembaruan status (background) sudah masuk DB
-        await new Promise((r) => setTimeout(r, 1500));
+        // Jeda singkat hanya untuk update DB di background (kiriman WA yang
+        // lambat tidak memengaruhi tampilan) — DB lokal selesai <100ms
+        await new Promise((r) => setTimeout(r, 400));
         if (state.phase === "detail") await openClaim(state.data.id);
         setActInfo(true);
       } catch (e) {

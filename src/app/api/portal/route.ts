@@ -48,18 +48,22 @@ export async function GET(request: NextRequest) {
   }
   const { supabase, employeeId } = ctx;
 
-  const { data: emp } = await supabase
-    .from("employees")
-    .select("employee_name, department, category")
-    .eq("id", employeeId)
-    .single();
-
-  const { data: claims } = await supabase
-    .from("claims")
-    .select("id, period, trip_count, total_amount, status, manager_status, hr_status, approved_at, updated_at")
-    .eq("employee_id", employeeId)
-    .order("updated_at", { ascending: false })
-    .limit(100);
+  // Paralel: profil + daftar klaim (refund menyusul batch — butuh id klaim)
+  const [empRes, claimsRes] = await Promise.all([
+    supabase
+      .from("employees")
+      .select("employee_name, department, category")
+      .eq("id", employeeId)
+      .single(),
+    supabase
+      .from("claims")
+      .select("id, period, trip_count, total_amount, status, manager_status, hr_status, approved_at, updated_at")
+      .eq("employee_id", employeeId)
+      .order("updated_at", { ascending: false })
+      .limit(100),
+  ]);
+  const { data: emp } = empRes;
+  const { data: claims } = claimsRes;
 
   // Penggantian aktif per klaim (satu query batch)
   const ids = (claims || []).map((c: { id: string }) => c.id);
