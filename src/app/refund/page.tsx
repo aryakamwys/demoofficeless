@@ -1,9 +1,13 @@
 "use client";
 
-// Halaman paraf manager untuk penggantian trip "tidak sesuai" — tanpa login:
-// token di link pesan WA adalah kuncinya (skema sama dengan /approve).
+// Halaman keputusan manager atas ALASAN KARYAWAN untuk trip "tidak sesuai"
+// — tanpa login: token di link pesan WA adalah kuncinya (skema sama dengan
+// /approve). Setujui = perjalanan sah (paraf tercatat, karyawan tidak bayar);
+// Tolak = karyawan wajib mengganti ke rekening kantor.
 import { useEffect, useRef, useState } from "react";
 import Image from "next/image";
+import { Circle, Square } from "lucide-react";
+import { ConfirmModal } from "@/components/ui/confirm-modal";
 
 type RefundInfo = {
   employee_name: string;
@@ -15,6 +19,7 @@ type RefundInfo = {
   dropoff: string | null;
   amount: number;
   reason: string;
+  employee_reason: string;
   has_signature: boolean;
   decision: string | null;
 };
@@ -32,7 +37,7 @@ function rupiah(n: number) {
 
 export default function RefundApprovePage() {
   const [state, setState] = useState<Phase>({ phase: "loading" });
-  const [confirming, setConfirming] = useState(false);
+  const [confirmOpen, setConfirmOpen] = useState(false);
   const [showReject, setShowReject] = useState(false);
   const [reason, setReason] = useState("");
   const [error, setError] = useState("");
@@ -66,9 +71,9 @@ export default function RefundApprovePage() {
             phase: "stale",
             message:
               body.refund.decision === "APPROVED"
-                ? "Anda sudah menyetujui penggantian ini sebelumnya."
+                ? "Anda sudah menyetujui alasan ini sebelumnya — perjalanan dianggap sah."
                 : body.refund.decision === "REJECTED"
-                  ? "Penggantian ini sudah ditolak sebelumnya."
+                  ? "Anda sudah menolak alasan ini sebelumnya — karyawan diminta mengganti."
                   : "Penggantian ini sudah tidak menunggu keputusan lagi.",
           });
           return;
@@ -100,143 +105,130 @@ export default function RefundApprovePage() {
         phase: "done",
         title:
           action === "approve"
-            ? `Terima kasih — penggantian disetujui${state.data.has_signature ? " dengan paraf Anda" : ""}. Karyawan sudah diminta transfer.`
-            : "Penggantian ditolak — perjalanan tetap di klaim.",
+            ? `Alasan diterima — perjalanan dianggap sah${state.data.has_signature ? " dengan paraf Anda" : ""}. Karyawan tidak perlu membayar.`
+            : "Alasan ditolak — karyawan diminta mengganti ke rekening kantor.",
       });
     } catch (e) {
       setError(e instanceof Error ? e.message : "Gagal memproses. Coba lagi.");
       if (state.phase === "ready") setState({ ...state, busy: false });
-      setConfirming(false);
+      setShowReject(false);
     }
   };
 
   return (
-    <div className="min-h-screen bg-slate-50">
-      <header className="border-b border-slate-200 bg-white">
-        <div className="mx-auto flex h-14 max-w-md items-center gap-2.5 px-4">
-          <Image src="/ogoperkom.png" alt="Perkom" width={32} height={32} className="h-8 w-8 object-contain" />
-          <div>
-            <p className="text-[15px] font-bold leading-tight text-slate-800">Klaim Grab Perkom</p>
-            <p className="text-[11px] leading-tight text-slate-500">Paraf penggantian perjalanan</p>
+    <div className="min-h-screen bg-[#F5F6F7] pb-16">
+      <header className="sticky top-0 z-10 border-b border-slate-200 bg-white">
+        <div className="mx-auto flex h-14 max-w-md items-center gap-2.5 px-4 md:max-w-2xl lg:max-w-5xl">
+          <Image src="/ogoperkom.png" alt="Perkom" width={28} height={28} className="h-7 w-7 object-contain" />
+          <div className="min-w-0 flex-1">
+            <p className="truncate text-[15px] font-bold leading-tight text-slate-900">Klaim Grab Perkom</p>
+            <p className="text-[11px] leading-tight text-slate-500">Keputusan perjalanan ditandai tidak sesuai</p>
           </div>
         </div>
       </header>
 
-      <main className="mx-auto max-w-md px-4 py-5">
+      <main className="mx-auto max-w-md px-4 py-4 md:max-w-2xl lg:max-w-5xl">
         {state.phase === "loading" && (
-          <p className="py-16 text-center text-[14px] text-slate-500">Memuat…</p>
+          <div className="space-y-3">
+            <div className="h-28 animate-pulse rounded-2xl bg-slate-200/60" />
+            <div className="h-40 animate-pulse rounded-2xl bg-slate-200/60" />
+          </div>
         )}
 
         {state.phase === "error" && (
-          <div className="rounded-xl border border-slate-200 bg-white p-6 text-center">
-            <p className="text-3xl">🔗</p>
-            <p className="mt-3 text-[15px] font-semibold text-slate-800">Link ini tidak bisa dipakai</p>
-            <p className="mt-1 text-[13px] leading-relaxed text-slate-600">{state.message}</p>
+          <div className="rounded-2xl bg-white p-6 text-center">
+            <p className="text-[15px] font-semibold text-slate-900">Link tidak bisa dibuka</p>
+            <p className="mt-1.5 text-[13px] leading-relaxed text-slate-600">{state.message}</p>
           </div>
         )}
 
         {state.phase === "stale" && (
-          <div className="rounded-xl border border-slate-200 bg-white p-6 text-center">
-            <p className="text-3xl">✅</p>
-            <p className="mt-3 text-[15px] font-semibold text-slate-800">Sudah diproses</p>
-            <p className="mt-1 text-[13px] leading-relaxed text-slate-600">{state.message}</p>
+          <div className="rounded-2xl bg-white p-6 text-center">
+            <p className="text-[15px] font-semibold text-slate-900">Sudah diproses</p>
+            <p className="mt-1.5 text-[13px] leading-relaxed text-slate-600">{state.message}</p>
           </div>
         )}
 
         {state.phase === "done" && (
-          <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-6 text-center">
-            <p className="text-4xl">✅</p>
-            <p className="mt-3 text-[15px] font-bold leading-relaxed text-emerald-800">{state.title}</p>
+          <div className="rounded-2xl bg-white p-8 text-center">
+            <p className="text-[16px] font-bold leading-relaxed text-emerald-700">{state.title}</p>
+            <p className="mt-1.5 text-[13px] leading-relaxed text-slate-600">
+              Keputusan sudah dikirim ke karyawan dan HR. Tidak perlu membalas pesan apa pun.
+            </p>
           </div>
         )}
 
         {state.phase === "ready" && (
           <>
-            <div className="rounded-xl border border-slate-200 bg-white p-5">
-              <h1 className="text-lg font-bold leading-snug text-slate-900">
-                {state.data.employee_name} — perjalanan nomor{" "}
-                <span className="text-blue-700">{state.data.trip_no}</span>
-              </h1>
-              <p className="mt-0.5 text-[13px] text-slate-600">Klaim periode {state.data.period}.</p>
-
-              <div className="mt-4 rounded-lg border border-amber-200 bg-amber-50 p-3">
-                <p className="text-[11px] font-bold uppercase tracking-wide text-amber-700">Ditandai tidak sesuai oleh HR</p>
-                <p className="mt-1.5 text-[13px] font-medium leading-relaxed text-amber-900">“{state.data.reason}”</p>
-              </div>
-
-              <div className="mt-3 space-y-1.5 text-[13px]">
-                <p className="text-slate-600">
-                  <span className="text-slate-400">Rute:</span> {state.data.pickup} → {state.data.dropoff}
-                </p>
-                <p className="text-slate-600">
-                  <span className="text-slate-400">Ditagihkan ke karyawan:</span>{" "}
-                  <b className="text-slate-900">{rupiah(state.data.amount)}</b> — transfer ke rekening kantor
-                </p>
-              </div>
-
-              <p className="mt-3 text-[12px] leading-relaxed text-slate-500">
-                Menyetujui = paraf Anda{state.data.has_signature ? " (tanda tangan tersimpan Anda)" : ""} tercatat
-                pada penggantian ini, lalu karyawan diminta transfer. Menolak = perjalanan tetap di klaim, karyawan
-                tidak perlu membayar.
-              </p>
-            </div>
-
             {state.busy && (
-              <div className="mt-3 flex items-center gap-2 rounded-lg border border-blue-200 bg-blue-50 px-3 py-2.5 text-[13px] font-medium text-blue-800">
-                <span className="h-3 w-3 animate-spin rounded-full border-2 border-blue-600 border-t-transparent" />
-                Memproses (± 7 detik, tunggu ya)
+              <div className="mb-3 flex items-center gap-2 text-[13px] font-medium text-slate-600">
+                <span className="loading loading-spinner loading-sm text-slate-400" />
+                Menyimpan keputusan…
               </div>
             )}
 
-            {!showReject ? (
-              <div className="mt-4 space-y-2">
-                <button
-                  type="button"
-                  disabled={state.busy}
-                  onClick={() => {
-                    if (!confirming) {
-                      setConfirming(true);
-                      return;
-                    }
-                    submit("approve");
-                  }}
-                  className={`w-full rounded-xl px-4 py-4 text-[16px] font-bold text-white shadow-sm transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 disabled:opacity-60 ${
-                    confirming ? "bg-emerald-700 hover:bg-emerald-800" : "bg-emerald-600 hover:bg-emerald-700"
-                  }`}
-                >
-                  {confirming ? "Yakin? tekan sekali lagi ✓" : "SETUJUI PENGGANTIAN ✓"}
-                </button>
-                <button
-                  type="button"
-                  disabled={state.busy}
-                  onClick={() => {
-                    setShowReject(true);
-                    setConfirming(false);
-                  }}
-                  className="w-full rounded-xl border border-amber-300 bg-amber-50 px-4 py-3.5 text-[14px] font-bold text-amber-700 transition-colors hover:bg-amber-100 disabled:opacity-60"
-                >
-                  Tolak — perjalanan tetap di klaim
-                </button>
+            {/* Kartu: trip yang dipertanyakan + alasan kedua pihak */}
+            <div className="rounded-2xl bg-white p-4">
+              <div className="flex items-baseline justify-between gap-2">
+                <p className="text-[15px] font-bold text-slate-900">
+                  {state.data.employee_name} — perjalanan nomor {state.data.trip_no}
+                </p>
+                <span className="shrink-0 rounded-full bg-slate-100 px-2.5 py-1 text-[11px] font-semibold text-slate-600">
+                  Periode {state.data.period}
+                </span>
               </div>
-            ) : (
-              <div className="mt-4 rounded-xl border border-amber-200 bg-white p-4">
-                <p className="text-[14px] font-bold text-slate-800">Alasan penolakan</p>
+
+              <div className="mt-3 rounded-xl bg-amber-50 p-3">
+                <p className="text-[11px] font-bold uppercase tracking-wide text-amber-700">Ditandai tidak sesuai oleh HR</p>
+                <p className="mt-1 text-[13px] font-medium leading-relaxed text-amber-900">“{state.data.reason}”</p>
+              </div>
+
+              <div className="mt-2.5 rounded-xl bg-emerald-50 p-3">
+                <p className="text-[11px] font-bold uppercase tracking-wide text-emerald-700">Alasan karyawan</p>
+                <p className="mt-1 text-[13px] font-medium leading-relaxed text-emerald-900">“{state.data.employee_reason || "-"}”</p>
+              </div>
+
+              <div className="mt-3 flex gap-2.5">
+                <div className="flex flex-col items-center pt-1">
+                  <Circle className="h-2.5 w-2.5 fill-current text-slate-400" />
+                  <span className="my-0.5 w-px flex-1 bg-slate-200" />
+                  <Square className="h-2.5 w-2.5 text-slate-400" />
+                </div>
+                <div className="min-w-0 flex-1 space-y-2">
+                  <p className="text-[12px] leading-relaxed text-slate-600">{state.data.pickup}</p>
+                  <p className="text-[12px] leading-relaxed text-slate-600">{state.data.dropoff}</p>
+                </div>
+              </div>
+
+              <p className="mt-3 text-[13px] leading-relaxed text-slate-600">
+                Nilai penggantian bila alasan ditolak:{" "}
+                <b className="text-slate-900">{rupiah(state.data.amount)}</b> ke rekening kantor.
+              </p>
+            </div>
+
+            {/* Form alasan penolakan */}
+            {showReject ? (
+              <div className="mt-2.5 rounded-2xl bg-white p-4">
+                <p className="text-[14px] font-bold text-slate-900">Alasan penolakan</p>
+                <p className="mt-0.5 text-[12px] leading-relaxed text-slate-600">
+                  Dikirim ke karyawan — mereka wajib mengganti {rupiah(state.data.amount)} ke rekening kantor.
+                </p>
                 <textarea
                   value={reason}
                   onChange={(e) => setReason(e.target.value)}
                   rows={3}
                   maxLength={300}
-                  placeholder="Contoh: perjalanan ini sesuai tugas, bukan salah karyawan"
-                  className="mt-2 w-full rounded-lg border border-slate-300 px-3 py-2.5 text-[14px] focus:border-blue-600 focus:outline-none"
+                  placeholder="Contoh: bukan perjalanan tugas, tidak ada izin dari saya"
+                  className="mt-2.5 w-full rounded-xl border border-slate-300 px-3 py-2.5 text-[14px] focus:border-slate-500 focus:outline-none"
                 />
-                <div className="mt-2 flex gap-2">
+                <div className="mt-2.5 flex gap-2">
                   <button
                     type="button"
                     disabled={state.busy || reason.trim().length < 5}
                     onClick={() => submit("reject", reason.trim())}
-                    className="flex-1 rounded-lg bg-amber-600 px-4 py-3 text-[14px] font-bold text-white transition-colors hover:bg-amber-700 disabled:opacity-50"
+                    className="flex-1 rounded-xl bg-red-600 px-4 py-3 text-[14px] font-semibold text-white hover:bg-red-700 disabled:opacity-40"
                   >
-                    Kirim penolakan
+                    Tolak — karyawan mengganti
                   </button>
                   <button
                     type="button"
@@ -245,21 +237,53 @@ export default function RefundApprovePage() {
                       setShowReject(false);
                       setReason("");
                     }}
-                    className="rounded-lg border border-slate-300 px-4 py-3 text-[13px] font-semibold text-slate-600 hover:bg-slate-50"
+                    className="rounded-xl border border-slate-300 bg-white px-4 py-3 text-[13px] font-semibold text-slate-700"
                   >
                     Batal
                   </button>
                 </div>
               </div>
+            ) : (
+              <div className="mt-4 space-y-2">
+                <button
+                  type="button"
+                  disabled={state.busy}
+                  onClick={() => setConfirmOpen(true)}
+                  className="w-full rounded-xl bg-[#00B14F] px-4 py-4 text-[15px] font-semibold text-white transition-colors hover:bg-[#009040] disabled:opacity-50"
+                >
+                  Alasan diterima — perjalanan sah
+                </button>
+                <button
+                  type="button"
+                  disabled={state.busy}
+                  onClick={() => setShowReject(true)}
+                  className="w-full rounded-xl border border-slate-300 bg-white px-4 py-3.5 text-[14px] font-semibold text-slate-700 active:bg-slate-50 disabled:opacity-50"
+                >
+                  Tolak — karyawan mengganti
+                </button>
+              </div>
             )}
 
             {error && (
-              <p className="mt-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-[13px] text-red-700">{error}</p>
+              <p className="mt-3 rounded-xl bg-red-50 px-3 py-2.5 text-[13px] font-medium text-red-700">{error}</p>
             )}
 
-            <p className="mt-4 px-1 text-center text-[11px] leading-relaxed text-slate-400">
+            <p className="mt-4 text-center text-[11px] leading-relaxed text-slate-400">
               Link ini khusus untuk Anda — jangan diteruskan ke orang lain.
             </p>
+
+            <ConfirmModal
+              open={confirmOpen}
+              title={`Terima alasan ${state.data.employee_name}?`}
+              desc={`Perjalanan nomor ${state.data.trip_no} dianggap sah${state.data.has_signature ? " dan paraf Anda tercatat di trip-nya" : ""}. Karyawan tidak perlu membayar ${rupiah(state.data.amount)}.`}
+              confirmLabel="Ya, Perjalanan Sah"
+              busy={state.busy}
+              onCancel={() => setConfirmOpen(false)}
+              onConfirm={() => {
+                setConfirmOpen(false);
+                submit("approve");
+              }}
+            />
           </>
         )}
       </main>

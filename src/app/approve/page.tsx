@@ -363,7 +363,7 @@ export default function ApprovePage() {
   return (
     <div className="min-h-screen bg-[#F5F6F7] pb-16">
       <header className="sticky top-0 z-10 border-b border-slate-200 bg-white">
-        <div className="mx-auto flex h-14 max-w-md items-center gap-2.5 px-4">
+        <div className="mx-auto flex h-14 max-w-md items-center gap-2.5 px-4 md:max-w-2xl lg:max-w-5xl">
           <Image src="/ogoperkom.png" alt="Perkom" width={28} height={28} className="h-7 w-7 object-contain" />
           <div className="min-w-0 flex-1">
             <p className="truncate text-[15px] font-bold leading-tight text-slate-900">Klaim Grab Perkom</p>
@@ -372,7 +372,7 @@ export default function ApprovePage() {
         </div>
       </header>
 
-      <main className="mx-auto max-w-md px-4 py-4">
+      <main className="mx-auto max-w-md px-4 py-4 md:max-w-2xl lg:max-w-5xl">
         {state.phase === "loading" && (
           <div className="space-y-3">
             <div className="h-28 animate-pulse rounded-2xl bg-slate-200/60" />

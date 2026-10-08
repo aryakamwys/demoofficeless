@@ -27,6 +27,9 @@ type Refund = {
   amount: number;
   reason: string;
   status: string;
+  manager_status: string | null;
+  employee_reason: string | null;
+  manager_reason: string | null;
   proof_url: string | null;
   proof_validated: boolean;
 };
@@ -77,23 +80,20 @@ function claimStages(c: {
   manager_status: string;
   hr_status: string;
   status: string;
-}): { stages: Stage[]; percent: number } {
+}): Stage[] {
   const done = c.status === "APPROVED";
   const youDone = !!c.approved_at && !c.in_revision;
   const mgrDone = c.manager_status === "APPROVED";
   const hrDone = c.hr_status === "APPROVED" || done;
 
   if (c.in_revision) {
-    return {
-      stages: [
-        { key: "you", label: "Perlu dibereskan", state: "warn" },
-        { key: "mgr", label: "Manager", state: "todo" },
-        { key: "hr", label: "HR", state: "todo" },
-      ],
-      percent: 8,
-    };
+    return [
+      { key: "you", label: "Perlu dibereskan", state: "warn" },
+      { key: "mgr", label: "Manager", state: "todo" },
+      { key: "hr", label: "HR", state: "todo" },
+    ];
   }
-  const stages: Stage[] = [
+  return [
     { key: "you", label: "Kamu", state: youDone ? "done" : "active" },
     {
       key: "mgr",
@@ -106,11 +106,11 @@ function claimStages(c: {
       state: hrDone ? "done" : mgrDone ? "active" : "todo",
     },
   ];
-  const doneCount = stages.filter((s) => s.state === "done").length;
-  return { stages, percent: Math.round((doneCount / stages.length) * 100) };
 }
 
-/** Stepper ringkas untuk kartu klaim: titik → garis → titik. */
+/** Stepper Kamu → Manager → HR. Grid 3 kolom: titik dan labelnya satu
+ *  kolom yang sama (sejajar persis); garis penghubung di belakang titik
+ *  adalah indikator progresnya — segmen hijau kalau tahap sesudahnya selesai. */
 function ProgressCompact(p: {
   approved_at?: string | null;
   in_revision?: boolean;
@@ -118,40 +118,42 @@ function ProgressCompact(p: {
   hr_status: string;
   status: string;
 }) {
-  const { stages, percent } = claimStages(p);
+  const stages = claimStages(p);
   return (
-    <div className="mt-3">
-      <div className="flex items-center gap-1.5">
+    <div className="mt-3" aria-label="Progres klaim">
+      <div className="relative grid grid-cols-3">
+        {[0, 1].map((i) => (
+          <span
+            key={i}
+            aria-hidden
+            className={`absolute top-[9px] h-0.5 ${
+              i === 0 ? "left-[16.66%] right-1/2" : "left-1/2 right-[16.66%]"
+            } ${stages[i + 1]!.state === "done" ? "bg-emerald-500" : "bg-slate-200"}`}
+          />
+        ))}
         {stages.map((s, i) => (
-          <div key={s.key} className="flex flex-1 items-center gap-1.5">
+          <div key={s.key} className="relative flex justify-center">
             <span
-              className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[10px] font-bold ${
+              className={`flex h-5 w-5 items-center justify-center rounded-full text-[10px] font-bold ${
                 s.state === "done"
                   ? "bg-emerald-600 text-white"
                   : s.state === "active"
-                    ? "border-2 border-emerald-500 text-emerald-600"
+                    ? "border-2 border-emerald-500 bg-white text-emerald-600"
                     : s.state === "warn"
                       ? "bg-amber-500 text-white"
-                      : "border-2 border-slate-200 text-slate-300"
+                      : "border-2 border-slate-200 bg-white text-slate-300"
               }`}
             >
               {s.state === "done" ? "✓" : i + 1}
             </span>
-            {i < stages.length - 1 && (
-              <span
-                className={`h-0.5 flex-1 rounded ${
-                  stages[i + 1]!.state === "done" ? "bg-emerald-500" : "bg-slate-200"
-                }`}
-              />
-            )}
           </div>
         ))}
       </div>
-      <div className="mt-1.5 flex justify-between text-[10px] font-medium">
+      <div className="mt-1.5 grid grid-cols-3">
         {stages.map((s) => (
           <span
             key={s.key}
-            className={
+            className={`text-center text-[10px] font-medium leading-tight ${
               s.state === "done"
                 ? "text-emerald-700"
                 : s.state === "active"
@@ -159,19 +161,11 @@ function ProgressCompact(p: {
                   : s.state === "warn"
                     ? "text-amber-700"
                     : "text-slate-400"
-            }
+            }`}
           >
             {s.label}
           </span>
         ))}
-      </div>
-      <div className="mt-1.5 h-1 overflow-hidden rounded-full bg-slate-100">
-        <div
-          className={`h-full rounded-full transition-all duration-500 ${
-            stages.some((s) => s.state === "warn") ? "bg-amber-500" : "bg-emerald-500"
-          }`}
-          style={{ width: `${Math.max(percent, 6)}%` }}
-        />
       </div>
     </div>
   );
@@ -319,7 +313,7 @@ export default function PortalPage() {
   return (
     <div className="min-h-screen bg-[#F5F6F7] pb-16">
       <header className="sticky top-0 z-10 border-b border-slate-200 bg-white">
-        <div className="mx-auto flex h-14 max-w-md items-center gap-2.5 px-4">
+        <div className="mx-auto flex h-14 max-w-md items-center gap-2.5 px-4 md:max-w-2xl lg:max-w-5xl">
           {state.phase === "detail" ? (
             <button
               type="button"
@@ -342,7 +336,7 @@ export default function PortalPage() {
         </div>
       </header>
 
-      <main className="mx-auto max-w-md px-4 py-4">
+      <main className="mx-auto max-w-md px-4 py-4 md:max-w-2xl lg:max-w-5xl">
         {busy && (
           <div className="mb-3 flex items-center gap-2 text-[13px] font-medium text-slate-600">
             <span className="loading loading-spinner loading-sm text-slate-400" />
@@ -477,6 +471,7 @@ function ClaimWork({
   uploadProof: (claimId: string, file: File) => Promise<void>;
 }) {
   const [ticketPick, setTicketPick] = useState<Record<number, string>>({});
+  const [explainText, setExplainText] = useState<Record<string, string>>({});
   const [confirmOpen, setConfirmOpen] = useState(false);
   const unconfirmed = data.status === "PENDING" || data.status === "SENT";
   const activeRefunds = data.refunds.filter((r) => r.status === "REQUESTED" || r.status === "CLAIMED");
@@ -534,70 +529,151 @@ function ClaimWork({
             <p className="mt-2 text-[12px] text-slate-500">Rekening kantor belum diatur HR.</p>
           )}
           <div className="mt-3 space-y-2.5">
-            {activeRefunds.map((r) => (
-              <div key={r.id} className="rounded-xl border border-slate-200 p-3">
-                <div className="flex items-start justify-between gap-2">
-                  <div>
-                    <p className="text-[13px] font-bold text-slate-900">
-                      Trip {r.trip_no} — {rupiah(r.amount)}
-                    </p>
-                    <p className="mt-0.5 text-[12px] text-slate-500">{r.reason}</p>
+            {activeRefunds.map((r) => {
+              const waitingManager = r.status === "REQUESTED" && r.manager_status === "PENDING";
+              const rejected = r.status === "REQUESTED" && r.manager_status === "REJECTED";
+              const needsResponse = r.status === "REQUESTED" && !r.manager_status;
+              return (
+                <div key={r.id} className="rounded-xl border border-slate-200 p-3">
+                  <div className="flex items-start justify-between gap-2">
+                    <div>
+                      <p className="text-[13px] font-bold text-slate-900">
+                        Trip {r.trip_no} — {rupiah(r.amount)}
+                      </p>
+                      <p className="mt-0.5 text-[12px] text-slate-500">{r.reason}</p>
+                    </div>
+                    <span
+                      className={`shrink-0 rounded-full px-2 py-0.5 text-[11px] font-semibold ${
+                        r.status === "CLAIMED"
+                          ? "bg-blue-50 text-blue-700"
+                          : waitingManager
+                            ? "bg-slate-100 text-slate-600"
+                            : "bg-amber-50 text-amber-700"
+                      }`}
+                    >
+                      {r.status === "CLAIMED"
+                        ? "Dicek HR"
+                        : waitingManager
+                          ? "Menunggu manager"
+                          : rejected
+                            ? "Wajib ganti"
+                            : "Perlu tanggapan"}
+                    </span>
                   </div>
-                  <span
-                    className={`shrink-0 rounded-full px-2 py-0.5 text-[11px] font-semibold ${
-                      r.status === "CLAIMED" ? "bg-blue-50 text-blue-700" : "bg-amber-50 text-amber-700"
-                    }`}
-                  >
-                    {r.status === "CLAIMED" ? "Dicek HR" : "Belum transfer"}
-                  </span>
-                </div>
-                {r.proof_url ? (
-                  <div className="mt-2.5 flex items-center gap-2.5">
-                    <a href={r.proof_url} target="_blank" rel="noopener noreferrer">
-                      {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img
-                        src={r.proof_url}
-                        alt={`Bukti transfer trip ${r.trip_no}`}
-                        className="h-16 rounded-lg object-cover"
+
+                  {/* Alasan sudah dikirim — menunggu keputusan manager */}
+                  {waitingManager && (
+                    <div className="mt-2.5 rounded-lg bg-slate-50 px-3 py-2.5">
+                      <p className="text-[12px] font-semibold text-slate-700">Alasan Anda terkirim ke manager</p>
+                      <p className="mt-0.5 text-[12px] leading-relaxed text-slate-600">“{r.employee_reason}”</p>
+                      <p className="mt-1 text-[11px] leading-relaxed text-slate-400">
+                        Kalau manager menyetujui, trip ini dianggap sah dan Anda tidak perlu membayar.
+                      </p>
+                    </div>
+                  )}
+
+                  {/* Alasan ditolak manager → wajib transfer */}
+                  {rejected && (
+                    <div className="mt-2.5 rounded-lg bg-red-50 px-3 py-2.5">
+                      <p className="text-[12px] font-semibold text-red-700">Manager belum menyetujui alasan Anda</p>
+                      {r.manager_reason && (
+                        <p className="mt-0.5 text-[12px] leading-relaxed text-red-600">{r.manager_reason}</p>
+                      )}
+                      <p className="mt-1 text-[11px] leading-relaxed text-red-500">
+                        Silakan transfer {rupiah(r.amount)} ke rekening kantor di atas, lalu unggah buktinya.
+                      </p>
+                    </div>
+                  )}
+
+                  {/* Belum menanggapi: kirim alasan ke manager atau langsung transfer */}
+                  {needsResponse && (
+                    <div className="mt-2.5">
+                      <textarea
+                        value={explainText[r.id] || ""}
+                        onChange={(e) => setExplainText((p) => ({ ...p, [r.id]: e.target.value }))}
+                        rows={2}
+                        maxLength={300}
+                        placeholder="Contoh: trip ini atas izin manager untuk mengambil dokumen klien"
+                        className="w-full rounded-lg border border-slate-300 px-3 py-2 text-[13px] text-slate-800 focus:border-slate-500 focus:outline-none"
                       />
-                    </a>
-                    <p className="text-[12px] text-slate-500">
-                      {r.proof_validated ? "Bukti tervalidasi" : "Bukti menunggu cek HR"}
-                    </p>
-                  </div>
-                ) : null}
-              </div>
-            ))}
+                      <button
+                        type="button"
+                        disabled={!!busy || (explainText[r.id] || "").trim().length < 5}
+                        onClick={() =>
+                          act({
+                            action: "refund_explain",
+                            claim_id: data.id,
+                            refund_id: r.id,
+                            text: (explainText[r.id] || "").trim(),
+                          })
+                        }
+                        className="mt-1.5 w-full rounded-lg bg-slate-900 px-4 py-2.5 text-[13px] font-semibold text-white disabled:opacity-40"
+                      >
+                        Ini atas izin manager — kirim alasannya
+                      </button>
+                      <p className="mt-1.5 text-[11px] leading-relaxed text-slate-400">
+                        Atau, kalau memang bukan perjalanan tugas: langsung transfer {rupiah(r.amount)} ke rekening
+                        kantor di atas, unggah buktinya, lalu tekan sudah transfer.
+                      </p>
+                    </div>
+                  )}
+
+                  {r.proof_url ? (
+                    <div className="mt-2.5 flex items-center gap-2.5">
+                      <a href={r.proof_url} target="_blank" rel="noopener noreferrer">
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img
+                          src={r.proof_url}
+                          alt={`Bukti transfer trip ${r.trip_no}`}
+                          className="h-16 rounded-lg object-cover"
+                        />
+                      </a>
+                      <p className="text-[12px] text-slate-500">
+                        {r.proof_validated ? "Bukti tervalidasi" : "Bukti menunggu cek HR"}
+                      </p>
+                    </div>
+                  ) : null}
+                </div>
+              );
+            })}
           </div>
-          {!activeRefunds.every((r) => r.proof_url) && (
-            <label className="mt-3 block">
-              <span className="flex w-full cursor-pointer items-center justify-center rounded-xl border border-slate-300 bg-white px-4 py-3 text-[13px] font-semibold text-slate-700 active:bg-slate-50">
-                Unggah bukti transfer
-              </span>
-              <input
-                type="file"
-                accept="image/*"
-                capture="environment"
-                className="hidden"
-                disabled={!!busy}
-                onChange={(e) => {
-                  const f = e.target.files?.[0];
-                  e.target.value = "";
-                  if (f) uploadProof(data.id, f);
-                }}
-              />
-            </label>
-          )}
-          {activeRefunds.some((r) => r.status === "REQUESTED") && (
-            <button
-              type="button"
-              disabled={!!busy}
-              onClick={() => act({ action: "refund_claimed", claim_id: data.id })}
-              className="mt-2 w-full rounded-xl bg-[#00B14F] px-4 py-3.5 text-[14px] font-semibold text-white transition-colors hover:bg-[#009040] disabled:opacity-50"
-            >
-              Saya sudah transfer semua
-            </button>
-          )}
+          {(() => {
+            // Penggantian yang boleh dibayar sekarang (bukan yang menunggu manager)
+            const payable = activeRefunds.filter(
+              (r) => r.status === "REQUESTED" && r.manager_status !== "PENDING"
+            );
+            if (payable.length === 0) return null;
+            return (
+              <>
+                {!payable.every((r) => r.proof_url) && (
+                  <label className="mt-3 block">
+                    <span className="flex w-full cursor-pointer items-center justify-center rounded-xl border border-slate-300 bg-white px-4 py-3 text-[13px] font-semibold text-slate-700 active:bg-slate-50">
+                      Unggah bukti transfer
+                    </span>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      className="hidden"
+                      disabled={!!busy}
+                      onChange={(e) => {
+                        const f = e.target.files?.[0];
+                        e.target.value = "";
+                        if (f) uploadProof(data.id, f);
+                      }}
+                    />
+                  </label>
+                )}
+                <button
+                  type="button"
+                  disabled={!!busy}
+                  onClick={() => act({ action: "refund_claimed", claim_id: data.id })}
+                  className="mt-2 w-full rounded-xl bg-[#00B14F] px-4 py-3.5 text-[14px] font-semibold text-white transition-colors hover:bg-[#009040] disabled:opacity-50"
+                >
+                  Saya sudah transfer semua
+                </button>
+              </>
+            );
+          })()}
         </div>
       )}
 

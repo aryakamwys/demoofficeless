@@ -41,6 +41,7 @@ const REFUND_REASONS = [
   "Bukan perjalanan tugas",
 ];
 
+/** Chip status penggantian (tanpa ttd) — untuk kartu daftar penggantian. */
 function refundChip(r: TripRefund) {
   if (r.status === "CLAIMED") {
     return (
@@ -49,36 +50,59 @@ function refundChip(r: TripRefund) {
       </span>
     );
   }
-  // Menunggu keputusan manager — karyawan belum diminta transfer
+  // Karyawan membela perjalanan — menunggu keputusan manager
   if (r.manager_status === "PENDING") {
     return (
       <span className="inline-block rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-semibold text-slate-600">
-        Menunggu paraf manager
+        Menunggu keputusan manager
       </span>
     );
   }
-  // Sudah diparaf manager — penggantian disetujui, ttd tampil di trip-nya
+  if (r.manager_status === "REJECTED") {
+    return (
+      <span
+        className="inline-block rounded-full bg-red-50 px-2 py-0.5 text-[11px] font-semibold text-red-700"
+        title={r.manager_reason || undefined}
+      >
+        Alasan ditolak — wajib ganti
+      </span>
+    );
+  }
+  // Paraf manager tanpa ttd tersimpan — tetap sah, ttd-nya kosong
   if (r.manager_status === "APPROVED") {
     return (
-      <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-2 py-0.5 text-[11px] font-semibold text-emerald-700">
-        Diparaf manager ✓
-        {r.manager_signature && (
-          // Data URL base64 — paraf tersimpan otomatis dari ttd manager
-          // eslint-disable-next-line @next/next/no-img-element
-          <img
-            src={r.manager_signature}
-            alt="Paraf manager"
-            className="h-5 object-contain mix-blend-multiply"
-          />
-        )}
+      <span className="inline-block rounded-full bg-emerald-50 px-2 py-0.5 text-[11px] font-semibold text-emerald-700">
+        Disetujui manager — sah
       </span>
     );
   }
   return (
     <span className="inline-block rounded-full bg-amber-50 px-2 py-0.5 text-[11px] font-semibold text-amber-700">
-      Ganti ke rekening kantor
+      Menunggu tanggapan karyawan
     </span>
   );
+}
+
+/** Isi kolom "Paraf Manager" di tabel Bookings — ttd besar saat perjalanan
+ *  disetujui manager lewat alasan karyawan (perjalanan sah, tidak diganti). */
+function parafCell(r: TripRefund) {
+  if (r.manager_status === "APPROVED" && r.manager_signature) {
+    return (
+      <div className="flex flex-col items-start gap-1">
+        {/* Data URL base64 — paraf tersimpan otomatis dari ttd manager */}
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src={r.manager_signature}
+          alt="Paraf manager"
+          className="h-12 max-w-[120px] object-contain mix-blend-multiply"
+        />
+        <span className="text-[10px] font-semibold leading-tight text-emerald-700">
+          Disetujui manager — sah
+        </span>
+      </div>
+    );
+  }
+  return refundChip(r);
 }
 
 export function ClaimDetailView({ claim }: ClaimDetailViewProps) {
@@ -104,7 +128,13 @@ export function ClaimDetailView({ claim }: ClaimDetailViewProps) {
 
   const refunds = claim.refunds || [];
   const activeRefunds = refunds.filter((r) => r.status === "REQUESTED" || r.status === "CLAIMED");
-  const refundByTripId = new Map(activeRefunds.filter((r) => r.trip_id).map((r) => [r.trip_id as string, r]));
+  // Per-trip: penggantian aktif + yang diparaf manager (CANCELLED tapi sah —
+  // ttd-nya tetap tampil di kolom Paraf Manager)
+  const refundByTripId = new Map(
+    refunds
+      .filter((r) => r.trip_id && (activeRefunds.includes(r) || r.manager_status === "APPROVED"))
+      .map((r) => [r.trip_id as string, r])
+  );
 
   const editable = claim.status !== "APPROVED";
 
@@ -574,6 +604,7 @@ export function ClaimDetailView({ claim }: ClaimDetailViewProps) {
                   <th className="border border-slate-200 px-3 py-3 text-left font-semibold text-slate-600 whitespace-nowrap print:py-1 print:px-1">Pick-Up</th>
                   <th className="border border-slate-200 px-3 py-3 text-left font-semibold text-slate-600 whitespace-nowrap print:py-1 print:px-1">Drop-Off</th>
                   <th className="border border-slate-200 px-3 py-3 text-left font-semibold text-slate-600 whitespace-nowrap print:py-1 print:px-1">Ticket</th>
+                  <th className="border border-slate-200 px-3 py-3 text-left font-semibold text-slate-600 whitespace-nowrap print:py-1 print:px-1">Paraf Manager</th>
                   {editable && (
                     <th className="border border-slate-200 px-3 py-3 print:hidden w-20">Aksi</th>
                   )}
@@ -594,9 +625,6 @@ export function ClaimDetailView({ claim }: ClaimDetailViewProps) {
                     </td>
                     <td className="border border-slate-200 px-3 py-3 text-right align-top font-medium text-slate-800 whitespace-nowrap print:py-1 print:px-1">
                       IDR {trip.fare.toLocaleString("id-ID")}
-                      {refundByTripId.get(trip.id) && (
-                        <span className="mt-1 block print:hidden">{refundChip(refundByTripId.get(trip.id)!)}</span>
-                      )}
                     </td>
                     <td className="border border-slate-200 px-3 py-3 align-top text-slate-600 print:py-1 print:px-1">
                       {trip.payment_method || "Corporate Billing"}
@@ -612,6 +640,9 @@ export function ClaimDetailView({ claim }: ClaimDetailViewProps) {
                     </td>
                     <td className="border border-slate-200 px-3 py-3 align-top text-slate-600 whitespace-nowrap print:py-1 print:px-1">
                       {trip.ticket_id ? `#${trip.ticket_id}` : "—"}
+                    </td>
+                    <td className="border border-slate-200 px-3 py-3 align-top whitespace-nowrap print:py-1 print:px-1">
+                      {refundByTripId.get(trip.id) ? parafCell(refundByTripId.get(trip.id)!) : "—"}
                     </td>
                     {editable && (
                       <td className="border border-slate-200 px-2 py-3 print:hidden">
@@ -691,18 +722,22 @@ export function ClaimDetailView({ claim }: ClaimDetailViewProps) {
                       {r.pickup || "—"} → {r.dropoff || "—"}
                     </p>
                     <p className="mt-1 text-xs text-slate-600">
-                      Alasan: {r.reason}
+                      Alasan HR: {r.reason}
+                      {r.employee_reason ? ` · karyawan membela: “${r.employee_reason}”` : ""}
                       {r.employee_note && r.status === "CLAIMED" ? ` · keterangan karyawan: ${r.employee_note}` : ""}
                     </p>
                   </div>
                   <div className="flex flex-col items-end gap-1">
                     {r.status === "CANCELLED" ? (
-                      <span
-                        className="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-semibold text-slate-500"
-                        title={r.manager_status === "REJECTED" ? r.manager_reason || "" : undefined}
-                      >
-                        {r.manager_status === "REJECTED" ? "Ditolak manager" : "Dibatalkan"}
-                      </span>
+                      r.manager_status === "APPROVED" ? (
+                        <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-[11px] font-semibold text-emerald-700">
+                          Disetujui manager — perjalanan sah
+                        </span>
+                      ) : (
+                        <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-semibold text-slate-500">
+                          Dibatalkan
+                        </span>
+                      )
                     ) : (
                       r.status !== "CONFIRMED" && refundChip(r)
                     )}
@@ -800,7 +835,7 @@ export function ClaimDetailView({ claim }: ClaimDetailViewProps) {
                           size="sm"
                           variant="outline"
                           disabled={refundBusy === r.id || r.manager_status === "PENDING"}
-                          title={r.manager_status === "PENDING" ? "Menunggu paraf manager dulu — karyawan belum diminta transfer" : undefined}
+                          title={r.manager_status === "PENDING" ? "Karyawan membela perjalanan — menunggu keputusan manager dulu" : undefined}
                           onClick={() => refundAction({ action: "send_norek", refund_id: r.id }, "Nominal & rekening kantor dikirim ke karyawan")}
                         >
                           {refundBusy === r.id && <Loader2 className="mr-1 h-3 w-3 animate-spin" />} Kirim Norek Kantor

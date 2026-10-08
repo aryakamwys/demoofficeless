@@ -32,12 +32,14 @@ export default async function ClaimDetailPage({ params }: ClaimDetailPageProps) 
       .select("*")
       .eq("claim_id", id)
       .order("created_at", { ascending: true }),
-    // Penggantian trip "tidak sesuai" — aktif + riwayat (CONFIRMED) untuk audit
+    // Penggantian trip "tidak sesuai" — aktif + riwayat audit. Yang dibatalkan
+    // TAPI diparaf manager (perjalanan sah) tetap diambil: ttd-nya tampil di
+    // kolom Paraf Manager pada tabel Bookings.
     serviceClient
       .from("trip_refunds")
       .select("*")
       .eq("claim_id", id)
-      .neq("status", "CANCELLED")
+      .or("status.neq.CANCELLED,manager_status.eq.APPROVED")
       .order("requested_at", { ascending: true }),
   ]);
 
