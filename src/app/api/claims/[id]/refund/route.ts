@@ -8,7 +8,9 @@ import {
   buildRefundConfirmedMessage,
   buildRefundAskAgainMessage,
   buildRefundCancelledMessage,
+  buildRefundManagerApprovalMessage,
 } from "@/lib/whatsapp";
+import { refundApproveLink } from "@/lib/wa-link";
 
 // Aksi HR untuk penggantian trip "tidak sesuai" (karyawan transfer biaya
 // trip ke rekening kantor). Semua aksi hanya untuk HR yang login —
@@ -83,6 +85,12 @@ export async function POST(
     const trip = trips[idx] as {
       id: string; trip_date: string; pickup: string; dropoff: string; fare: number;
     };
+    // Paraf manager dulu (kalau klaim punya manager): karyawan baru diminta
+    // transfer SETELAH manager menyetujui — alasan penggantian ada
+    // penanggung jawabnya. Tanpa manager → flow lama langsung ke karyawan.
+    const mgrPhone = claim.manager ? normalizePhone(claim.manager.phone_number) : null;
+    const needManagerApproval = !!claim.manager_id && !!mgrPhone;
+
     const { data: refund, error: insErr } = await service
       .from("trip_refunds")
       .insert({
@@ -96,6 +104,7 @@ export async function POST(
         reason,
         status: "REQUESTED",
         requested_by: actor,
+        manager_status: needManagerApproval ? "PENDING" : null,
       })
       .select()
       .single();
@@ -113,10 +122,32 @@ export async function POST(
 
     await service.from("comments").insert({
       claim_id: id,
-      message: `Trip ${idx + 1} ditandai TIDAK SESUAI oleh HR — alasan: ${reason}. Karyawan diminta mengganti ${rupiah(amount)} ke rekening kantor.`,
+      message: `Trip ${idx + 1} ditandai TIDAK SESUAI oleh HR — alasan: ${reason}. ${needManagerApproval ? `Menunggu paraf Manager (${claim.manager?.employee_name || "-"}) sebelum karyawan diminta mengganti ${rupiah(amount)}.` : `Karyawan diminta mengganti ${rupiah(amount)} ke rekening kantor.`}`,
       author_name: actor,
       author_role: "HR",
     });
+
+    if (needManagerApproval) {
+      const link = refundApproveLink(refund.id, mgrPhone!);
+      const sent = await sendAndLog(
+        service, id, mgrPhone!,
+        buildRefundManagerApprovalMessage({
+          employee_name: claim.employee?.employee_name || "Karyawan",
+          period: claim.period,
+          trip_no: idx + 1,
+          pickup: trip.pickup,
+          dropoff: trip.dropoff,
+          amount,
+          reason,
+          link,
+        }),
+        "REFUND_MANAGER_APPROVAL_PROMPT"
+      );
+      if (!sent) {
+        await flowAlert(service, id, "Permintaan paraf manager gagal terkirim — proses manual / kirim ulang setelah device normal.");
+      }
+      return NextResponse.json({ success: true, data: refund, manager_approval: "PENDING" });
+    }
 
     if (employeePhone) {
       const sent = await sendAndLog(

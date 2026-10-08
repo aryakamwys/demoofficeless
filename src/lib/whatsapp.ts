@@ -689,6 +689,42 @@ export function buildRevisionRequestMessage(params: {
 }
 
 /**
+ * Minta paraf manager untuk penggantian trip "tidak sesuai" yang ditandai HR.
+ * Karyawan belum diminta transfer — menunggu keputusan manager dari link ini.
+ */
+export function buildRefundManagerApprovalMessage(params: {
+  employee_name: string;
+  period: string;
+  trip_no: number;
+  pickup: string;
+  dropoff: string;
+  amount: number;
+  reason: string;
+  link?: string;
+}): string {
+  return [
+    `*Perlu Paraf: Penggantian Perjalanan*`,
+    ``,
+    `Halo Manager,`,
+    ``,
+    `${params.employee_name} (klaim periode ${params.period}) ada perjalanan yang ditandai TIDAK SESUAI oleh HR.`,
+    ``,
+    `Perjalanan nomor ${params.trip_no}: ${shortAddr(params.pickup, 40)} → ${shortAddr(params.dropoff, 40)}`,
+    `Alasan: ${params.reason}`,
+    `Penggantian: *${formatAmount(params.amount)}* ke rekening kantor.`,
+    ``,
+    ...(params.link
+      ? [
+          `Setujui di sini (paraf otomatis dari tanda tangan Anda yang tersimpan):`,
+          params.link,
+          ``,
+          `Menolak juga bisa dari halaman yang sama — perjalanan tetap di klaim.`,
+        ]
+      : [`Balas chat ini ke HR Perkom untuk menyampaikan keputusan Anda.`]),
+  ].join("\n");
+}
+
+/**
  * Daftar trip bernomor — acuan menulis catatan & command TICKET.
  */
 export function buildRevisionTripListMessage(

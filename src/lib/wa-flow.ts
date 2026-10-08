@@ -399,6 +399,21 @@ async function sendClaimInfo(
   );
 }
 
+/** Ttd tersimpan karyawan (dari form employee) — dipakai auto-paraf saat
+ *  approve klaim lewat WA/link; null kalau belum pernah menggambar. */
+async function storedSignature(
+  supabase: ReturnType<typeof createServiceClient>,
+  employeeId: string | null
+): Promise<string | null> {
+  if (!employeeId) return null;
+  const { data } = await supabase
+    .from("signatures")
+    .select("signature")
+    .eq("employee_id", employeeId)
+    .maybeSingle();
+  return data?.signature || null;
+}
+
 // Helper: proceed to HR approval or auto-finalize
 async function proceedToHrOrFinalize(
   supabase: ReturnType<typeof createServiceClient>,
@@ -1282,9 +1297,15 @@ export async function processWebhookReply(
         // Penggantian belum selesai — approval ditahan
         await sendAndLog(supabase, claim.id, phoneNumber, refundHoldMessage(refunds), "REFUND_HOLD");
       } else if (reply === "1") {
-        // ticket_wizard ikut dihapus: mode isi ticket tidak boleh nyangkut
-        // setelah klaim maju tahap / selesai
-        await mustUpdateClaim(supabase, claim.id, { manager_status: "APPROVED", ticket_wizard: null });
+        // Paraf otomatis dari ttd tersimpan — tanpa ini approve via WA/link
+        // tidak menyimpan ttd dan kotak paraf di Report PDF kosong
+        let mgrSig = claim.manager_signature || null;
+        if (!mgrSig) mgrSig = await storedSignature(supabase, claim.manager_id);
+        await mustUpdateClaim(supabase, claim.id, {
+          manager_status: "APPROVED",
+          ...(mgrSig ? { manager_signature: mgrSig } : {}),
+          ticket_wizard: null,
+        });
         await sendAndLog(
           supabase, claim.id, phoneNumber,
           [
@@ -1352,7 +1373,15 @@ export async function processWebhookReply(
         // Penggantian belum selesai — approval ditahan
         await sendAndLog(supabase, claim.id, phoneNumber, refundHoldMessage(refunds), "REFUND_HOLD");
       } else if (reply === "1") {
-        await mustUpdateClaim(supabase, claim.id, { hr_status: "APPROVED", status: "APPROVED", ticket_wizard: null });
+        // Paraf otomatis HR dari ttd tersimpan (sama seperti Manager)
+        let hrSig = claim.hr_signature || null;
+        if (!hrSig) hrSig = await storedSignature(supabase, claim.hr_id);
+        await mustUpdateClaim(supabase, claim.id, {
+          hr_status: "APPROVED",
+          status: "APPROVED",
+          ...(hrSig ? { hr_signature: hrSig } : {}),
+          ticket_wizard: null,
+        });
         await sendAndLog(
           supabase, claim.id, phoneNumber,
           [

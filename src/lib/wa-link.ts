@@ -37,6 +37,41 @@ export function approveLink(claimId: string, phone: string, role: WaRole): strin
   return `${base}/approve?t=${approveToken(claimId, phone, role)}`;
 }
 
+/** Tautan approval penggantian trip "tidak sesuai" — dipakai manager saat
+ *  HR menandai trip (paraf sebelum karyawan diminta transfer). */
+export function refundApproveLink(refundId: string, phone: string): string {
+  const base = appUrl();
+  if (!base) return "";
+  const exp = Date.now() + TOKEN_TTL_MS;
+  const payload = `REFUND.${refundId}.${phone}.${exp}`;
+  const sig = createHmac("sha256", secret()).update(payload).digest("base64url");
+  const token = Buffer.from(`${payload}.${sig}`).toString("base64url");
+  return `${base}/refund?t=${token}`;
+}
+
+/** Verifikasi token penggantian — null jika rusak/kedaluwarsa/dimanipulasi. */
+export function verifyRefundToken(
+  token: string
+): { refundId: string; phone: string } | null {
+  try {
+    const raw = Buffer.from(token, "base64url").toString("utf8");
+    const parts = raw.split(".");
+    if (parts.length !== 5) return null;
+    const [prefix, refundId, phone, exp, sig] = parts;
+    if (prefix !== "REFUND" || !refundId || !phone || !exp || !sig) return null;
+    if (!Number(exp) || Number(exp) < Date.now()) return null;
+    const expected = createHmac("sha256", secret())
+      .update(`REFUND.${refundId}.${phone}.${exp}`)
+      .digest("base64url");
+    const a = Buffer.from(sig);
+    const b = Buffer.from(expected);
+    if (a.length !== b.length || !timingSafeEqual(a, b)) return null;
+    return { refundId, phone };
+  } catch {
+    return null;
+  }
+}
+
 /** Verifikasi tautan — null jika rusak/kedaluwarsa/dimanipulasi. */
 export function verifyApproveToken(
   token: string

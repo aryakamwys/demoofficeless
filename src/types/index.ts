@@ -162,6 +162,12 @@ export interface TripRefund {
   proof_validated?: boolean;
   proof_reject_reason?: string | null;
   proof_received_at?: string | null;
+  /** Paraf manager: PENDING (menunggu keputusan) / APPROVED / REJECTED.
+   *  null = tanpa approval manager (klaim tanpa manager / data lama). */
+  manager_status?: "PENDING" | "APPROVED" | "REJECTED" | null;
+  manager_signature?: string | null;
+  manager_reason?: string | null;
+  manager_decided_at?: string | null;
   /** Signed URL proof_path (dibuat server untuk web) */
   proof_url?: string | null;
   employee_note?: string | null;
