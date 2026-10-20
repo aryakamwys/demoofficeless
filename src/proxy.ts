@@ -18,6 +18,7 @@ export async function proxy(request: NextRequest) {
     "/users",
     "/finance",
     "/api/services",
+    "/api/automation",
     "/api/inventory",
     "/api/admin/users",
     "/api/upload",

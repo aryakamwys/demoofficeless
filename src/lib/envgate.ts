@@ -107,6 +107,39 @@ async function api<T = unknown>(path: string): Promise<T> {
   }
 }
 
+async function apiPost<T = unknown>(path: string, body: unknown): Promise<T> {
+  const username = process.env.SERVICEDESK_USERNAME;
+  const password = process.env.SERVICEDESK_PASSWORD;
+  if (!username || !password) {
+    throw new Error(
+      "SERVICEDESK_USERNAME dan SERVICEDESK_PASSWORD belum diset di environment"
+    );
+  }
+
+  const res = await fetch(`${BASE}${path}`, {
+    method: "POST",
+    headers: {
+      Authorization: `Basic ${Buffer.from(`${username}:${password}`).toString("base64")}`,
+      "Content-Type": "application/json",
+      Accept: "application/json",
+    },
+    body: JSON.stringify(body),
+    cache: "no-store",
+    signal: AbortSignal.timeout(30_000),
+  });
+
+  if (!res.ok) {
+    throw new Error(`EnvGate API error: ${res.status} ${res.statusText} (${path})`);
+  }
+
+  const text = await res.text();
+  try {
+    return JSON.parse(text) as T;
+  } catch {
+    throw new Error(`EnvGate API membalas non-JSON untuk ${path}`);
+  }
+}
+
 /**
  * Docs baru menamai endpoint /requests; versi lama /incidents.
  * Coba nama baru dulu, fallback ke legacy — instance self-host bisa salah satunya.
@@ -383,6 +416,49 @@ export async function getRecentTickets(
       getCategoryMap(),
     ]);
     return decorate(items, entityMap, users, categories);
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Tulis: buat tiket + cari user by email (dipakai modul automation Openclaw)
+
+export interface InvCreateResult {
+  status?: string;
+  request_id?: number;
+  info?: string;
+}
+
+/**
+ * Buat incident via POST /incident — kontrak dari developer manual InvGate:
+ * wajib priority_id, type_id, creator_id, customer_id, category_id, title.
+ * Respon: { status: "OK"|"ERROR", request_id, info }.
+ */
+export function createIncident(payload: Record<string, unknown>) {
+  return apiPost<InvCreateResult>("/incident", payload);
+}
+
+/**
+ * Cari user InvGate lewat email. Endpoint lookup-by-email tidak terverifikasi
+ * lengkap di docs (ada /user.by dan /users.by) — coba keduanya, gagal = null.
+ * Pemanggil wajib menangani null: JANGAN menebak customer_id.
+ */
+export async function findUserByEmail(email: string): Promise<MappedUser | null> {
+  // Cache 24 jam — campaign memanggil ini per engineer × per customer
+  return cached(`envgate:user:email:${email.toLowerCase()}`, 24 * 3600, async () => {
+    const q = encodeURIComponent(email);
+    for (const path of [`/user.by?email=${q}`, `/users.by?email=${q}`]) {
+      try {
+        const raw = await api<unknown>(path);
+        const first = Array.isArray(unwrap(raw))
+          ? (unwrap(raw) as InvUser[])[0]
+          : (raw as InvUser);
+        const mapped = mapUser(first);
+        if (mapped?.id != null) return mapped;
+      } catch {
+        // coba kandidat berikutnya
+      }
+    }
+    return null;
   });
 }
 

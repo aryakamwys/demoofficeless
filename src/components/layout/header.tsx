@@ -23,7 +23,9 @@ import {
   ChevronDown,
   Settings,
   Bell,
-  Wrench,
+  Bot,
+  ClipboardList,
+  Megaphone,
   Boxes,
   Scale,
   Activity,
@@ -45,10 +47,12 @@ const pageTitles: Record<string, string> = {
   "/employees": "Employee Master",
   "/upload": "Upload Grab",
   "/claims": "Claims Grab",
-  "/services/openclaw": "Openclaw Ticket",
+  "/services/openclaw": "Openclaw Console",
   "/services/inventory": "Inventory",
   "/inventory": "Inventory",
   "/grc": "GRC",
+  "/services/openclaw/tickets": "Ticket Operations",
+  "/services/openclaw/campaign": "Ayana CCTV Campaign",
   "/settings": "Settings",
   "/services/report": "Report",
   "/finance": "Finance",
@@ -165,13 +169,37 @@ export function Header({ isSuperadmin }: { isSuperadmin?: boolean }) {
                 href="/services/openclaw"
                 className={cn(
                   "flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors",
-                  pathname.startsWith("/services/openclaw")
+                  pathname === "/services/openclaw"
                     ? "bg-accent text-primary"
                     : "text-muted-foreground hover:bg-accent hover:text-foreground"
                 )}
               >
-                <Wrench className="h-4 w-4 shrink-0" />
-                Openclaw Ticket
+                <Bot className="h-4 w-4 shrink-0" />
+                Openclaw Console
+              </Link>
+              <Link
+                href="/services/openclaw/tickets"
+                className={cn(
+                  "flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors",
+                  pathname.startsWith("/services/openclaw/tickets")
+                    ? "bg-accent text-primary"
+                    : "text-muted-foreground hover:bg-accent hover:text-foreground"
+                )}
+              >
+                <ClipboardList className="h-4 w-4 shrink-0" />
+                Ticket Operations
+              </Link>
+              <Link
+                href="/services/openclaw/campaign"
+                className={cn(
+                  "flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors",
+                  pathname.startsWith("/services/openclaw/campaign")
+                    ? "bg-accent text-primary"
+                    : "text-muted-foreground hover:bg-accent hover:text-foreground"
+                )}
+              >
+                <Megaphone className="h-4 w-4 shrink-0" />
+                Ayana CCTV Campaign
               </Link>
               <Link
                 href="/services/envgate"
