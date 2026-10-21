@@ -21,8 +21,7 @@ export function SiteFooter() {
             </span>
           </div>
           <p className="mt-3 text-sm leading-relaxed text-slate-500">
-            Aplikasi internal PT Perkom untuk pengelolaan klaim Grab Business
-            dan layanan operasional karyawan.
+            Aplikasi internal PT Perkom dan layanan operasional karyawan.
           </p>
         </div>
 

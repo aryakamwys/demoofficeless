@@ -6,9 +6,8 @@ import { SiteFooter } from "@/components/site-footer";
 import { ProductVisual } from "@/components/product-visual";
 
 export const metadata: Metadata = {
-  title: "Officeless Perkom — Klaim Grab Business via WhatsApp",
-  description:
-    "Pengajuan, persetujuan Manager & HR, dan laporan klaim perjalanan Grab Business karyawan — cukup dari WhatsApp.",
+  title: "Officeless Perkom",
+  description: "Aplikasi internal PT Perkom dan layanan operasional karyawan.",
 };
 
 // Landing publik: hero dengan visual produk asli (mockup portal + chip WA
