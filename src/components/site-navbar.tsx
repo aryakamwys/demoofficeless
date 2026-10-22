@@ -17,7 +17,7 @@ export function SiteNavbar() {
             priority
           />
           <span className="text-sm font-semibold text-slate-800">
-            Officeless Perkom
+            PerkomBusiness
           </span>
         </Link>
         <nav className="ml-auto flex items-center gap-1">

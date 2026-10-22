@@ -17,11 +17,12 @@ export function SiteFooter() {
               className="h-7 w-7 object-contain"
             />
             <span className="text-base font-bold text-slate-800">
-              Officeless Perkom
+              PerkomBusiness
             </span>
           </div>
           <p className="mt-3 text-sm leading-relaxed text-slate-500">
-            Aplikasi internal PT Perkom dan layanan operasional karyawan.
+            Aplikasi internal PT Perkom untuk pengelolaan dan layanan
+            operasional karyawan.
           </p>
         </div>
 

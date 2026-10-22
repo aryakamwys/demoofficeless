@@ -6,8 +6,9 @@ import { SiteFooter } from "@/components/site-footer";
 import { ProductVisual } from "@/components/product-visual";
 
 export const metadata: Metadata = {
-  title: "Officeless Perkom",
-  description: "Aplikasi internal PT Perkom dan layanan operasional karyawan.",
+  title: "PerkomBusiness",
+  description:
+    "Aplikasi internal PT Perkom untuk pengelolaan dan layanan operasional karyawan.",
 };
 
 // Landing publik: hero dengan visual produk asli (mockup portal + chip WA
