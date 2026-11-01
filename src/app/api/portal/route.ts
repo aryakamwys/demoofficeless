@@ -11,6 +11,7 @@ import {
   flowAlert,
 } from "@/lib/wa-flow";
 import { getRecentTickets, ticketTitle } from "@/lib/envgate";
+import { matchRole } from "@/lib/wa-match";
 
 // Portal karyawan — semua proses klaim lewat web (WA hanya pengantar link
 // + notifikasi). Token portal = HMAC employee+nomor, 90 hari; setiap request
@@ -199,6 +200,7 @@ export async function POST(request: NextRequest) {
           in_revision: claim.status === "NEED_REVIEW" && !!claim.approved_at,
           revision_reason,
           trips: (claim.trips || []).map((t: Record<string, unknown>, i: number) => ({
+            id: t.id,
             no: i + 1,
             date: t.trip_date,
             pickup: t.pickup,
@@ -209,6 +211,7 @@ export async function POST(request: NextRequest) {
           })),
           refunds: refunds.map((r) => ({
             id: r.id,
+            trip_id: r.trip_id,
             trip_no: r.trip_no,
             amount: Number(r.amount),
             reason: r.reason,
@@ -231,9 +234,19 @@ export async function POST(request: NextRequest) {
     if (!claim || claim.employee_id !== employeeId) {
       return NextResponse.json({ success: false, error: "CLAIM_NOT_FOUND" }, { status: 404 });
     }
-    if (claim.status === "APPROVED") {
+    // Validasi tahap sama dengan /api/wa/action (matchRole): begitu karyawan
+    // konfirmasi (approved_at terisi, klaim tidak sedang revisi), aksi
+    // konfirmasi ulang tidak boleh me-reset persetujuan manager/HR yang
+    // sudah berjalan lalu mengulang alurnya dari awal.
+    if (matchRole(claim, phone) !== "EMPLOYEE") {
       return NextResponse.json(
-        { success: false, error: "Klaim ini sudah selesai." },
+        {
+          success: false,
+          error:
+            claim.status === "APPROVED"
+              ? "Klaim ini sudah selesai."
+              : "Klaim ini sudah Anda konfirmasi — sedang menunggu persetujuan Manager/HR.",
+        },
         { status: 409 }
       );
     }

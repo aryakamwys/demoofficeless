@@ -27,14 +27,26 @@ let job: BulkJob | null = null;
 
 async function runJob() {
   if (!job) return;
-  for (const item of job.items) {
-    if (job.stopped) break;
-    item.state = "sending";
-    const r = await sendClaimToEmployee(item.claim_id);
-    item.state = r.ok ? "ok" : "fail";
-    item.error = r.ok ? undefined : r.error;
+  try {
+    for (const item of job.items) {
+      if (job.stopped) break;
+      item.state = "sending";
+      try {
+        const r = await sendClaimToEmployee(item.claim_id);
+        item.state = r.ok ? "ok" : "fail";
+        item.error = r.ok ? undefined : r.error;
+      } catch (e) {
+        // sendClaimToEmployee seharusnya tidak throw, tapi satu exception
+        // tidak boleh membatalkan seluruh antrean — tandai gagal, lanjut.
+        item.state = "fail";
+        item.error = e instanceof Error ? e.message : "Kesalahan tak terduga";
+      }
+    }
+  } finally {
+    // Wajib jalan apa pun yang terjadi — kalau running tidak diriset,
+    // semua blast berikutnya kena 409 sampai proses di-restart.
+    if (job) job.running = false;
   }
-  if (job) job.running = false;
 }
 
 function jobSummary() {
@@ -50,11 +62,23 @@ function jobSummary() {
 }
 
 export async function GET() {
+  const supabase = await createServerClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) {
+    return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 });
+  }
   return NextResponse.json({ success: true, job: jobSummary() });
 }
 
 export async function POST(request: NextRequest) {
   try {
+    // Blast massal bisa mengirim WA ke semua karyawan — hanya user login.
+    const supabase = await createServerClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) {
+      return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 });
+    }
+
     const body = await request.json();
 
     if (body?.action === "stop") {
@@ -79,7 +103,6 @@ export async function POST(request: NextRequest) {
 
     // Validasi ulang dari data terkini: hanya klaim PENDING milik karyawan
     // yang punya nomor WA — kondisi bisa berubah sejak halaman dimuat.
-    const supabase = await createServerClient();
     const { data } = await supabase
       .from("claims")
       .select(`

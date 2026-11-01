@@ -5,6 +5,14 @@ import { errorMessage } from "@/lib/utils";
 export async function POST(request: NextRequest) {
   try {
     const supabase = await createServerClient();
+
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    if (!user) {
+      return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 });
+    }
+
     const { managedClaimId, grabClaimId } = await request.json();
 
     if (!managedClaimId || !grabClaimId) {
@@ -14,51 +22,47 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // 1. Fetch managed_service_claim
-    const { data: managedClaim, error: mError } = await supabase
-      .from("managed_service_claims")
-      .select("id, amount")
-      .eq("id", managedClaimId)
-      .single();
+    // Merge atomik di Postgres (027_merge_and_rls.sql): kunci kedua baris,
+    // cek status PENDING, tambah amount, SET 'MERGED' — satu transaksi.
+    // Versi JS dulu menambah amount dulu lalu gagal di CHECK constraint
+    // ('MERGED' belum diizinkan) → amount bengkak permanen tiap retry.
+    const { data, error } = await supabase.rpc("merge_managed_claim", {
+      p_managed: managedClaimId,
+      p_grab: grabClaimId,
+    });
 
-    if (mError || !managedClaim) {
-      return NextResponse.json({ success: false, error: "Managed Claim not found" }, { status: 404 });
+    if (error) {
+      return NextResponse.json(
+        { success: false, error: errorMessage(error, "Internal server error") },
+        { status: 500 }
+      );
     }
 
-    // 2. Fetch Grab claim
-    const { data: grabClaim, error: gError } = await supabase
-      .from("claims")
-      .select("id, total_amount, status")
-      .eq("id", grabClaimId)
-      .single();
+    const result = (data ?? {}) as { success?: boolean; error?: string };
 
-    if (gError || !grabClaim) {
-      return NextResponse.json({ success: false, error: "Grab Claim not found" }, { status: 404 });
-    }
-
-    if (grabClaim.status === "MERGED") {
-      return NextResponse.json({ success: false, error: "Grab Claim is already merged" }, { status: 400 });
-    }
-
-    // 3. Update managed_service_claim amount
-    const newAmount = Number(managedClaim.amount) + Number(grabClaim.total_amount);
-    const { error: updateError } = await supabase
-      .from("managed_service_claims")
-      .update({ amount: newAmount })
-      .eq("id", managedClaimId);
-
-    if (updateError) {
-      throw new Error("Failed to update managed claim amount");
-    }
-
-    // 4. Update grab claim status
-    const { error: grabUpdateError } = await supabase
-      .from("claims")
-      .update({ status: "MERGED" })
-      .eq("id", grabClaimId);
-
-    if (grabUpdateError) {
-      throw new Error("Failed to update grab claim status");
+    if (!result.success) {
+      if (result.error === "MANAGED_NOT_FOUND") {
+        return NextResponse.json(
+          { success: false, error: "Klaim managed service tidak ditemukan" },
+          { status: 404 }
+        );
+      }
+      if (result.error === "GRAB_NOT_FOUND") {
+        return NextResponse.json(
+          { success: false, error: "Klaim Grab tidak ditemukan" },
+          { status: 404 }
+        );
+      }
+      if (result.error === "GRAB_NOT_PENDING") {
+        return NextResponse.json(
+          { success: false, error: "Klaim Grab sudah pernah digabungkan" },
+          { status: 409 }
+        );
+      }
+      return NextResponse.json(
+        { success: false, error: "Gagal menggabungkan klaim" },
+        { status: 400 }
+      );
     }
 
     return NextResponse.json({ success: true, message: "Successfully merged claims" });

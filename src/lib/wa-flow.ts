@@ -29,6 +29,7 @@ import {
 import { parseWaCommand } from "@/lib/wa-commands";
 import { getTicket, getRecentTickets, ticketTitle } from "@/lib/envgate";
 import { approveLink, portalLink } from "@/lib/wa-link";
+import { matchRole } from "@/lib/wa-match";
 
 // Helper: fetch a fresh claim with all relations
 export async function fetchClaimFresh(supabase: ReturnType<typeof createServiceClient>, claimId: string) {
@@ -104,7 +105,11 @@ export async function releaseClaimIfNoRefunds(
     .from("claims")
     .update({ status: "SENT" })
     .eq("id", claimId)
-    .eq("status", "NEED_REVIEW");
+    .eq("status", "NEED_REVIEW")
+    // NEED_REVIEW juga berarti revisi karyawan sedang berjalan — klaim itu
+    // BUKAN ditahan penggantian; melepasnya di sini membatalkan revisi aktif
+    // dan mempersenjatai ulang link approver lebih awal.
+    .eq("revision_active", false);
   if (error) throw new Error(`Gagal melepaskan tahanan klaim: ${error.message}`);
   return true;
 }
@@ -540,6 +545,7 @@ async function handleRevisionRequest(
   // Status stage tidak diubah ke REJECTED — tetap PENDING menunggu revisi
   await mustUpdateClaim(supabase, claim.id, {
     status: "NEED_REVIEW",
+    revision_active: true,
     pending_wa_change: null,
     ticket_wizard: null,
   });
@@ -1057,6 +1063,7 @@ async function handleRevisionCommands(
     });
     await mustUpdateClaim(supabase, claim.id, {
       status: "SENT",
+      revision_active: false,
       pending_wa_change: null,
       ticket_wizard: null,
     });
@@ -1180,6 +1187,18 @@ export async function processWebhookReply(
   // Penggantian aktif menahan klaim — dibaca sekali, dipakai semua guard
   const refunds = await activeRefunds(supabase, claim.id);
 
+  // Validasi ulang tahap pada kondisi TERKINI: route sudah memeriksa
+  // matchRole sebelum memanggil, tapi dua aksi nyaris bersamaan (setujui +
+  // revisi dari dua tab) sama-sama lolos cek itu; tanpa cek ulang di sini,
+  // aksi yang telat tetap diproses dan bisa membalikkan klaim yang sudah
+  // bertransisi (pesan dobel / klaim APPROVED diproses lagi). No-op + log.
+  if (matchRole(claim, phoneNumber) !== role) {
+    console.warn(
+      `[FLOW] Tahap ${role} sudah lewat di klaim ${claim.id} — balasan "${reply.slice(0, 50)}" diabaikan.`
+    );
+    return;
+  }
+
   try {
     // ==========================================
     // ROLE: EMPLOYEE
@@ -1230,6 +1249,15 @@ export async function processWebhookReply(
           manager_status: hasManager ? "PENDING" : "APPROVED",
           hr_status: "PENDING",
           ticket_wizard: null,
+          // Catatan karyawan sebelumnya menahan klaim di NEED_REVIEW —
+          // konfirmasi melepaskannya kembali ke jalur approval. Tanpa ini
+          // klaim nyangkut di NEED_REVIEW + approved_at: portal menampilkan
+          // banner "diminta revisi" palsu dan approver diminta ulang.
+          // Penggantian aktif sudah dicegat di cabang REFUND_HOLD atas —
+          // klaim tahanan penggantian memang tetap NEED_REVIEW.
+          ...(claim.status === "NEED_REVIEW" && refunds.length === 0
+            ? { status: "SENT" }
+            : {}),
         });
 
         const confirmMsg = buildConfirmationMessage(hasManager ? claim.manager.employee_name : undefined, claim.period);

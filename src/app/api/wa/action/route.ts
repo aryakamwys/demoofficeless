@@ -93,7 +93,7 @@ export async function GET(request: NextRequest) {
   // badge per-trip dan menonaktifkan Hapus/Ubah untuk trip bersangkutan.
   const { data: refundRows } = await supabase
     .from("trip_refunds")
-    .select("trip_no, amount, reason, status")
+    .select("trip_no, trip_id, amount, reason, status")
     .eq("claim_id", v.claimId)
     .in("status", ["REQUESTED", "CLAIMED"]);
 
@@ -107,6 +107,7 @@ export async function GET(request: NextRequest) {
     revision_reason,
     refunds: (refundRows || []).map((r) => ({
       no: r.trip_no,
+      trip_id: r.trip_id,
       amount: Number(r.amount),
       reason: r.reason,
       status: r.status,
@@ -119,6 +120,7 @@ export async function GET(request: NextRequest) {
       total_amount: claim.total_amount,
       trip_count: claim.trip_count ?? (claim.trips || []).length,
       trips: (claim.trips || []).map((t: Record<string, unknown>, i: number) => ({
+        id: t.id,
         no: i + 1,
         date: t.trip_date,
         pickup: t.pickup,

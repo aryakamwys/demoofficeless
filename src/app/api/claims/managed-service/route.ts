@@ -1,8 +1,21 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServerClient, createServiceClient } from "@/lib/supabase-server";
 
+// Field opsional form-data: null / non-string (File) → undefined (kolom nullable)
+const optionalText = (value: FormDataEntryValue | null): string | undefined =>
+  typeof value === "string" ? value : undefined;
+
 export async function GET() {
   const supabase = await createServerClient();
+
+  // Endpoint ini menyerahkan signed URL dokumen — wajib login
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) {
+    return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 });
+  }
+
 
   const { data, error } = await supabase
     .from("managed_service_claims")
@@ -70,25 +83,44 @@ export async function GET() {
 
 export async function POST(request: NextRequest) {
   const supabase = await createServerClient();
-  await supabase.auth.getUser();
 
-  // If no user is found, we can still allow for now or return 401 if strict
-  // if (authError || !user) {
-  //   return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 });
-  // }
+  // Tulis DB & storage hanya untuk user terautentikasi
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) {
+    return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 });
+  }
 
   const formData = await request.formData();
 
-  const ticket_id = formData.get("ticket_id") as string;
-  const ticket_title = formData.get("ticket_title") as string;
-  const customer_name = formData.get("customer_name") as string;
-  const location = formData.get("location") as string;
-  const amount = formData.get("amount") as string;
-  const file = formData.get("file") as File;
+  const ticket_id = formData.get("ticket_id");
+  const ticket_title = optionalText(formData.get("ticket_title"));
+  const customer_name = optionalText(formData.get("customer_name"));
+  const location = optionalText(formData.get("location"));
+  const amount = formData.get("amount");
+  const file = formData.get("file");
 
-  if (!ticket_id || !file || !amount) {
+  if (typeof ticket_id !== "string" || !ticket_id || !(file instanceof File) || !amount) {
     return NextResponse.json(
       { success: false, error: "Ticket ID, Amount, dan file wajib diisi" },
+      { status: 400 }
+    );
+  }
+
+  const parsedAmount = typeof amount === "string" ? Number.parseFloat(amount) : NaN;
+  if (!Number.isFinite(parsedAmount) || parsedAmount <= 0) {
+    return NextResponse.json(
+      { success: false, error: "Amount harus berupa angka lebih dari 0" },
+      { status: 400 }
+    );
+  }
+
+  // Cek ukuran SEBELUM buffer di memori
+  const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10 MB
+  if (file.size > MAX_FILE_SIZE) {
+    return NextResponse.json(
+      { success: false, error: "Ukuran file maksimal 10 MB" },
       { status: 400 }
     );
   }
@@ -128,7 +160,7 @@ export async function POST(request: NextRequest) {
       ticket_title,
       customer_name,
       location,
-      amount: parseFloat(amount),
+      amount: parsedAmount,
       storage_path: storagePath,
       status: "pending"
     })

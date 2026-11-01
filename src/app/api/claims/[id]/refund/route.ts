@@ -104,15 +104,28 @@ export async function POST(
       .select()
       .single();
     if (insErr || !refund) {
+      // Race dua HR menandai trip yang sama: index unik 029 menolak baris
+      // kedua — samakan jawabannya dengan pre-check di atas.
+      if (insErr?.code === "23505") {
+        return NextResponse.json({ success: false, error: "Trip ini sudah ditandai" }, { status: 409 });
+      }
       return NextResponse.json({ success: false, error: insErr?.message || "Gagal menyimpan" }, { status: 500 });
     }
 
-    // Tahan klaim di mode perbaikan — tidak bisa maju selama penggantian jalan
-    if (claim.status !== "NEED_REVIEW") {
-      const { error } = await service.from("claims").update({ status: "NEED_REVIEW" }).eq("id", id);
-      if (error) {
-        return NextResponse.json({ success: false, error: `Gagal menahan klaim: ${error.message}` }, { status: 500 });
-      }
+    // Tahan klaim di mode perbaikan — tidak bisa maju selama penggantian jalan.
+    // Predikat status di UPDATE (bukan snapshot awal request): klaim yang baru
+    // saja di-approve HR lain tidak boleh diturunkan lagi ke NEED_REVIEW.
+    const { data: held, error: holdError } = await service
+      .from("claims")
+      .update({ status: "NEED_REVIEW" })
+      .eq("id", id)
+      .neq("status", "APPROVED")
+      .select("id");
+    if (holdError) {
+      return NextResponse.json({ success: false, error: `Gagal menahan klaim: ${holdError.message}` }, { status: 500 });
+    }
+    if (!held || held.length === 0) {
+      return NextResponse.json({ success: false, error: "Status klaim berubah — muat ulang halaman" }, { status: 409 });
     }
 
     await service.from("comments").insert({

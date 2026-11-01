@@ -10,6 +10,7 @@ export const CLAIM_STATUS = {
   APPROVED: "APPROVED",
   NEED_REVIEW: "NEED_REVIEW",
   UNMATCHED: "UNMATCHED",
+  MERGED: "MERGED",
 } as const;
 
 export type ClaimStatus = (typeof CLAIM_STATUS)[keyof typeof CLAIM_STATUS];
@@ -100,7 +101,8 @@ export interface Comment {
 
 export interface WhatsappLog {
   id: string;
-  claim_id: string;
+  // Nullable sejak 016 — webhook mencatat log sistem tanpa klaim.
+  claim_id?: string | null;
   phone_number: string;
   message_type: string;
   status: string;

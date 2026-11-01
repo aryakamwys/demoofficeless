@@ -40,7 +40,7 @@ export async function sendClaimToEmployee(
 
   const result = await sendTextMessage(claim.employee.phone_number, message);
 
-  await supabase.from("whatsapp_logs").insert({
+  const { error: logError } = await supabase.from("whatsapp_logs").insert({
     claim_id: claimId,
     phone_number: claim.employee.phone_number,
     message_type: "CLAIM_NOTIFICATION",
@@ -52,16 +52,32 @@ export async function sendClaimToEmployee(
     return { ok: false, error: result.error || "Gagal mengirim WhatsApp", status: 500 };
   }
 
-  await supabase
-    .from("claims")
-    .update({
-      status: "SENT",
-      manager_id: opts?.manager_id !== undefined ? opts.manager_id : claim.employee.manager_id,
-      hr_id: opts?.hr_id !== undefined ? opts.hr_id : claim.employee.hr_id,
-      wa_sent: true,
-      wa_sent_at: new Date().toISOString(),
-    })
-    .eq("id", claimId);
+  // Mulai sini pesan SUDAH terkirim — error harus jelas "jangan kirim ulang",
+  // kalau tidak klaim PENDING akan di-blast ulang dan karyawan dapat duplikat.
+  const update = {
+    status: "SENT",
+    manager_id: opts?.manager_id !== undefined ? opts.manager_id : claim.employee.manager_id,
+    hr_id: opts?.hr_id !== undefined ? opts.hr_id : claim.employee.hr_id,
+    wa_sent: true,
+    wa_sent_at: new Date().toISOString(),
+  };
+  let { error: updateError } = await supabase.from("claims").update(update).eq("id", claimId);
+  if (updateError) {
+    // Coba sekali lagi — kegagalan sesaat (network/timeout) lumrah terjadi.
+    ({ error: updateError } = await supabase.from("claims").update(update).eq("id", claimId));
+  }
+  if (updateError) {
+    return {
+      ok: false,
+      error: "Pesan TERKIRIM tapi gagal update status klaim — JANGAN kirim ulang, periksa manual",
+    };
+  }
+  if (logError) {
+    return {
+      ok: false,
+      error: "Pesan terkirim & status klaim terupdate, tapi gagal mencatat log WA — periksa manual",
+    };
+  }
 
   return { ok: true };
 }

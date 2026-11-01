@@ -88,9 +88,12 @@ export async function POST(request: NextRequest) {
     // Group trips by employee
     const grouped = groupTripsByEmployee(trips);
 
-    // Cegah klaim ganda: karyawan yang SUDAH punya klaim pada periode yang
-    // sama tidak dibuatkan lagi (upload ulang statement = sumber duplikat —
-    // dua klaim aktif berarti dua pesan WA dan dua approval untuk hal yang sama).
+    // Cegah klaim ganda: karyawan yang sudah punya klaim AKTIF pada periode
+    // yang sama tidak dibuatkan lagi (upload ulang statement = sumber
+    // duplikat — dua klaim aktif berarti dua pesan WA dan dua approval).
+    // Sesuai index 017: hanya status aktif yang diblokir, klaim APPROVED
+    // TIDAK — statement koreksi periode yang sudah APPROVED tetap boleh
+    // membuat klaim baru.
     const withMatch = grouped.map((group) => ({
       group,
       emp: employees?.find(
@@ -104,6 +107,7 @@ export async function POST(request: NextRequest) {
         .from("claims")
         .select("employee_id")
         .eq("period", upload.period)
+        .in("status", ["PENDING", "SENT", "NEED_REVIEW"])
         .in("employee_id", matchedIds);
       for (const c of dupeClaims || []) if (c.employee_id) existing.add(c.employee_id);
     }
@@ -144,43 +148,93 @@ export async function POST(request: NextRequest) {
       .insert(claimRows)
       .select("id");
 
-    if (claimsError || !claims) {
-      // Race dua upload bersamaan bisa kena unique index (017) — jangan
-      // gagal total, laporkan saja sebagai dilewati.
-      if (claimsError?.code === "23505") {
-        await supabase
-          .from("uploads")
-          .update({ status: "PROCESSED" })
-          .eq("id", upload_id);
-        return NextResponse.json({
-          success: true,
-          data: { claims_created: 0, skipped_duplicate: skippedDuplicate },
-        });
+    // Id claim baru sejajar urutan `fresh`; null = karyawan tercatat sebagai
+    // duplikat (kena unique index 017 lewat race upload bersamaan).
+    const createdIds: Array<string | null> = new Array(fresh.length).fill(null);
+
+    if (claimsError) {
+      // Insert multi-baris bersifat all-or-nothing: SATU baris kena unique
+      // index (017) membatalkan seluruh batch — karyawan lain ikut hilang.
+      // Ulangi per karyawan: yang kena 23505 dihitung dilewati, sisanya jadi.
+      if (claimsError.code !== "23505") {
+        return NextResponse.json(
+          { success: false, error: "Gagal membuat claim: " + claimsError.message },
+          { status: 500 }
+        );
       }
-      return NextResponse.json(
-        { success: false, error: "Gagal membuat claim: " + claimsError?.message },
-        { status: 500 }
-      );
+      for (let i = 0; i < claimRows.length; i++) {
+        const { data: one, error: oneErr } = await supabase
+          .from("claims")
+          .insert(claimRows[i])
+          .select("id")
+          .single();
+        if (oneErr) {
+          if (oneErr.code === "23505") {
+            skippedDuplicate.push(fresh[i].group.employee_name);
+          } else {
+            return NextResponse.json(
+              { success: false, error: "Gagal membuat claim: " + oneErr.message },
+              { status: 500 }
+            );
+          }
+        } else if (one) {
+          createdIds[i] = one.id;
+        }
+      }
+    } else if (claims) {
+      claims.forEach((c, i) => {
+        createdIds[i] = c.id;
+      });
     }
 
     // ponytail: cocokkan trip ke claim via urutan hasil insert (perilaku
     // Postgres multi-VALUES) — employee_id bisa null/duplikat, tak bisa jadi kunci.
-    const tripRecords = fresh.flatMap(({ group }, i) =>
-      group.trips.map((t) => ({
-        claim_id: claims[i].id,
-        trip_date: t.trip_date
-          ? new Date(t.trip_date).toISOString()
-          : new Date().toISOString(),
-        booking_id: t.booking_id,
-        service_type: t.service_type,
-        payment_method: t.payment_method,
-        employee_group: t.employee_group,
-        cost_code: t.cost_code,
-        pickup: t.pickup,
-        dropoff: t.dropoff,
-        fare: t.fare,
-      }))
-    );
+    // Tanggal dari CSV bebas formatnya — "31/07/2026" bikin new Date() Invalid
+    // Date lalu toISOString() melempar, membatalkan upload yang filenya sudah
+    // tersimpan. Konversi format yang dikenal; baris yang tetap tak valid
+    // dilewati dengan warning, jangan sampai satu baris rusak membunuh upload.
+    const warnings: string[] = [];
+    const toIsoDate = (raw: string, employeeName: string): string | null => {
+      if (!raw) return new Date().toISOString();
+      // DD/MM/YYYY (± jam) — konvensi statement Grab Indonesia; new Date()
+      // tidak bisa parse-nya. Bagian bulan > 12 berarti bukan DD/MM — biarkan
+      // lolos ke parse umum supaya tidak salah tukar hari/bulan.
+      const dmy = raw.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})(?:\s+(\d{1,2}):(\d{2}))?$/);
+      if (dmy && Number(dmy[2]) <= 12) {
+        const dd = dmy[1]!.padStart(2, "0");
+        const mm = dmy[2]!.padStart(2, "0");
+        const hh = (dmy[4] || "0").padStart(2, "0");
+        const mi = dmy[5] || "00";
+        return `${dmy[3]}-${mm}-${dd}T${hh}:${mi}:00Z`;
+      }
+      const d = new Date(raw);
+      if (Number.isNaN(d.getTime())) {
+        warnings.push(`Trip ${employeeName} dilewati — tanggal "${raw}" tidak dikenali`);
+        return null;
+      }
+      return d.toISOString();
+    };
+
+    const tripRecords = fresh.flatMap(({ group }, i) => {
+      const claimId = createdIds[i];
+      if (!claimId) return [];
+      return group.trips.flatMap((t) => {
+        const tripDate = toIsoDate(t.trip_date, group.employee_name);
+        if (!tripDate) return [];
+        return [{
+          claim_id: claimId,
+          trip_date: tripDate,
+          booking_id: t.booking_id,
+          service_type: t.service_type,
+          payment_method: t.payment_method,
+          employee_group: t.employee_group,
+          cost_code: t.cost_code,
+          pickup: t.pickup,
+          dropoff: t.dropoff,
+          fare: t.fare,
+        }];
+      });
+    });
 
     if (tripRecords.length > 0) {
       const { error: tripsError } = await supabase.from("trips").insert(tripRecords);
@@ -197,7 +251,11 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({
       success: true,
-      data: { claims_created: claims.length, skipped_duplicate: skippedDuplicate },
+      data: {
+        claims_created: createdIds.filter(Boolean).length,
+        skipped_duplicate: skippedDuplicate,
+        warnings,
+      },
     });
   } catch (error) {
     const message =

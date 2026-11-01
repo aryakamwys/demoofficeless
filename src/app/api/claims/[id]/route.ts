@@ -36,10 +36,16 @@ export async function GET(
 
   let ticket = null;
   if (claim.employee?.employee_name) {
+    // Escape wildcard LIKE (%, _, \) di nama — tanpa ini nama yang
+    // mengandung karakter itu mencocokkan baris yang salah.
+    const escapedName = claim.employee.employee_name.replace(
+      /[\\%_]/g,
+      (c: string) => `\\${c}`
+    );
     const { data: tickets } = await supabase
       .from("managed_service_claims")
       .select("*")
-      .ilike("customer_name", claim.employee.employee_name)
+      .ilike("customer_name", escapedName)
       .order("created_at", { ascending: false })
       .limit(1);
 
@@ -92,18 +98,27 @@ export async function PATCH(
   const { id } = await params;
   const supabase = await createServerClient();
   const serviceClient = createServiceClient();
-  const body = await request.json();
+
+  // Semua jalur PATCH wajib login — tanpa ini RLS menyaring update ke 0 baris
+  // dan caller anonim tetap balas {success:true} (bohong).
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) {
+    return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 });
+  }
+
+  const body = await request.json().catch(() => null);
+  if (!body || typeof body !== "object") {
+    return NextResponse.json(
+      { success: false, error: "Body request tidak valid" },
+      { status: 400 }
+    );
+  }
 
   // Batalkan approval — klaim kembali menunggu konfirmasi karyawan via WA,
   // semua approval reset. Dipakai kalau ada kesalahan setelah approve.
   if (body.action === "cancel_approval") {
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-    if (!user) {
-      return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 });
-    }
-
     const { error } = await serviceClient
       .from("claims")
       .update({
@@ -132,6 +147,24 @@ export async function PATCH(
 
   const { manager_signature, hr_signature, ...updateData } = body;
 
+  // Whitelist kolom — body mentah tidak boleh langsung masuk .update()
+  // (mass assignment: employee_id, manager_id, total_amount, dst.).
+  const PATCHABLE_FIELDS = [
+    "status",
+    "approved_at",
+    "manager_status",
+    "hr_status",
+  ];
+  const unknownFields = Object.keys(updateData).filter(
+    (field) => !PATCHABLE_FIELDS.includes(field)
+  );
+  if (unknownFields.length > 0) {
+    return NextResponse.json(
+      { success: false, error: `Field tidak dikenal: ${unknownFields.join(", ")}` },
+      { status: 400 }
+    );
+  }
+
   // Penggantian trip "tidak sesuai" belum selesai — klaim tidak boleh
   // disetujui penuh (jalur approve manual di web maupun signature pad).
   if (updateData.status === "APPROVED") {
@@ -146,6 +179,31 @@ export async function PATCH(
         {
           success: false,
           error: `Masih ada ${active.length} trip menunggu penggantian (Rp${total.toLocaleString("id-ID")}) — selesaikan dulu di panel Penggantian.`,
+        },
+        { status: 409 }
+      );
+    }
+
+    // Invariant dua approver: klaim hanya boleh APPROVED kalau Manager DAN
+    // HR keduanya APPROVED — status di DB digabung dengan status di payload.
+    const { data: current } = await supabase
+      .from("claims")
+      .select("manager_status, hr_status")
+      .eq("id", id)
+      .single();
+    if (!current) {
+      return NextResponse.json(
+        { success: false, error: "Claim tidak ditemukan" },
+        { status: 404 }
+      );
+    }
+    const managerStatus = updateData.manager_status ?? current.manager_status;
+    const hrStatus = updateData.hr_status ?? current.hr_status;
+    if (managerStatus !== "APPROVED" || hrStatus !== "APPROVED") {
+      return NextResponse.json(
+        {
+          success: false,
+          error: `Klaim belum disetujui kedua approver (Manager: ${managerStatus}, HR: ${hrStatus}) — approve keduanya dulu.`,
         },
         { status: 409 }
       );
@@ -187,15 +245,25 @@ export async function PATCH(
     }
   }
 
-  const { error } = await supabase
+  const { data: updated, error } = await supabase
     .from("claims")
     .update(updateData)
-    .eq("id", id);
+    .eq("id", id)
+    .select("id");
 
   if (error) {
     return NextResponse.json(
       { success: false, error: error.message },
       { status: 500 }
+    );
+  }
+
+  // 0 baris ter-update = klaim tidak terlihat RLS untuk user ini —
+  // jangan balas success kalau sebenarnya tidak ada yang berubah.
+  if (!updated || updated.length === 0) {
+    return NextResponse.json(
+      { success: false, error: "Tidak ada perubahan" },
+      { status: 404 }
     );
   }
 

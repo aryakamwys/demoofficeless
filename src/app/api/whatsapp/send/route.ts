@@ -10,6 +10,11 @@ export const maxDuration = 60;
 export async function POST(request: NextRequest) {
   try {
     const supabase = await createServerClient();
+    // Hanya user login yang boleh memicu pengiriman WhatsApp.
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) {
+      return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 });
+    }
     const { claim_id, manager_id, hr_id, target = "EMPLOYEE" } = await request.json();
 
     if (!claim_id) {

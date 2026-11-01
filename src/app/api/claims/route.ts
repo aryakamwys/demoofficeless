@@ -7,10 +7,17 @@ export async function GET(request: NextRequest) {
 
   // If requesting distinct periods
   if (searchParams.get("distinct_periods") === "true") {
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from("claims")
       .select("period")
       .order("period", { ascending: false });
+
+    if (error) {
+      return NextResponse.json(
+        { success: false, error: error.message },
+        { status: 500 }
+      );
+    }
 
     const periods = [...new Set(data?.map((c) => c.period) || [])];
     return NextResponse.json({ success: true, data: periods });
@@ -27,7 +34,7 @@ export async function GET(request: NextRequest) {
     // (ticket_wizard/pending_wa_change) + kolom tak terpakai di setiap
     // baris payload 500 klaim yang di-poll tiap 10 detik.
     .select(
-      "id, upload_id, period, trip_count, total_amount, status, manager_status, hr_status, wa_sent, updated_at, employee:employees!claims_employee_id_fkey(id, employee_name, employee_number, phone_number)"
+      "id, upload_id, period, trip_count, total_amount, status, manager_status, hr_status, wa_sent, updated_at, employee:employees!claims_employee_id_fkey(id, employee_name, employee_number, phone_number, manager_id, hr_id)"
     )
     .order("updated_at", { ascending: false })
     // ponytail: pengaman pertumbuhan data — dataset klaim internal jauh di
