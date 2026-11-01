@@ -3,6 +3,11 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import Link from "next/link";
 import dayjs from "dayjs";
+import utc from "dayjs/plugin/utc";
+
+// Kolom waktu header tabel berlabel GMT+7 — format dipaksa ke offset +7
+// apa pun timezone viewer (setter utcOffset butuh plugin utc).
+dayjs.extend(utc);
 import { ClaimWithEmployee, Upload } from "@/types";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -188,6 +193,7 @@ export default function ClaimsPage() {
               <SelectItem value="APPROVED">Approved</SelectItem>
               <SelectItem value="NEED_REVIEW">Need Review</SelectItem>
               <SelectItem value="UNMATCHED">Unmatched</SelectItem>
+              <SelectItem value="MERGED">Merged</SelectItem>
             </SelectContent>
           </Select>
 
@@ -318,9 +324,9 @@ export default function ClaimsPage() {
                         />
                       </td>
                       <td className="px-4 py-4 align-middle text-slate-500 text-xs">
-                        {dayjs(claim.updated_at).format("DD MMM YYYY,")}
+                        {dayjs(claim.updated_at).utcOffset(7).format("DD MMM YYYY,")}
                         <br />
-                        {dayjs(claim.updated_at).format("hh:mm:ss A")}
+                        {dayjs(claim.updated_at).utcOffset(7).format("hh:mm:ss A")}
                       </td>
                       <td className="px-4 py-4 font-medium align-middle text-slate-800">
                         {claim.employee?.employee_name || "—"}

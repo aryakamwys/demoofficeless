@@ -23,7 +23,14 @@ interface SignaturePadDialogProps {
 export function SignaturePadDialog({ open, onOpenChange, onSave, roleTitle }: SignaturePadDialogProps) {
   const sigRef = useRef<SignatureCanvas>(null);
   const [isSaving, setIsSaving] = useState(false);
+  const [hasInk, setHasInk] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
+
+  // Canvas di-remount tiap dialog dibuka — reset state tinta juga.
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    if (open) setHasInk(false);
+  }, [open]);
 
   // Handle resize and DPI scaling robustly
   useEffect(() => {
@@ -58,6 +65,7 @@ export function SignaturePadDialog({ open, onOpenChange, onSave, roleTitle }: Si
 
   const clear = () => {
     sigRef.current?.clear();
+    setHasInk(false);
   };
 
   const undo = () => {
@@ -65,6 +73,7 @@ export function SignaturePadDialog({ open, onOpenChange, onSave, roleTitle }: Si
     if (data && data.length > 0) {
       data.pop();
       sigRef.current?.fromData(data);
+      setHasInk(data.length > 0);
     }
   };
 
@@ -109,6 +118,7 @@ export function SignaturePadDialog({ open, onOpenChange, onSave, roleTitle }: Si
         >
           <SignatureCanvas
             ref={sigRef}
+            onEnd={() => setHasInk(true)}
             penColor="black"
             canvasProps={{
               className: "w-full h-full cursor-crosshair touch-none",
@@ -132,7 +142,7 @@ export function SignaturePadDialog({ open, onOpenChange, onSave, roleTitle }: Si
             <Button type="button" variant="ghost" size="sm" onClick={() => onOpenChange(false)} disabled={isSaving}>
               Cancel
             </Button>
-            <Button type="button" size="sm" onClick={save} disabled={isSaving}>
+            <Button type="button" size="sm" onClick={save} disabled={isSaving || !hasInk}>
               {isSaving ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Check className="w-4 h-4 mr-2" />}
               Save Signature
             </Button>

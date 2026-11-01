@@ -10,6 +10,8 @@ const statusConfig: Record<string, { label: string; variant: "default" | "second
   APPROVED: { label: "Approved", variant: "default" },
   NEED_REVIEW: { label: "Need Review", variant: "destructive" },
   UNMATCHED: { label: "Unmatched", variant: "outline" },
+  REJECTED: { label: "Rejected", variant: "destructive" },
+  MERGED: { label: "Merged", variant: "secondary" },
 };
 
 const statusColors: Record<string, string> = {
@@ -18,6 +20,8 @@ const statusColors: Record<string, string> = {
   APPROVED: "bg-emerald-100 text-emerald-700 border-emerald-200",
   NEED_REVIEW: "bg-orange-100 text-orange-700 border-orange-200",
   UNMATCHED: "bg-red-100 text-red-700 border-red-200",
+  REJECTED: "bg-red-100 text-red-700 border-red-200",
+  MERGED: "bg-slate-100 text-slate-700 border-slate-200",
 };
 
 export function StatusBadge({ status }: StatusBadgeProps) {

@@ -61,18 +61,20 @@ export default function ManagedServiceClaimsHRPage() {
     }
 
     const headers = ["Ticket ID", "Subject", "Customer Name", "Location", "Amount (Rp)", "File URL", "Status", "Date"];
+    // Semua field di-quote — signed URL mengandung koma, tanpa quote kolom CSV bergeser
+    const csvQuote = (value: unknown) => `"${String(value ?? "").replace(/"/g, '""')}"`;
     const rows = data.map(item => [
-      item.ticket_id,
-      `"${(item.ticket_title || "").replace(/"/g, '""')}"`,
-      `"${(item.customer_name || "").replace(/"/g, '""')}"`,
-      `"${(item.location || "").replace(/"/g, '""')}"`,
-      item.amount,
-      item.file_url,
-      item.status,
-      dayjs(item.created_at).format("YYYY-MM-DD HH:mm:ss")
-    ]);
+      csvQuote(item.ticket_id),
+      csvQuote(item.ticket_title),
+      csvQuote(item.customer_name),
+      csvQuote(item.location),
+      csvQuote(item.amount),
+      csvQuote(item.file_url),
+      csvQuote(item.status),
+      csvQuote(dayjs(item.created_at).format("YYYY-MM-DD HH:mm:ss"))
+    ].join(","));
 
-    const csvContent = [headers.join(","), ...rows.map(r => r.join(","))].join("\n");
+    const csvContent = [headers.join(","), ...rows].join("\n");
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
@@ -81,6 +83,8 @@ export default function ManagedServiceClaimsHRPage() {
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
+    // Lepaskan blob URL setelah klik download diproses browser
+    setTimeout(() => URL.revokeObjectURL(url), 0);
   };
 
   return (
@@ -110,7 +114,7 @@ export default function ManagedServiceClaimsHRPage() {
               <tbody>
                 {loading ? (
                   <tr>
-                    <td colSpan={6} className="text-center py-12 text-slate-500">
+                    <td colSpan={7} className="text-center py-12 text-slate-500">
                       <Loader2 className="h-8 w-8 animate-spin mx-auto mb-2 text-blue-500" />
                       Memuat data...
                     </td>

@@ -50,6 +50,12 @@ export function BulkSendDialog({
   const [starting, setStarting] = useState(false);
   const [error, setError] = useState("");
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  // Interval memanggil onDone lewat ref supaya selalu memakai prop terbaru —
+  // versi yang ditangkap saat interval dibuat akan stale (filter lama).
+  const onDoneRef = useRef(onDone);
+  useEffect(() => {
+    onDoneRef.current = onDone;
+  });
 
   const stopPolling = () => {
     if (pollRef.current) {
@@ -66,13 +72,13 @@ export function BulkSendDialog({
         setJob(body.job as ServerJob);
         if (!(body.job as ServerJob).running) {
           stopPolling();
-          onDone();
+          onDoneRef.current();
         }
       }
     } catch {
       // polling gagal sekali bukan masalah — tick berikutnya mencoba lagi
     }
-  }, [onDone]);
+  }, []);
 
   // Buka dialog → tampilkan kondisi antrean terakhir (blast masih jalan
   // walau tab sempat ditutup). Jalan → mulai polling.

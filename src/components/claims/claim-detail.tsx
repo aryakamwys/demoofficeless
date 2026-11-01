@@ -9,6 +9,10 @@ import { Send, Info, UserCheck, Loader2, Printer, Pencil, Trash2, FileText, Undo
 import { BackLink } from "@/components/ui/back-link";
 import { toast } from "sonner";
 import dayjs from "dayjs";
+import utc from "dayjs/plugin/utc";
+
+// Waktu trip di tabel konsisten GMT+7 (setter utcOffset butuh plugin utc).
+dayjs.extend(utc);
 import { useRouter } from "next/navigation";
 import { SendWADialog } from "@/components/claims/send-wa-dialog";
 import { SignaturePadDialog } from "@/components/claims/signature-pad-dialog";
@@ -326,18 +330,18 @@ export function ClaimDetailView({ claim }: ClaimDetailViewProps) {
     setApproving(true);
     const roleToUse = overrideRole || sigRole;
     try {
+      // Approval per-role: satu role approve TIDAK meng-final klaim. Status
+      // APPROVED + approved_at hanya dikirim kalau role pasanganannya sudah
+      // APPROVED di data klaim saat ini (finalisasi terjadi di approve kedua).
       const payload: {
-        status: string;
-        approved_at: string;
+        status?: string;
+        approved_at?: string;
         manager_status?: string;
         manager_signature?: string;
         hr_status?: string;
         hr_signature?: string;
-      } = {
-        status: "APPROVED",
-        approved_at: new Date().toISOString()
-      };
-      
+      } = {};
+
       if (roleToUse === "MANAGER") {
         payload.manager_status = "APPROVED";
         payload.manager_signature = signatureData;
@@ -345,17 +349,27 @@ export function ClaimDetailView({ claim }: ClaimDetailViewProps) {
         payload.hr_status = "APPROVED";
         payload.hr_signature = signatureData;
       }
-      
+
+      const otherRoleApproved =
+        roleToUse === "MANAGER"
+          ? claim.hr_status === "APPROVED"
+          : claim.manager_status === "APPROVED";
+      if (otherRoleApproved) {
+        payload.status = "APPROVED";
+        payload.approved_at = new Date().toISOString();
+      }
+
       const res = await fetch(`/api/claims/${claim.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
       });
-      if (res.ok) {
+      const result = await res.json().catch(() => null);
+      if (result?.success) {
         toast.success(`Claim berhasil di-approve sebagai ${roleToUse}`);
         router.refresh();
       } else {
-        toast.error("Gagal meng-approve claim");
+        toast.error(result?.error || "Gagal meng-approve claim");
       }
     } finally {
       setApproving(false);
@@ -614,8 +628,8 @@ export function ClaimDetailView({ claim }: ClaimDetailViewProps) {
                 {claim.trips.map((trip) => (
                   <tr key={trip.id} className="hover:bg-slate-50/80 transition-colors">
                     <td className="border border-slate-200 px-3 py-3 whitespace-nowrap align-top print:py-1 print:px-1">
-                      {dayjs(trip.trip_date).format("DD MMM YYYY,")}<br/>
-                      <span className="text-slate-500">{dayjs(trip.trip_date).format("hh:mm:ss A")}</span>
+                      {dayjs(trip.trip_date).utcOffset(7).format("DD MMM YYYY,")}<br/>
+                      <span className="text-slate-500">{dayjs(trip.trip_date).utcOffset(7).format("hh:mm:ss A")}</span>
                     </td>
                     <td className="border border-slate-200 px-3 py-3 align-top font-medium print:py-1 print:px-1">
                       {claim.employee?.employee_name || "—"}

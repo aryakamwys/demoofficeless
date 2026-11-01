@@ -19,7 +19,12 @@ export default async function ClaimDetailPage({ params }: ClaimDetailPageProps) 
   const [claimRes, tripsRes, commentsRes, refundsRes] = await Promise.all([
     supabase
       .from("claims")
-      .select("*, employee:employees!claims_employee_id_fkey(*)")
+      .select(`
+        *,
+        employee:employees!claims_employee_id_fkey(*),
+        manager:employees!claims_manager_id_fkey(*),
+        hr:employees!claims_hr_id_fkey(*)
+      `)
       .eq("id", id)
       .single(),
     supabase
@@ -99,6 +104,15 @@ export default async function ClaimDetailPage({ params }: ClaimDetailPageProps) 
 
   const claimDetail: ClaimDetail = {
     ...claim,
+    // Approver asli klaim (claims.manager_id/hr_id) di-inject sebagai
+    // manager/hr employee — blok ttd print membacanya dari situ.
+    employee: claim.employee
+      ? {
+          ...claim.employee,
+          manager: claim.manager ?? claim.employee.manager ?? null,
+          hr: claim.hr ?? claim.employee.hr ?? null,
+        }
+      : claim.employee,
     trips: trips || [],
     comments: comments || [],
     ticket,

@@ -23,6 +23,7 @@ type ClaimRow = {
 
 type Refund = {
   id: string;
+  trip_id: string | null;
   trip_no: number;
   amount: number;
   reason: string;
@@ -44,7 +45,7 @@ type ClaimDetail = {
   total_amount: number;
   in_revision: boolean;
   revision_reason: string | null;
-  trips: Array<{ no: number; date: string; pickup: string; dropoff: string; fare: number; service_type: string | null; ticket_id: string | null }>;
+  trips: Array<{ id: string; no: number; date: string; pickup: string; dropoff: string; fare: number; service_type: string | null; ticket_id: string | null }>;
   refunds: Refund[];
   bank: { bank_name: string; account_number: string; account_name: string } | null;
   ticket_options: Array<{ id: number; title: string }>;
@@ -594,12 +595,17 @@ function ClaimWork({
               const waitingManager = r.status === "REQUESTED" && r.manager_status === "PENDING";
               const rejected = r.status === "REQUESTED" && r.manager_status === "REJECTED";
               const needsResponse = r.status === "REQUESTED" && !r.manager_status;
+              // trip_no refund adalah snapshot saat ditandai — trip lain bisa
+              // terhapus (penggantian lain selesai) sehingga nomor bergeser;
+              // cocokkan lewat trip_id ke nomor terkini, fallback snapshot.
+              const curNo =
+                (r.trip_id ? data.trips.find((t) => t.id === r.trip_id)?.no : undefined) ?? r.trip_no;
               return (
                 <div key={r.id} className="rounded-xl border border-slate-200 p-3">
                   <div className="flex items-start justify-between gap-2">
                     <div>
                       <p className="text-[13px] font-bold text-slate-900">
-                        Trip {r.trip_no} — {rupiah(r.amount)}
+                        Trip {curNo} — {rupiah(r.amount)}
                       </p>
                       <p className="mt-0.5 text-[12px] text-slate-500">{r.reason}</p>
                     </div>
@@ -685,7 +691,7 @@ function ClaimWork({
                         {/* eslint-disable-next-line @next/next/no-img-element */}
                         <img
                           src={r.proof_url}
-                          alt={`Bukti transfer trip ${r.trip_no}`}
+                          alt={`Bukti transfer trip ${curNo}`}
                           className="h-16 rounded-lg object-cover"
                         />
                       </a>

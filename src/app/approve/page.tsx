@@ -9,6 +9,7 @@ import { Circle, Square, Ticket } from "lucide-react";
 import { ConfirmModal, InfoModal } from "@/components/ui/confirm-modal";
 
 type Trip = {
+  id?: string;
   no: number;
   date: string;
   pickup: string;
@@ -40,7 +41,7 @@ type Data = {
   in_revision: boolean;
   revision_reason: string | null;
   queue?: QueueItem[];
-  refunds: { no: number; amount: number; reason: string; status: string }[];
+  refunds: { trip_id?: string | null; no: number; amount: number; reason: string; status: string }[];
   claim: ClaimInfo;
 };
 
@@ -63,12 +64,6 @@ const REVISE_REASONS = [
   "Ada trip yang bukan perjalanan tugas",
   "Nominal ada yang kurang pas",
   "Ticket EnvGate belum lengkap",
-];
-
-const DROP_REASONS = [
-  "Pulang ke rumah di jam kantor",
-  "Bukan perjalanan tugas",
-  "Trip ini bukan milik saya",
 ];
 
 function rupiah(n: number | string) {
@@ -115,12 +110,7 @@ export default function ApprovePage() {
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [showReject, setShowReject] = useState(false);
   const [reason, setReason] = useState("");
-  const [dialog, setDialog] = useState<
-    | { kind: "drop"; no: number; reason: string }
-    | { kind: "fare"; no: number; fare: string }
-    | { kind: "ticket"; no: number; ticket: string }
-    | null
-  >(null);
+  const [dialog, setDialog] = useState<{ kind: "ticket"; no: number; ticket: string } | null>(null);
   // Antrean klaim lain menunggu approver ini (Manager/HR)
   const [queueBusy, setQueueBusy] = useState<string | null>(null);
   const [queueDone, setQueueDone] = useState<Record<string, string>>({});
@@ -199,8 +189,8 @@ export default function ApprovePage() {
     }
   };
 
-  /** Perintah revisi dari tombol (HAPUS/UBAH/TICKET/SELESAI) — jalur yang
-   *  sama dengan tombol web lama, lalu data dimuat ulang. */
+  /** Perintah revisi dari tombol (TICKET/SELESAI/SUDAH TF) — jalur yang
+   *  sama dengan perintah chat, lalu data dimuat ulang. */
   const runCommand = async (texts: string[], busyLabel: string, after?: () => void) => {
     if (state.phase !== "ready") return;
     setError("");
@@ -442,8 +432,8 @@ export default function ApprovePage() {
                   {state.data.revision_reason || "-"}
                 </p>
                 <p className="mt-1.5 text-[12px] leading-relaxed text-amber-800">
-                  Bereskan di bawah — hapus trip yang salah, ubah nominal, atau pasang ticket. Kalau sudah,
-                  tekan tombol kirim ulang.
+                  Bereskan di bawah — pasang ticket yang belum terpasang. Data trip yang salah
+                  diluruskan lewat catatan untuk HR. Kalau sudah, tekan tombol kirim ulang.
                 </p>
               </div>
             )}
@@ -487,7 +477,13 @@ export default function ApprovePage() {
               </p>
               <ul className="mt-2 divide-y divide-slate-100">
                 {state.data.claim.trips.map((t) => {
-                  const rf = state.data.refunds?.find((x) => x.no === t.no);
+                  // Badge penggantian: trip_no pada refund adalah snapshot saat
+                  // ditandai — trip lain bisa terhapus (penggantian selesai)
+                  // sehingga nomor bergeser. Cocokkan lewat trip_id kalau
+                  // tersedia, fallback ke nomor snapshot.
+                  const rf = state.data.refunds?.find((x) =>
+                    x.trip_id && t.id ? x.trip_id === t.id : x.no === t.no
+                  );
                   return (
                     <li key={t.no} className="py-3.5 first:pt-2.5 last:pb-0">
                       <div className="flex items-baseline justify-between gap-2">
@@ -521,33 +517,11 @@ export default function ApprovePage() {
                         </p>
                       )}
 
-                      {/* Aksi revisi per-trip (karyawan) */}
+                      {/* Aksi revisi per-trip (karyawan). Hanya pasang ticket —
+                          hapus/ubah nominal dipensiunkan: data klaim langsung
+                          dari statement Grab, koreksi lewat catatan untuk HR. */}
                       {state.data.in_revision && !state.busy && (
                         <div className="mt-2 flex gap-1.5">
-                          <button
-                            type="button"
-                            disabled={state.data.claim.trips.length <= 1 || !!rf}
-                            title={
-                              rf
-                                ? "Trip ini menunggu penggantian — selesaikan lewat transfer"
-                                : state.data.claim.trips.length <= 1
-                                  ? "Satu-satunya trip tidak boleh dihapus"
-                                  : ""
-                            }
-                            onClick={() => setDialog({ kind: "drop", no: t.no, reason: "" })}
-                            className="rounded-lg border border-slate-300 bg-white px-2.5 py-1.5 text-[11px] font-semibold text-red-600 active:bg-slate-50 disabled:opacity-40"
-                          >
-                            Hapus
-                          </button>
-                          <button
-                            type="button"
-                            disabled={!!rf}
-                            title={rf ? "Nominal terkunci sampai penggantian selesai" : ""}
-                            onClick={() => setDialog({ kind: "fare", no: t.no, fare: String(t.fare) })}
-                            className="rounded-lg border border-slate-300 bg-white px-2.5 py-1.5 text-[11px] font-semibold text-slate-700 active:bg-slate-50 disabled:opacity-40"
-                          >
-                            Ubah Rp
-                          </button>
                           <button
                             type="button"
                             onClick={() => setDialog({ kind: "ticket", no: t.no, ticket: "" })}
@@ -578,80 +552,6 @@ export default function ApprovePage() {
             {/* Dialog per-trip (revisi) */}
             {dialog && (
               <div className="mt-3 rounded-2xl bg-white p-4">
-                {dialog.kind === "drop" && (
-                  <>
-                    <p className="text-[14px] font-bold text-slate-900">Hapus trip no {dialog.no}?</p>
-                    <p className="mt-1 text-[12px] leading-relaxed text-slate-600">
-                      Trip ini keluar dari klaim dan tidak dihitung lagi. Pilih alasan (bisa diedit):
-                    </p>
-                    <div className="mt-2">{chips(DROP_REASONS, (v) => setDialog({ ...dialog, reason: v }))}</div>
-                    <textarea
-                      value={dialog.reason}
-                      onChange={(e) => setDialog({ ...dialog, reason: e.target.value })}
-                      rows={2}
-                      maxLength={200}
-                      placeholder="Alasan hapus…"
-                      className="mt-2 w-full rounded-xl border border-slate-300 px-3 py-2 text-[13px] focus:border-slate-500 focus:outline-none"
-                    />
-                    <div className="mt-2 flex gap-2">
-                      <button
-                        type="button"
-                        disabled={dialog.reason.trim().length < 4}
-                        onClick={() => runCommand([`HAPUS ${dialog.no} ${dialog.reason.trim()}`, "YA"], "Menghapus trip…")}
-                        className="flex-1 rounded-xl bg-red-600 px-4 py-3 text-[14px] font-semibold text-white hover:bg-red-700 disabled:opacity-40"
-                      >
-                        Ya, hapus trip ini
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setDialog(null)}
-                        className="rounded-xl border border-slate-300 bg-white px-4 py-3 text-[13px] font-semibold text-slate-700"
-                      >
-                        Batal
-                      </button>
-                    </div>
-                  </>
-                )}
-
-                {dialog.kind === "fare" && (
-                  <>
-                    <p className="text-[14px] font-bold text-slate-900">Ubah nominal trip no {dialog.no}</p>
-                    <p className="mt-1 text-[12px] text-slate-600">
-                      Sekarang: {rupiah(state.data.claim.trips[dialog.no - 1]?.fare || 0)}
-                    </p>
-                    <input
-                      type="text"
-                      inputMode="numeric"
-                      value={dialog.fare}
-                      onChange={(e) => setDialog({ ...dialog, fare: e.target.value.replace(/[^\d.]/g, "") })}
-                      placeholder="Contoh: 75000"
-                      className="mt-2 w-full rounded-xl border border-slate-300 px-3 py-2.5 text-[15px] font-semibold focus:border-slate-500 focus:outline-none"
-                    />
-                    <div className="mt-2 flex gap-2">
-                      <button
-                        type="button"
-                        disabled={!Number(dialog.fare) || Number(dialog.fare) <= 0}
-                        onClick={() =>
-                          runCommand(
-                            [`UBAH ${dialog.no} ${Math.round(Number(dialog.fare))}`, "YA"],
-                            "Menyimpan nominal baru…"
-                          )
-                        }
-                        className="flex-1 rounded-xl bg-slate-900 px-4 py-3 text-[14px] font-semibold text-white disabled:opacity-40"
-                      >
-                        Simpan nominal
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setDialog(null)}
-                        className="rounded-xl border border-slate-300 bg-white px-4 py-3 text-[13px] font-semibold text-slate-700"
-                      >
-                        Batal
-                      </button>
-                    </div>
-                  </>
-                )}
-
                 {dialog.kind === "ticket" && (
                   <>
                     <p className="text-[14px] font-bold text-slate-900">Pasang ticket untuk trip no {dialog.no}</p>
